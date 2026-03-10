@@ -1,10 +1,15 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-// TODO (backend): uncomment these two lines when the API is live
-// import { api, ApiError } from '@/lib/api';
-// import { getToken }      from '@/lib/auth';
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
+import {
+  DEPARTMENT_COURSE_MAP,
+  getCoursesByDepartmentCode,
+  isValidCourseForDepartment,
+  isValidDepartmentCode,
+} from '@/constants/departments';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -14,19 +19,6 @@ const STEPS = [
   { id: 3, label: 'Medical History' },
   { id: 4, label: 'Surgical History' },
   { id: 5, label: 'Data Privacy' },
-  { id: 6, label: 'E-Signature' },
-];
-
-const COURSES = [
-  'BS Civil Engineering', 'BS Computer Engineering', 'BS Electrical Engineering',
-  'BS Nursing', 'BS Education', 'BS Business Administration',
-  'BS Information Technology', 'BS Computer Science',
-];
-
-const DEPARTMENTS = [
-  'College of Engineering', 'College of Education', 'College of Business',
-  'College of Nursing', 'College of Arts and Sciences',
-  'College of Computing and Information Sciences',
 ];
 
 const RELATIONSHIPS = [
@@ -127,6 +119,9 @@ interface PersonalData {
 }
 
 function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof PersonalData, v: string) => void }) {
+  const selectedDepartment = data.department;
+  const availableCourses = getCoursesByDepartmentCode(selectedDepartment);
+
   return (
     <div>
       <h2 className="text-base font-bold text-gray-800 dark:text-gray-100 mb-5">Personal Information</h2>
@@ -147,16 +142,36 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
           <Field label="Middle Initial">
             <input className={inputCls} placeholder="" value={data.middleInitial} onChange={e => set('middleInitial', e.target.value)} />
           </Field>
-          <Field label="Course">
-            <select className={selectCls} value={data.course} onChange={e => set('course', e.target.value)}>
-              <option value="">Select Course</option>
-              {COURSES.map(c => <option key={c}>{c}</option>)}
+          <Field label="College (Department)">
+            <select
+              className={selectCls}
+              value={selectedDepartment}
+              onChange={e => {
+                const nextDepartment = e.target.value;
+                const nextCourses = getCoursesByDepartmentCode(nextDepartment);
+                set('department', nextDepartment);
+                if (!nextCourses.includes(data.course)) {
+                  set('course', '');
+                }
+              }}
+            >
+              <option value="">Select College (Department)</option>
+              {DEPARTMENT_COURSE_MAP.map((entry) => (
+                <option key={entry.code} value={entry.code}>{`${entry.name} (${entry.code})`}</option>
+              ))}
             </select>
           </Field>
-          <Field label="Department">
-            <select className={selectCls} value={data.department} onChange={e => set('department', e.target.value)}>
-              <option value="">Select Department</option>
-              {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+          <Field label="Course">
+            <select
+              className={selectCls}
+              value={data.course}
+              onChange={e => set('course', e.target.value)}
+              disabled={!selectedDepartment}
+            >
+              <option value="">{selectedDepartment ? 'Select Course' : 'Select College First'}</option>
+              {availableCourses.map((course) => (
+                <option key={course} value={course}>{course}</option>
+              ))}
             </select>
           </Field>
         </div>
@@ -242,7 +257,7 @@ function StepEmergency({ data, set }: { data: EmergencyData; set: (k: keyof Emer
 
 interface MedicalData {
   conditions: string[]; others: string; bloodType: string;
-  allergies: string; existingConditions: string;
+  allergies: string; existingConditions: string; immunizations: string;
 }
 
 function StepMedicalHistory({ data, setData }: { data: MedicalData; setData: (d: MedicalData) => void }) {
@@ -287,6 +302,9 @@ function StepMedicalHistory({ data, setData }: { data: MedicalData; setData: (d:
         </Field>
         <Field label="Existing Conditions (comma separated)">
           <input className={inputCls} placeholder="e.g. Asthma, Hypertension" value={data.existingConditions} onChange={e => setData({ ...data, existingConditions: e.target.value })} />
+        </Field>
+        <Field label="Immunizations (comma separated)">
+          <input className={inputCls} placeholder="e.g. Tetanus, Hepatitis B" value={data.immunizations} onChange={e => setData({ ...data, immunizations: e.target.value })} />
         </Field>
       </div>
     </div>
@@ -392,136 +410,60 @@ function StepDataPrivacy({ agreed, setAgreed }: { agreed: boolean; setAgreed: (v
   );
 }
 
-// ── Step 6: E-Signature ───────────────────────────────────────────────────────
-
-function StepESignature({ sigFile, setSigFile }: { sigFile: File | null; setSigFile: (f: File | null) => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing   = useRef(false);
-  const [hasDraw, setHasDraw] = useState(false);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth   = 2;
-    ctx.lineCap     = 'round';
-    ctx.lineJoin    = 'round';
-  }, []);
-
-  function getPos(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    if ('touches' in e) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    }
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
-  }
-
-  function startDraw(e: React.MouseEvent<HTMLCanvasElement>) {
-    drawing.current = true;
-    const ctx = canvasRef.current!.getContext('2d')!;
-    const { x, y } = getPos(e);
-    ctx.beginPath(); ctx.moveTo(x, y);
-  }
-
-  function draw(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!drawing.current) return;
-    const ctx = canvasRef.current!.getContext('2d')!;
-    const { x, y } = getPos(e);
-    ctx.lineTo(x, y); ctx.stroke();
-    setHasDraw(true);
-  }
-
-  function stopDraw() { drawing.current = false; }
-
-  function clearCanvas() {
-    const canvas = canvasRef.current!;
-    canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height);
-    setHasDraw(false);
-  }
-
-  return (
-    <div>
-      <h2 className="text-base font-bold text-gray-800 dark:text-gray-100 mb-1">Upload Your Electronic Signature</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">Please upload a clear image of your signature. This will be used for verification purposes.</p>
-
-      {/* Upload area */}
-      <label className="block border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:border-teal-300 hover:bg-teal-50/30 dark:hover:bg-teal-900/10 transition mb-5">
-        <input type="file" accept=".png,.jpg,.jpeg" className="hidden"
-          onChange={e => setSigFile(e.target.files?.[0] ?? null)} />
-        <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-        </svg>
-        {sigFile ? (
-          <p className="text-sm text-teal-600 font-medium">{sigFile.name}</p>
-        ) : (
-          <>
-            <p className="text-sm text-gray-500 dark:text-gray-400"><span className="font-medium text-gray-700 dark:text-gray-300">Click to upload</span> or drag and drop</p>
-            <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 5MB</p>
-          </>
-        )}
-      </label>
-
-      {/* Draw area */}
-      <div className="mb-1">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Or draw your signature below</p>
-          {hasDraw && (
-            <button onClick={clearCanvas} className="text-xs text-gray-400 hover:text-red-500 transition">Clear</button>
-          )}
-        </div>
-        <div className="border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden relative bg-white dark:bg-gray-900">
-          {!hasDraw && (
-            <p className="absolute inset-0 flex items-center justify-center text-3xl text-gray-200 font-light pointer-events-none select-none">
-              Sign Here
-            </p>
-          )}
-          <canvas ref={canvasRef} width={700} height={140} className="w-full block cursor-crosshair"
-            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw} />
-        </div>
-      </div>
-      <p className="text-xs text-gray-400 text-center mt-3">Your e-signature serves as your digital consent to this registration.</p>
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function RegistrationPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  // Persist submission across page navigations / refreshes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('gchl_reg_submitted');
-      if (saved === 'true') setSubmitted(true);
+  async function handleSubmit() {
+    const token = getToken();
+    if (!token) {
+      setSubmitError('You are not logged in. Please sign in again.');
+      return;
     }
-  }, []);
 
-  /**
-   * TODO (backend): replace this function body with:
-   *
-   *   setSubmitError('');
-   *   setSubmitLoading(true);
-   *   try {
-   *     await api.post('/registration', { personal, emergency, medical, surgical }, getToken() ?? undefined);
-   *     localStorage.setItem('gchl_reg_submitted', 'true');
-   *     setSubmitted(true);
-   *   } catch (err) {
-   *     setSubmitError(err instanceof ApiError ? err.message : 'Submission failed. Please try again.');
-   *   } finally {
-   *     setSubmitLoading(false);
-   *   }
-   */
-  function handleSubmit() {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('gchl_reg_submitted', 'true');
+    if (!privacyAgreed) {
+      setSubmitError('You must agree to the data privacy consent before submitting.');
+      return;
     }
-    setSubmitted(true);
+
+    if (!isValidDepartmentCode(personal.department)) {
+      setSubmitError('Please select a valid college (department).');
+      return;
+    }
+
+    if (!isValidCourseForDepartment(personal.course, personal.department)) {
+      setSubmitError('Please select a valid course for the selected college.');
+      return;
+    }
+
+    setSubmitError('');
+    setSubmitLoading(true);
+
+    const payload = {
+      personal,
+      emergency,
+      medical,
+      surgical,
+      consentAgreed: privacyAgreed,
+    };
+
+    try {
+      await api.post('/students/registration', payload, token);
+      setSubmitted(true);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setSubmitError(error.message);
+      } else {
+        setSubmitError('Submission failed. Please try again.');
+      }
+    } finally {
+      setSubmitLoading(false);
+    }
   }
 
   const [personal, setPersonal]   = useState<Parameters<typeof StepPersonalInfo>[0]['data']>({
@@ -533,11 +475,10 @@ export default function RegistrationPage() {
     name: '', relationship: '', contact: '', address: '',
   });
   const [medical, setMedical]     = useState<Parameters<typeof StepMedicalHistory>[0]['data']>({
-    conditions: [], others: '', bloodType: '', allergies: '', existingConditions: '',
+    conditions: [], others: '', bloodType: '', allergies: '', existingConditions: '', immunizations: '',
   });
   const [surgical, setSurgical]   = useState<SurgicalData>({ hasSurgery: null, entries: [] });
   const [privacyAgreed, setPrivacyAgreed] = useState(false);
-  const [sigFile, setSigFile]     = useState<File | null>(null);
 
   if (submitted) {
     return (
@@ -586,8 +527,13 @@ export default function RegistrationPage() {
         {step === 3 && <StepMedicalHistory data={medical}  setData={setMedical} />}
         {step === 4 && <StepSurgicalHistory data={surgical} setData={setSurgical} />}
         {step === 5 && <StepDataPrivacy  agreed={privacyAgreed} setAgreed={setPrivacyAgreed} />}
-        {step === 6 && <StepESignature   sigFile={sigFile} setSigFile={setSigFile} />}
       </div>
+
+      {submitError && (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {submitError}
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="flex justify-between items-center mt-5 pb-4">
@@ -609,10 +555,10 @@ export default function RegistrationPage() {
           </button>
         ) : (
           <div className="flex flex-col items-end gap-2">
-            {/* TODO (backend): render submitError here when API is live */}
-            <button onClick={handleSubmit}
+            <button onClick={() => { void handleSubmit(); }}
+              disabled={submitLoading || !privacyAgreed}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold transition">
-              Submit Registration
+              {submitLoading ? 'Submitting…' : 'Submit Registration'}
             </button>
           </div>
         )}

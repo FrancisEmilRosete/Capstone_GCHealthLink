@@ -1,368 +1,773 @@
-﻿/**
- * QR CODE SCANNER PAGE
- * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- * Route: /dashboard/staff/scanner
- *
- * Allows clinic staff to look up a student's health record by
- * either scanning their QR code or typing their Student ID.
- *
- * States:
- *   idle      â†’ QR frame + manual search input
- *   found     â†’ Student result card with info pills + action btns
- *   not-found â†’ Scanner + inline error + red toast
- *
- * TODO: Replace mock lookup with a real API call:
- *   GET /api/students/:id  â†’  { found: true, student: {...} }
- *
- * TODO: Hook up the actual camera using a library such as
- *   `html5-qrcode` or `react-qr-reader` once available.
- */
-
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 import PhysicalExamModal from '@/components/modals/PhysicalExamModal';
 import ConsultationModal from '@/components/modals/ConsultationModal';
 
-// QrCameraScanner uses html5-qrcode which is browser-only — must skip SSR
-const QrCameraScanner = dynamic(
-  () => import('@/components/scanner/QrCameraScanner'),
-  { ssr: false },
-);
+const QrCameraScanner = dynamic(() => import('@/components/scanner/QrCameraScanner'), {
+  ssr: false,
+});
 
-// â”€â”€ Mock Student Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// TODO: Replace with API call â€” add real fields from your DB schema
-
-interface Student {
-  firstName:  string;
-  lastName:   string;
-  course:     string;
-  college:    string;
-  bloodType:  string;
-  allergies:  string[];
+interface SearchStudent {
+  id: string;
+  studentNumber: string;
+  firstName: string;
+  lastName: string;
+  courseDept: string;
+  age: number | null;
+  sex: string | null;
+  user: {
+    id: string;
+  };
 }
 
-const MOCK_STUDENTS: Record<string, Student> = {
-  '2023-0001': {
-    firstName:  'Juan',
-    lastName:   'Dela Cruz',
-    course:     'BS Civil Engineering',
-    college:    'College of Engineering',
-    bloodType:  'O+',
-    allergies:  ['Peanuts', 'Penicillin'],
-  },
-  '2023-0002': {
-    firstName:  'Maria',
-    lastName:   'Santos',
-    course:     'BS Nursing',
-    college:    'College of Health Sciences',
-    bloodType:  'A+',
-    allergies:  ['Aspirin'],
-  },
-  '2024-0010': {
-    firstName:  'Carlos',
-    lastName:   'Reyes',
-    course:     'BS Education',
-    college:    'College of Education',
-    bloodType:  'B+',
-    allergies:  [],
-  },
-};
+interface SearchResponse {
+  success: boolean;
+  data: SearchStudent[];
+  message?: string;
+}
+
+interface ScanProfile {
+  id: string;
+  studentNumber: string;
+  firstName: string;
+  lastName: string;
+  courseDept: string;
+  age: number | null;
+  sex: string | null;
+  medicalHistory?: {
+    allergyEnc?: string | null;
+    bloodType?: string | null;
+  } | null;
+}
+
+interface ScanResponse {
+  success: boolean;
+  data: ScanProfile;
+  emergencyAlert?: {
+    warning?: string;
+    instructions?: string;
+  } | null;
+}
+
+interface InventoryItem {
+  id: string;
+  itemName: string;
+}
+
+interface InventoryResponse {
+  success: boolean;
+  data: InventoryItem[];
+}
+
+interface EmergencyAlertResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    recipient?: string;
+    status?: string;
+    timestamp?: string;
+  };
+}
+
+interface UiStudent {
+  userId: string;
+  studentProfileId: string;
+  studentNumber: string;
+  firstName: string;
+  lastName: string;
+  course: string;
+  college: string;
+  age: string;
+  sex: string;
+  allergies: string[];
+  bloodType: string;
+}
+
+interface PhysicalExamFormData {
+  yearLevel: string;
+  dateOfExam: string;
+  examinedBy: string;
+  bp: string;
+  heartRate: string;
+  respRate: string;
+  temperature: string;
+  weight: string;
+  height: string;
+  visualAcuity: string;
+  skin: string;
+  heent: string;
+  chestLungs: string;
+  heart: string;
+  abdomen: string;
+  extremities: string;
+  remarks: string;
+  hgb: string;
+  hct: string;
+  wbc: string;
+  cbcBldType: string;
+  urineGlucose: string;
+  urineProtein: string;
+  chestXray: 'normal' | 'abnormal' | '';
+  chestXrayFindings: string;
+  labOthers: string;
+}
 
 type SearchStatus = 'idle' | 'found' | 'not-found';
 
-// â”€â”€ Allergy pill colour helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Blood type gets a blue pill; allergens get a red/rose pill.
-function BloodTypePill({ type }: { type: string }) {
+function parseAllergies(value?: string | null): string[] {
+  if (!value) return [];
+
+  const normalized = value.trim();
+  if (!normalized) return [];
+
+  const lowered = normalized.toLowerCase();
+  if (['none', 'no', 'n/a', 'na'].includes(lowered)) return [];
+
+  return normalized
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function looksLikeStudentNumber(value: string) {
+  return /^\d{4}-\d{3,}$/.test(value.trim());
+}
+
+function normalizeParsedValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function classifyStudentIdentifier(value: string): { userId?: string; studentNumber?: string } {
+  const normalized = value.trim();
+  if (!normalized) return {};
+  if (looksLikeStudentNumber(normalized)) {
+    return { studentNumber: normalized };
+  }
+  return { userId: normalized };
+}
+
+function parseQrPayload(raw: string): {
+  userId?: string;
+  studentNumber?: string;
+  qrToken?: string;
+  fallbackText: string;
+} {
+  const trimmed = raw.trim();
+  if (!trimmed) return { fallbackText: '' };
+
+  const fromRecord = (record: Record<string, unknown>) => {
+    const qrToken = normalizeParsedValue(record.qrToken ?? record.token);
+    const explicitUserId = normalizeParsedValue(record.userId ?? record.id);
+    const explicitStudentNumber = normalizeParsedValue(record.studentNumber ?? record.studentNo);
+    const ambiguousStudentId = normalizeParsedValue(record.studentId);
+
+    const fromAmbiguousStudentId = classifyStudentIdentifier(ambiguousStudentId);
+    const fromExplicitUserId = classifyStudentIdentifier(explicitUserId);
+    const fromExplicitStudentNumber = classifyStudentIdentifier(explicitStudentNumber);
+
+    return {
+      qrToken: qrToken || undefined,
+      userId: fromAmbiguousStudentId.userId || fromExplicitUserId.userId || undefined,
+      studentNumber:
+        fromAmbiguousStudentId.studentNumber
+        || fromExplicitStudentNumber.studentNumber
+        || undefined,
+    };
+  };
+
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const resolved = fromRecord(parsed);
+      if (resolved.qrToken || resolved.userId || resolved.studentNumber) {
+        return { ...resolved, fallbackText: trimmed };
+      }
+    }
+  } catch {
+    // Non-JSON payloads are treated as manual query text.
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const pathSegments = url.pathname.split('/').filter(Boolean);
+    const lastSegment = decodeURIComponent(pathSegments[pathSegments.length - 1] || '');
+    const resolved = fromRecord({
+      qrToken:
+        url.searchParams.get('qrToken')
+        || url.searchParams.get('token')
+        || (url.pathname.includes('/scan-token/') ? lastSegment : ''),
+      userId: url.searchParams.get('userId') || url.searchParams.get('id') || '',
+      studentId:
+        url.searchParams.get('studentId')
+        || (url.pathname.includes('/scan/') ? lastSegment : ''),
+      studentNumber: url.searchParams.get('studentNumber') || url.searchParams.get('studentNo') || '',
+    });
+
+    if (resolved.qrToken || resolved.userId || resolved.studentNumber) {
+      return { ...resolved, fallbackText: trimmed };
+    }
+  } catch {
+    // Keep raw fallback handling when payload is not a URL.
+  }
+
+  return { fallbackText: trimmed };
+}
+
+function mapProfileToStudent(userId: string, profile: ScanProfile): UiStudent {
+  return {
+    userId,
+    studentProfileId: profile.id,
+    studentNumber: profile.studentNumber,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    course: profile.courseDept || 'N/A',
+    college: profile.courseDept || 'N/A',
+    age: profile.age ? String(profile.age) : '',
+    sex: profile.sex || '',
+    allergies: parseAllergies(profile.medicalHistory?.allergyEnc),
+    bloodType: profile.medicalHistory?.bloodType?.trim() || 'N/A',
+  };
+}
+
+function BloodTypePill({ bloodType }: { bloodType: string }) {
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-      bg-blue-50 text-blue-600 border border-blue-100">
-      Type {type}
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100">
+      Blood Type: {bloodType || 'N/A'}
     </span>
   );
 }
+
 function AllergyPill({ name }: { name: string }) {
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-      bg-rose-50 text-rose-500 border border-rose-100">
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-500 border border-rose-100">
       {name}
     </span>
   );
 }
 
-// â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 export default function ScannerPage() {
   const router = useRouter();
-  const [studentId,    setStudentId]    = useState('');
-  const [status,       setStatus]       = useState<SearchStatus>('idle');
-  const [foundStudent, setFoundStudent] = useState<Student | null>(null);
-  const [foundId,      setFoundId]      = useState('');
-  const [toastType,    setToastType]    = useState<'found' | 'not-found' | null>(null);
-  // true = camera is scanning; false = camera paused (after a scan or manual search)
-  const [cameraActive, setCameraActive] = useState(true);
-  const [showExamModal,    setShowExamModal]    = useState(false);
-  const [showConsultModal, setShowConsultModal] = useState(false);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const studentIdParam = (searchParams.get('studentId') || '').trim();
 
-  // Auto-dismiss toast after 3 s
+  const [studentInput, setStudentInput] = useState('');
+  const [status, setStatus] = useState<SearchStatus>('idle');
+  const [foundStudent, setFoundStudent] = useState<UiStudent | null>(null);
+  const [cameraActive, setCameraActive] = useState(true);
+
+  const [showExamModal, setShowExamModal] = useState(false);
+  const [showConsultModal, setShowConsultModal] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const [sendingEmergency, setSendingEmergency] = useState(false);
+
+  const [toastType, setToastType] = useState<'found' | 'not-found' | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousStudentIdParam = useRef(studentIdParam);
+
+  const [inventoryByName, setInventoryByName] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (toastType) {
-      toastTimer.current = setTimeout(() => setToastType(null), 3000);
+      toastTimer.current = setTimeout(() => setToastType(null), 2500);
     }
-    return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
+
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, [toastType]);
 
-  // Called automatically when the camera decodes a QR code
-  function handleQrScan(text: string) {
-    const trimmed = text.trim();
-    setCameraActive(false); // pause camera — one scan at a time
-    setStudentId(trimmed);
-    const student = MOCK_STUDENTS[trimmed];
-    if (student) {
-      setFoundStudent(student);
-      setFoundId(trimmed);
-      setStatus('found');
-      setToastType('found');
+  function replaceStudentIdParam(nextStudentId: string | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    const currentStudentId = (searchParams.get('studentId') || '').trim();
+    const normalized = nextStudentId?.trim() || '';
+
+    if (!normalized) {
+      if (!params.has('studentId')) return;
+      params.delete('studentId');
     } else {
-      setFoundStudent(null);
-      setStatus('not-found');
-      setToastType('not-found');
+      if (currentStudentId.toLowerCase() === normalized.toLowerCase()) return;
+      params.set('studentId', normalized);
+    }
+
+    const query = params.toString();
+    const nextUrl = query ? `${pathname}?${query}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }
+
+  function resetScannerState() {
+    setStudentInput('');
+    setStatus('idle');
+    setFoundStudent(null);
+    setError('');
+    setActionMessage('');
+    setToastType(null);
+    setShowConsultModal(false);
+    setShowExamModal(false);
+    setCameraActive(true);
+  }
+
+  useEffect(() => {
+    async function loadInventoryLookup() {
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        const response = await api.get<InventoryResponse>('/inventory', token);
+        const mapped: Record<string, string> = {};
+
+        for (const item of response.data || []) {
+          mapped[item.itemName.trim().toLowerCase()] = item.id;
+        }
+
+        setInventoryByName(mapped);
+      } catch {
+        // Keep scanner usable even when inventory lookup fails.
+      }
+    }
+
+    void loadInventoryLookup();
+  }, []);
+
+  useEffect(() => {
+    const hadStudentIdParam = !!previousStudentIdParam.current;
+    previousStudentIdParam.current = studentIdParam;
+
+    if (!studentIdParam) {
+      if (!hadStudentIdParam) return;
+      resetScannerState();
+      return;
+    }
+
+    if (foundStudent?.studentNumber.toLowerCase() === studentIdParam.toLowerCase()) {
+      return;
+    }
+
+    setCameraActive(false);
+    setStudentInput(studentIdParam);
+    void resolveLookup(studentIdParam);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentIdParam, foundStudent?.studentNumber]);
+
+  async function fetchStudentByUserId(userId: string) {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    const response = await api.get<ScanResponse>(`/clinic/scan/${userId}`, token);
+    const mappedStudent = mapProfileToStudent(userId, response.data);
+
+    setFoundStudent(mappedStudent);
+    setStudentInput(mappedStudent.studentNumber);
+    setStatus('found');
+    setCameraActive(false);
+    setToastType('found');
+    setError('');
+    replaceStudentIdParam(mappedStudent.studentNumber);
+
+    if (response.emergencyAlert?.warning) {
+      setActionMessage(response.emergencyAlert.warning);
+    } else {
+      setActionMessage('');
     }
   }
 
-  // Called when the user types a student ID and presses Search / Enter
-  function handleSearch() {
-    const trimmed = studentId.trim();
-    if (!trimmed) return;
-    setCameraActive(false); // pause camera while showing result
-    const student = MOCK_STUDENTS[trimmed];
-    if (student) {
-      setFoundStudent(student);
-      setFoundId(trimmed);
-      setStatus('found');
-      setToastType('found');
+  async function fetchStudentByQrToken(qrToken: string) {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    const response = await api.get<ScanResponse>(`/clinic/scan-token/${encodeURIComponent(qrToken)}`, token);
+    const mappedStudent = mapProfileToStudent('', response.data);
+
+    setFoundStudent(mappedStudent);
+    setStudentInput(mappedStudent.studentNumber);
+    setStatus('found');
+    setCameraActive(false);
+    setToastType('found');
+    setError('');
+    replaceStudentIdParam(mappedStudent.studentNumber);
+
+    if (response.emergencyAlert?.warning) {
+      setActionMessage(response.emergencyAlert.warning);
     } else {
+      setActionMessage('');
+    }
+  }
+
+  async function searchStudent(query: string) {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    const response = await api.get<SearchResponse>(`/clinic/search?q=${encodeURIComponent(query)}`, token);
+    const matches = response.data || [];
+
+    if (matches.length === 0) {
       setFoundStudent(null);
       setStatus('not-found');
       setToastType('not-found');
+      return;
     }
+
+    const exactMatch = matches.find((student) => student.studentNumber.toLowerCase() === query.toLowerCase());
+    const chosen = exactMatch || matches[0];
+
+    await fetchStudentByUserId(chosen.user.id);
+  }
+
+  async function resolveLookup(rawInput: string) {
+    const parsed = parseQrPayload(rawInput);
+    if (!parsed.userId && !parsed.studentNumber && !parsed.qrToken && !parsed.fallbackText) return;
+
+    setLoading(true);
+    setError('');
+    setActionMessage('');
+
+    try {
+      if (parsed.qrToken) {
+        await fetchStudentByQrToken(parsed.qrToken);
+      } else if (parsed.userId) {
+        await fetchStudentByUserId(parsed.userId);
+      } else if (parsed.studentNumber) {
+        await searchStudent(parsed.studentNumber);
+      } else {
+        await searchStudent(parsed.fallbackText);
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Could not fetch student record right now.');
+      }
+      setFoundStudent(null);
+      setStatus('not-found');
+      setToastType('not-found');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleQrScan(text: string) {
+    setCameraActive(false);
+    await resolveLookup(text);
+  }
+
+  async function handleManualSearch() {
+    const query = studentInput.trim();
+    if (!query) return;
+
+    setCameraActive(false);
+    await resolveLookup(query);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') handleSearch();
+    if (e.key === 'Enter') {
+      void handleManualSearch();
+    }
   }
 
   function handleReset() {
-    setStudentId('');
-    setStatus('idle');
-    setFoundStudent(null);
-    setFoundId('');
-    setToastType(null);
-    setCameraActive(true); // restart the camera for the next scan
+    resetScannerState();
+    replaceStudentIdParam(null);
   }
 
-  // Initials from first + last name  e.g. "Juan Dela Cruz" â†’ "JD"
+  async function handleConsultSave(
+    form: {
+      symptoms: string;
+      bp: string;
+      temperature: string;
+      treatmentProvided: string;
+    },
+    medicines: Array<{ medicine: string; qty: string }>,
+  ) {
+    if (!foundStudent) return;
+
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    const dispensedMedicines = medicines
+      .map((medicine) => {
+        const inventoryId = inventoryByName[medicine.medicine.trim().toLowerCase()];
+        if (!inventoryId) return null;
+
+        const qty = Number(medicine.qty);
+        return {
+          inventoryId,
+          quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
+        };
+      })
+      .filter((entry): entry is { inventoryId: string; quantity: number } => entry !== null);
+
+    const normalizedSymptoms = form.symptoms?.trim() || '';
+    const normalizedTreatment = form.treatmentProvided?.trim() || '';
+
+    const structuredComplaint = {
+      symptoms: normalizedSymptoms,
+      chiefComplaint: normalizedSymptoms,
+      diagnosis: normalizedSymptoms,
+      treatmentProvided: normalizedTreatment,
+      treatmentManagement: normalizedTreatment,
+      vitals: {
+        bp: form.bp?.trim() || null,
+        temperature: form.temperature?.trim() || null,
+      },
+      notes: [normalizedSymptoms, normalizedTreatment]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(' | ') || 'General consultation',
+    };
+
+    try {
+      await api.post(
+        '/clinic/visits',
+        {
+          studentProfileId: foundStudent.studentProfileId,
+          visitDate: new Date().toISOString(),
+          visitTime: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+          chiefComplaintEnc: JSON.stringify(structuredComplaint),
+          dispensedMedicines,
+        },
+        token,
+      );
+
+      const skipped = medicines.length - dispensedMedicines.length;
+      if (skipped > 0) {
+        setActionMessage(`Consultation saved. ${skipped} medicine item(s) were not in inventory and were skipped.`);
+      } else {
+        setActionMessage('Consultation saved successfully.');
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to save consultation record.');
+      }
+    }
+  }
+
+  async function handleEmergencyAlert() {
+    if (!foundStudent) return;
+
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      setSendingEmergency(true);
+      setError('');
+
+      const response = await api.post<EmergencyAlertResponse>(
+        '/clinic/emergency-alert',
+        {
+          studentProfileId: foundStudent.studentProfileId,
+          incidentDetails: 'Urgent health concern detected during clinic screening.',
+        },
+        token,
+      );
+
+      const recipient = response.data?.recipient || 'the emergency contact';
+      setActionMessage(`Guardian alert sent successfully to ${recipient}.`);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to send guardian emergency alert.');
+      }
+    } finally {
+      setSendingEmergency(false);
+    }
+  }
+
+  async function handlePhysicalExamSave(form: PhysicalExamFormData) {
+    if (!foundStudent) return;
+
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      setError('');
+
+      await api.post(
+        '/physical-exams',
+        {
+          studentProfileId: foundStudent.studentProfileId,
+          ...form,
+        },
+        token,
+      );
+
+      setActionMessage('Physical examination recorded successfully.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to save physical examination record.');
+      }
+    }
+  }
+
   const initials = foundStudent
     ? `${foundStudent.firstName[0]}${foundStudent.lastName[0]}`.toUpperCase()
     : '';
 
   return (
     <div className="relative p-4 sm:p-6 max-w-2xl mx-auto">
-
-      {/* Consultation Modal */}
       {showConsultModal && foundStudent && (
         <ConsultationModal
           patient={{
-            name:       `${foundStudent.firstName} ${foundStudent.lastName}`,
-            age:        '',
+            name: `${foundStudent.firstName} ${foundStudent.lastName}`,
             department: foundStudent.college,
-            course:     foundStudent.course,
-            sex:        '',
+            course: foundStudent.course,
           }}
           onClose={() => setShowConsultModal(false)}
           onSave={(data, medicines) => {
-            // TODO: POST /api/consultations
-            console.log('Saving consultation:', data, medicines);
+            void handleConsultSave(data, medicines);
             setShowConsultModal(false);
           }}
         />
       )}
 
-      {/* Physical Exam Modal */}
       {showExamModal && foundStudent && (
         <PhysicalExamModal
           studentName={`${foundStudent.firstName} ${foundStudent.lastName}`}
           onClose={() => setShowExamModal(false)}
-          onSave={(data) => {
-            // TODO: POST /api/students/:id/physical-exams
-            console.log('Saving physical exam:', data);
+          onSave={(form) => {
+            void handlePhysicalExamSave(form as PhysicalExamFormData);
             setShowExamModal(false);
           }}
         />
       )}
 
-      {/* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      {/* Green for found, red for not-found â€” auto-dismisses */}
       <div
         aria-live="polite"
-        className={`
-          fixed top-4 right-4 z-50 flex items-center gap-2.5
-          text-sm font-bold px-4 py-3 rounded-xl shadow-lg
-          transition-all duration-300
-          ${toastType === 'found'
+        className={`fixed top-4 right-4 z-50 flex items-center gap-2.5 text-sm font-bold px-4 py-3 rounded-xl shadow-lg transition-all duration-300 ${
+          toastType === 'found'
             ? 'bg-white border border-green-200 text-green-600 shadow-green-100'
             : 'bg-red-500 text-white shadow-red-200'
-          }
-          ${toastType
-            ? 'opacity-100 translate-y-0 pointer-events-auto'
-            : 'opacity-0 -translate-y-2 pointer-events-none'
-          }
-        `}
+        } ${toastType ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
       >
-        {toastType === 'found' ? (
-          /* Checkmark circle */
-          <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10" strokeWidth="2" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 12l3 3 5-5" />
-          </svg>
-        ) : (
-          /* Exclamation circle */
-          <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10" strokeWidth="2" />
-            <line x1="12" y1="8" x2="12" y2="12" strokeWidth="2.5" strokeLinecap="round" />
-            <circle cx="12" cy="16" r="0.5" fill="currentColor" strokeWidth="2" />
-          </svg>
-        )}
-        {toastType === 'found' ? 'Student Found!' : 'Student Not Found!'}
+        {toastType === 'found' ? 'Student Found' : 'Student Not Found'}
       </div>
 
-      {/* â”€â”€ Page header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="text-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">QR Code Scanner</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Scan a student&apos;s QR code to quickly access their health record
-        </p>
+        <p className="text-sm text-gray-500 mt-1">Scan a student QR code or search by student number.</p>
       </div>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          FOUND STATE â€” student result card
-          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      {actionMessage && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          {actionMessage}
+        </div>
+      )}
+
       {status === 'found' && foundStudent ? (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
-
-          {/* Student info row */}
           <div className="flex items-center gap-4">
-            {/* Avatar circle */}
             <div className="w-14 h-14 rounded-full bg-teal-500 flex items-center justify-center shrink-0 shadow-md shadow-teal-100">
               <span className="text-white text-lg font-bold tracking-wide">{initials}</span>
             </div>
 
             <div>
-              {/* Last name, First name */}
               <h2 className="text-lg font-bold text-gray-900 leading-tight">
-                {foundStudent.lastName}
-                <span className="font-normal text-gray-400">,</span>{' '}
-                {foundStudent.firstName}
+                {foundStudent.lastName}, {foundStudent.firstName}
               </h2>
-              {/* Student ID in teal */}
-              <p className="text-sm font-semibold text-teal-500 mt-0.5">{foundId}</p>
-              {/* Course + College */}
-              <p className="text-xs text-gray-500 mt-0.5">
-                {foundStudent.course}
-                <span className="mx-1.5 text-gray-300">â€¢</span>
-                {foundStudent.college}
-              </p>
+              <p className="text-sm font-semibold text-teal-500 mt-0.5">{foundStudent.studentNumber}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{foundStudent.course}</p>
             </div>
           </div>
 
-          {/* Blood type + allergy pills */}
           <div className="flex flex-wrap gap-1.5 mt-4">
-            <BloodTypePill type={foundStudent.bloodType} />
-            {foundStudent.allergies.map((a) => (
-              <AllergyPill key={a} name={a} />
-            ))}
-            {foundStudent.allergies.length === 0 && (
+            <BloodTypePill bloodType={foundStudent.bloodType} />
+            {foundStudent.allergies.length > 0 ? (
+              foundStudent.allergies.map((allergy) => <AllergyPill key={allergy} name={allergy} />)
+            ) : (
               <span className="text-xs text-gray-400 italic">No known allergies</span>
             )}
           </div>
 
-          {/* Action buttons */}
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <button
               onClick={() => setShowConsultModal(true)}
-              className="flex-1 flex items-center justify-center gap-2
-              bg-teal-500 hover:bg-teal-600 text-white font-semibold text-sm
-              px-5 py-3 rounded-xl transition-colors">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3-3-3z" />
-              </svg>
+              className="flex-1 bg-teal-500 hover:bg-teal-600 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors"
+            >
               Consult
             </button>
+
             <button
               onClick={() => setShowExamModal(true)}
-              className="flex-1 flex items-center justify-center gap-2
-              border-2 border-teal-500 text-teal-600 hover:bg-teal-50
-              font-semibold text-sm px-5 py-3 rounded-xl transition-colors bg-white">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
+              className="flex-1 border-2 border-teal-500 text-teal-600 hover:bg-teal-50 font-semibold text-sm px-5 py-3 rounded-xl transition-colors bg-white"
+            >
               Physical Exam
             </button>
+
             <button
-              onClick={() => router.push(`/dashboard/staff/record/${foundId}`)}
-              className="flex-1 flex items-center justify-center gap-2
-              border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600
-              font-semibold text-sm px-5 py-3 rounded-xl transition-colors bg-white">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+              onClick={() => { void handleEmergencyAlert(); }}
+              disabled={sendingEmergency}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors disabled:opacity-70"
+            >
+              {sendingEmergency ? 'Sending Alert...' : 'Alert Guardian'}
+            </button>
+
+            <button
+              onClick={() => router.push(`/dashboard/staff/record/${encodeURIComponent(foundStudent.studentNumber)}`)}
+              className="flex-1 border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 font-semibold text-sm px-5 py-3 rounded-xl transition-colors bg-white"
+            >
               View Record
             </button>
           </div>
 
-          {/* Scan another */}
           <div className="text-center mt-5">
-            <button
-              onClick={handleReset}
-              className="text-xs text-gray-400 hover:text-teal-500 transition-colors"
-            >
+            <button onClick={handleReset} className="text-xs text-gray-400 hover:text-teal-500 transition-colors">
               Scan another student
             </button>
           </div>
         </div>
-
       ) : (
-        /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-           IDLE / NOT-FOUND STATE â€” scanner frame + search
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
-
-          {/* Live camera feed — or tap-to-restart placeholder when paused */}
           <div className="mb-5">
             {cameraActive ? (
-              <QrCameraScanner active={true} onScan={handleQrScan} />
+              <QrCameraScanner active={true} onScan={(value) => { void handleQrScan(value); }} />
             ) : (
               <div className="max-w-xs mx-auto">
                 <button
                   type="button"
-                  onClick={() => { setCameraActive(true); setStatus('idle'); setToastType(null); }}
-                  className="w-full flex flex-col items-center justify-center
-                    h-52 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200
-                    text-gray-400 hover:text-teal-500 hover:border-teal-300 transition-colors"
+                  onClick={() => {
+                    setCameraActive(true);
+                    setStatus('idle');
+                    setToastType(null);
+                  }}
+                  className="w-full flex flex-col items-center justify-center h-52 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 hover:text-teal-500 hover:border-teal-300 transition-colors"
                 >
-                  {/* Camera icon */}
-                  <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                      d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
                   <span className="text-sm font-medium">Tap to scan again</span>
                 </button>
               </div>
@@ -372,68 +777,47 @@ export default function ScannerPage() {
           <p className="text-center text-sm text-gray-500 mb-6">
             {cameraActive
               ? 'Hold the QR code steady within the camera frame'
-              : 'Camera paused - tap above to restart, or search below'}
+              : 'Camera paused. Restart scan above or search manually below.'}
           </p>
 
-          {/* Divider */}
           <div className="flex items-center gap-3 mb-5">
             <div className="flex-1 border-t border-gray-100" />
             <span className="text-xs text-gray-400 font-medium">Or search manually</span>
             <div className="flex-1 border-t border-gray-100" />
           </div>
 
-          {/* Manual search input */}
           <div className="flex gap-2">
             <input
               type="text"
-              value={studentId}
+              value={studentInput}
               onChange={(e) => {
-                setStudentId(e.target.value);
+                setStudentInput(e.target.value);
                 if (status !== 'idle') setStatus('idle');
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Enter Student ID (e.g. 2023-0001)"
-              className={`
-                flex-1 border rounded-xl px-4 py-2.5 text-sm
-                focus:outline-none focus:ring-2 focus:ring-teal-400 transition
-                ${status === 'not-found'
+              placeholder="Enter Student Number"
+              className={`flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 transition ${
+                status === 'not-found'
                   ? 'border-red-300 bg-red-50 text-red-800 placeholder:text-red-300'
                   : 'border-gray-200 bg-white text-gray-800 placeholder:text-gray-400'
-                }
-              `}
+              }`}
             />
             <button
-              onClick={handleSearch}
-              className="bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold
-                px-5 py-2.5 rounded-xl transition-colors shrink-0"
+              onClick={() => { void handleManualSearch(); }}
+              disabled={loading}
+              className="bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors shrink-0 disabled:opacity-70"
             >
-              Search
+              {loading ? 'Searching...' : 'Search'}
             </button>
           </div>
 
-          {/* Inline error */}
           {status === 'not-found' && (
-            <div className="mt-3 flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-              <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" strokeWidth="2" />
-                <line x1="12" y1="8" x2="12" y2="12" strokeWidth="2.5" strokeLinecap="round" />
-                <circle cx="12" cy="16" r="0.5" fill="currentColor" strokeWidth="2" />
-              </svg>
-              <p className="text-sm text-red-600">
-                Student not found. Please check the ID and try again.
-              </p>
+            <div className="mt-3 rounded-xl px-4 py-3 bg-red-50 border border-red-100 text-sm text-red-600">
+              Student not found. Check the number or scan the QR code again.
             </div>
           )}
         </div>
       )}
-
-      {/* â”€â”€ Hint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      {status !== 'found' && (
-        <p className="text-center text-[11px] text-gray-400 mt-4">
-          Try demo IDs: <span className="font-mono">2023-0001</span> Â· <span className="font-mono">2023-0002</span> Â· <span className="font-mono">2024-0010</span>
-        </p>
-      )}
-
     </div>
   );
 }

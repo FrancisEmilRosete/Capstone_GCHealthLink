@@ -7,15 +7,10 @@
  * It is the first page users see when they open the app.
  *
  * Responsibilities:
- *  1. Holds the form state (role, email, password, rememberMe)
- *  2. Passes state and handlers down to child components
- *  3. Calls the backend API when Sign In is clicked (TODO)
- *  4. Redirects to the correct dashboard based on role (TODO)
- *
- * Child components used:
- *  ┌─ RoleSelector      → picks Staff / Student / Faculty
- *  ├─ LoginForm         → email, password, remember me, sign in
- *  └─ DemoLoginButtons  → quick test logins
+ * 1. Holds the form state (role, email, password, rememberMe)
+ * 2. Passes state and handlers down to child components
+ * 3. Calls the real Node.js backend API when Sign In is clicked
+ * 4. Redirects to the correct dashboard based on the database role
  */
 
 'use client';
@@ -26,14 +21,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 import { UserRole }               from '@/types/auth';
-import { DemoUser, DEMO_USERS }   from '@/constants/roles';
-// TODO (backend): uncomment these two lines when the API is live
-// import { authLogin } from '@/lib/auth';
-// import { ApiError }  from '@/lib/api';
+import { ApiError }               from '@/lib/api';
+import { authLogin, authLogout }  from '@/lib/auth';
 import HeartbeatIcon              from '@/components/icons/HeartbeatIcon';
 import RoleSelector               from '@/components/auth/RoleSelector';
 import LoginForm                  from '@/components/auth/LoginForm';
-import DemoLoginButtons           from '@/components/auth/DemoLoginButtons';
 
 export default function LoginPage() {
 
@@ -51,20 +43,9 @@ export default function LoginPage() {
 
   /**
    * Handles the Sign In button click.
-   * Currently validates against local demo credentials.
-   *
-   * TODO (backend): replace the body of this function with:
-   *
-   *   setLoading(true);
-   *   try {
-   *     const { user } = await authLogin({ email: email.trim().toLowerCase(), password, role: selectedRole });
-   *     router.push(`/dashboard/${user.role}`);
-   *   } catch (err) {
-   *     setError(err instanceof ApiError ? err.message : 'Login failed. Please try again.');
-   *     setLoading(false);
-   *   }
+   * Sends credentials to the Node.js backend and handles the JWT token.
    */
-  function handleSignIn() {
+  async function handleSignIn() {
     setError('');
 
     if (!email.trim()) { setError('Please enter your email address.'); return; }
@@ -72,35 +53,40 @@ export default function LoginPage() {
 
     setLoading(true);
 
-    // Check against local demo credentials
-    setTimeout(() => {
-      const match = DEMO_USERS.find(
-        (u) =>
-          u.role     === selectedRole &&
-          u.email    === email.trim().toLowerCase() &&
-          u.password === password
-      );
+    try {
+      const { user } = await authLogin({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
-      if (!match) {
-        setError('Incorrect email or password. Please try again.');
-        setLoading(false);
+      const actualRole: UserRole = user.role === 'ADMIN'
+        ? 'admin'
+        : user.role === 'CLINIC_STAFF'
+          ? 'staff'
+          : 'student';
+
+      if (selectedRole !== actualRole) {
+        authLogout();
+        setError(`Role mismatch. This account is registered as ${actualRole}.`);
         return;
       }
 
-      router.push(`/dashboard/${selectedRole}`);
-    }, 600);
-  }
+      const dashboardRoute = actualRole === 'admin'
+        ? '/dashboard/admin'
+        : actualRole === 'staff'
+          ? '/dashboard/staff'
+          : '/dashboard/student';
 
-  /**
-   * Handles Quick Demo Login button clicks.
-   * Pre-fills the form with demo credentials.
-   * The user still needs to press Sign In — no automatic redirect.
-   */
-  function handleDemoLogin(user: DemoUser) {
-    setError('');
-    setSelectedRole(user.role);
-    setEmail(user.email);
-    setPassword(user.password);
+      router.push(dashboardRoute);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Could not connect to the server. Is the backend running?');
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   // ── Render ─────────────────────────────────────────────────
@@ -108,7 +94,6 @@ export default function LoginPage() {
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-white">
 
       {/* ── Background Blobs ───────────────────────────────── */}
-      {/* These are decorative blurred circles. Adjust colors/position as needed. */}
       <div className="pointer-events-none absolute -top-32 -left-32 w-[520px] h-[520px] rounded-full bg-teal-400 opacity-20 blur-[120px]" />
       <div className="pointer-events-none absolute -top-20 -right-32 w-[480px] h-[480px] rounded-full bg-blue-400 opacity-20 blur-[120px]" />
       <div className="pointer-events-none absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-teal-300 opacity-15 blur-[120px]" />
@@ -147,9 +132,6 @@ export default function LoginPage() {
           error={error}
           loading={loading}
         />
-
-        {/* Quick Demo Login (for testing only) */}
-        <DemoLoginButtons onDemoLogin={handleDemoLogin} />
 
         {/* Register link for new students */}
         <p className="mt-4 text-center text-xs text-gray-400">

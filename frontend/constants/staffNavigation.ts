@@ -25,8 +25,6 @@ import {
   ConsultationsIcon,
   ScannerIcon,
   InventoryIcon,
-  CertificatesIcon,
-  ReportsIcon,
   NotificationsIcon,
 } from '@/components/icons/NavIcons';
 
@@ -46,7 +44,7 @@ export interface StaffNavGroup {
 
 export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
   {
-    groupLabel: 'Main',
+    groupLabel: 'MAIN',
     items: [
       {
         id:    'dashboard',
@@ -55,54 +53,44 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
         icon:  DashboardIcon,
       },
       {
-        id:    'physical-examination',
-        label: 'Physical Examination',
-        href:  '/dashboard/staff/physical-examination',
-        icon:  PhysicalExamIcon,
-      },
-      {
-        id:    'consultations',
-        label: 'Consultations',
-        href:  '/dashboard/staff/consultations',
-        icon:  ConsultationsIcon,
-        // badge: 3  ← uncomment and set a real number when backend is ready
-      },
-      {
         id:    'scanner',
         label: 'QR Scanner',
         href:  '/dashboard/staff/scanner',
         icon:  ScannerIcon,
-      },
-    ],
-  },
-  {
-    groupLabel: 'Inventory & Reports',
-    items: [
-      {
-        id:    'inventory',
-        label: 'Medicine Inventory',
-        href:  '/dashboard/staff/inventory',
-        icon:  InventoryIcon,
-        // badge: 1  ← uncomment when low-stock alerts are connected
-      },
-      {
-        id:    'certificates',
-        label: 'Certificates',
-        href:  '/dashboard/staff/certificates',
-        icon:  CertificatesIcon,
-      },
-      {
-        id:    'reports',
-        label: 'Reports',
-        href:  '/dashboard/staff/reports',
-        icon:  ReportsIcon,
       },
       {
         id:    'notifications',
         label: 'Notifications',
         href:  '/dashboard/staff/notifications',
         icon:  NotificationsIcon,
-        // badge: 4  ← uncomment and set real count from API
+      },
+    ],
+  },
+  {
+    groupLabel: 'MEDICAL RECORDS',
+    items: [
+      {
+        id:    'consultations',
+        label: 'Consultations',
+        href:  '/dashboard/staff/consultations',
+        icon:  ConsultationsIcon,
+      },
+      {
+        id:    'physical-examination',
+        label: 'Physical Examination',
+        href:  '/dashboard/staff/physical-examination',
+        icon:  PhysicalExamIcon,
+      },
+    ],
+  },
+  {
+    groupLabel: 'CLINIC OPERATIONS',
+    items: [
+      {
+        id:    'inventory',
+        label: 'Medicine Inventory',
+        href:  '/dashboard/staff/inventory',
+        icon:  InventoryIcon,
       },
     ],
   },

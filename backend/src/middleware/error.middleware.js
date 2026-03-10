@@ -4,12 +4,30 @@ function notFound(req, res, next) {
   next(error);
 }
 
+function mapMulterErrorMessage(error) {
+  if (error.code === "LIMIT_FILE_SIZE") {
+    return "Uploaded file is too large.";
+  }
+
+  if (error.code === "LIMIT_UNEXPECTED_FILE") {
+    return "Unexpected upload field. Expected field name: file.";
+  }
+
+  return error.message || "Invalid file upload request.";
+}
+
 function errorHandler(error, req, res, next) {
-  const status = error.status || 500;
+  let status = error.status || 500;
+  let message = error.message || "Internal Server Error";
+
+  if (error.name === "MulterError") {
+    status = 400;
+    message = mapMulterErrorMessage(error);
+  }
 
   const payload = {
     success: false,
-    message: error.message || "Internal Server Error",
+    message,
   };
 
   if (error.details) {

@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "phasee:integration": "node scripts/integration.phasee.js",
+    "phasee:smoke": "node scripts/smoke.phasee.js",
+    "phasee:verify": "npm run phasee:integration && npm run phasee:smoke",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:studio": "prisma studio"
@@ -20,6 +23,8 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "pdfkit": "^0.17.2",
     "prisma": "^6.6.0",
     "qrcode": "^1.5.4"
   },

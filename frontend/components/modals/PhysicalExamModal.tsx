@@ -16,7 +16,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 
 // ── Form shape ────────────────────────────────────────────────
 interface PhysicalExamForm {
@@ -106,10 +106,13 @@ function Field({
   type?: string;
   readOnly?: boolean;
 }) {
+  const inputId = useId();
+
   return (
     <div>
-      <label className="block text-[11px] font-medium text-teal-500 mb-1">{label}</label>
+      <label htmlFor={inputId} className="block text-[11px] font-medium text-teal-500 mb-1">{label}</label>
       <input
+        id={inputId}
         type={type}
         readOnly={readOnly}
         value={value}
@@ -135,6 +138,9 @@ export default function PhysicalExamModal({
 }: PhysicalExamModalProps) {
   const [form, setForm] = useState<PhysicalExamForm>(INITIAL_FORM);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Auto-calculate BMI when weight or height changes
   const bmi = (() => {
@@ -144,13 +150,45 @@ export default function PhysicalExamModal({
     return '';
   })();
 
-  // Close on Escape key
+  // Close on Escape + keep keyboard focus inside the modal while open.
   useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (e.key !== 'Tab' || !dialogRef.current) {
+        return;
+      }
+
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])',
+      );
+
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previousFocusRef.current?.focus();
+    };
   }, [onClose]);
 
   // Close when clicking the dark backdrop
@@ -175,15 +213,23 @@ export default function PhysicalExamModal({
       className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
     >
       {/* ── Dialog ────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh]
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="physical-exam-modal-title"
+        tabIndex={-1}
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh]
         overflow-y-auto flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
-          <h2 className="text-base font-bold text-gray-900">Record Physical Examination</h2>
+          <h2 id="physical-exam-modal-title" className="text-base font-bold text-gray-900">Record Physical Examination</h2>
           <button
+            ref={closeButtonRef}
+            type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Close physical exam modal"
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,6 +252,7 @@ export default function PhysicalExamModal({
               <select
                 value={form.yearLevel}
                 onChange={(e) => set('yearLevel')(e.target.value)}
+                aria-label="Year Level"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm
                   bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
               >
@@ -302,7 +349,8 @@ export default function PhysicalExamModal({
 
             {/* Chest X-ray */}
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Chest X-ray</p>
-            <div className="border border-gray-100 rounded-xl p-3 mb-4 space-y-2 bg-gray-50">
+            <fieldset className="border border-gray-100 rounded-xl p-3 mb-4 space-y-2 bg-gray-50">
+              <legend className="text-[11px] font-semibold text-gray-500 px-1">Chest X-ray Result</legend>
               {/* Normal radio */}
               <label className="flex items-center gap-2.5 cursor-pointer group">
                 <input
@@ -345,7 +393,7 @@ export default function PhysicalExamModal({
                     focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
                 />
               )}
-            </div>
+            </fieldset>
 
             {/* Others */}
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Others</p>
@@ -357,6 +405,7 @@ export default function PhysicalExamModal({
         {/* Footer buttons */}
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 shrink-0">
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 text-sm font-semibold text-gray-500
               border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
@@ -364,6 +413,7 @@ export default function PhysicalExamModal({
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleSave}
             className="px-5 py-2 text-sm font-semibold text-white
               bg-teal-500 hover:bg-teal-600 rounded-xl transition-colors"

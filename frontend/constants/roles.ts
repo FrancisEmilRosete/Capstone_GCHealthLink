@@ -19,25 +19,3 @@ export const ROLES: RoleOption[] = [
   { id: 'student', label: 'Student' },
   { id: 'admin',   label: 'Admin'   },
 ];
-
-/**
- * Demo user accounts for quick testing during development.
- *
- * ✅ To add a new demo user: add a new object here.
- * ⚠️  Remove or disable these in production.
- *
- * Each entry maps to a role, and has preset email + password
- * so testers can log in with one click.
- */
-export interface DemoUser {
-  label:    string;   // button label shown on screen
-  role:     UserRole; // which role this demo user belongs to
-  email:    string;   // pre-filled email
-  password: string;   // pre-filled password
-}
-
-export const DEMO_USERS: DemoUser[] = [
-  { label: 'Doctor',  role: 'staff',   email: 'doctor@gchealthlink.com',  password: 'demo1234' },
-  { label: 'Student', role: 'student', email: 'student@gchealthlink.com', password: 'demo1234' },
-  { label: 'Admin',   role: 'admin',   email: 'admin@gchealthlink.com',   password: 'demo1234' },
-];

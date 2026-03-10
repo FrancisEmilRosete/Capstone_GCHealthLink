@@ -1,0 +1,19 @@
+{
+  "clinic": {
+    "clinicName": "GC HealthLink - Clinic Management System",
+    "schoolYear": "2025-2026",
+    "contactNumber": "+63 47 224 2000",
+    "email": "clinic@gordoncollege.edu.ph",
+    "address": "Gordon College, Olongapo City",
+    "operatingHours": "Monday - Friday, 8:00 AM - 5:00 PM"
+  },
+  "notifications": {
+    "lowInventory": true,
+    "highVisitVolume": true,
+    "pendingAccounts": true,
+    "diseaseAlert": true,
+    "loginActivity": true,
+    "exportActivity": false
+  },
+  "staffPreferences": {}
+}

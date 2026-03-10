@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { authLogout } from '@/lib/auth';
+import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken, getUserId } from '@/lib/auth';
 import { SignOutIcon, SettingsIcon, ShieldIcon } from '@/components/icons/NavIcons';
 import { ADMIN_NAV_GROUPS } from '@/constants/adminNavigation';
 
@@ -21,13 +21,16 @@ interface AdminLayoutProps {
 
 function AdminSidebar({
   isOpen,
+  displayName,
   onClose,
 }: {
   isOpen: boolean;
+  displayName: string;
   onClose: () => void;
 }) {
   const pathname = usePathname();
   const router   = useRouter();
+  const adminInitial = (displayName.trim()[0] || 'A').toUpperCase();
 
   useEffect(() => { onClose(); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -121,10 +124,10 @@ function AdminSidebar({
         {/* Admin profile */}
         <div className="flex items-center gap-3 px-3 py-2.5 mt-1">
           <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-            A
+            {adminInitial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">Admin</p>
+            <p className="text-sm font-semibold text-white truncate">{displayName}</p>
             <p className="text-[10px] text-slate-400 capitalize">admin</p>
           </div>
         </div>
@@ -202,6 +205,7 @@ function AdminTopBar({ onMenuOpen, isDark, onToggleDark }: { onMenuOpen: () => v
         {/* Dark / Light toggle */}
         <button
           onClick={onToggleDark}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
           title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
           className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
         >
@@ -218,7 +222,7 @@ function AdminTopBar({ onMenuOpen, isDark, onToggleDark }: { onMenuOpen: () => v
           )}
         </button>
 
-        <button className="relative p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
+        <button aria-label="Notifications" className="relative p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -235,11 +239,37 @@ function AdminTopBar({ onMenuOpen, isDark, onToggleDark }: { onMenuOpen: () => v
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark,      setIsDark]      = useState(false);
+  const router = useRouter();
+  const token = getToken();
+  const role = getNormalizedUserRole();
+  const userId = getUserId();
+  const displayName = userId ? `Admin ${userId.slice(0, 6)}` : 'Admin User';
+  const isAuthorized = !!token && role === 'ADMIN';
+
+  useEffect(() => {
+    if (!token || !role) {
+      router.replace('/login');
+      return;
+    }
+
+    if (role !== 'ADMIN') {
+      router.replace(getDashboardRouteForRole(role));
+    }
+  }, [role, router, token]);
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <p className="text-sm text-gray-500 dark:text-gray-400">Checking session...</p>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex min-h-screen${isDark ? ' dark' : ''}`}>
       <AdminSidebar
         isOpen={sidebarOpen}
+        displayName={displayName}
         onClose={() => setSidebarOpen(false)}
       />
       <div className="flex flex-col flex-1 min-w-0 bg-gray-50 dark:bg-gray-950">

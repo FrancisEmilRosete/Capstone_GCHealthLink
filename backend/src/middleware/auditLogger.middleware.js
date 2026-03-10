@@ -29,7 +29,7 @@ function auditLogger(actionOrResolver) {
 
         await prisma.auditLog.create({
           data: {
-            userId: req.user?.id || null,
+            userId: req.user?.userId || null,
             action,
             targetId:
               req.params?.id || req.body?.studentProfileId || req.body?.studentId || null,

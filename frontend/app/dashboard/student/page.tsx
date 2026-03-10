@@ -1,217 +1,249 @@
-﻿'use client';
+'use client';
 
-/**
- * STUDENT DASHBOARD
- * Route: /dashboard/student
- * Shows: welcome banner, quick stats, recent visits, QR code, reminders.
- */
-
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
-// â”€â”€ Mock data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
-const STUDENT = {
-  firstName:  'Juan',
-  lastName:   'Dela Cruz',
-  id:         '2023-0001',
-  course:     'BS Civil Engineering',
-  department: 'College of Engineering',
-  bloodType:  'O+',
-  bmi:        '22.5',
-};
-
-const RECENT_VISITS = [
-  {
-    id:        1,
-    date:      '3/10/2024',
-    diagnosis: 'Tension Headache',
-    treatment: 'Rest, stress management',
-    type:      'Enquiry',
-    typeColor: 'bg-yellow-100 text-yellow-700',
-    dot:       'bg-yellow-400',
-  },
-  {
-    id:        2,
-    date:      '2/20/2024',
-    diagnosis: 'Gastritis',
-    treatment: 'Kremil-S, dietary modification',
-    type:      'Treated',
-    typeColor: 'bg-teal-100 text-teal-700',
-    dot:       'bg-teal-400',
-  },
-  {
-    id:        3,
-    date:      '11/8/2023',
-    diagnosis: 'Common Cold',
-    treatment: 'Includes Flu meds, rest',
-    type:      'Released',
-    typeColor: 'bg-blue-100 text-blue-700',
-    dot:       'bg-blue-400',
-  },
-];
-
-// â”€â”€ QR Code placeholder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function QRPlaceholder() {
-  const cells = [
-    [1,1,1,1,1,1,1,0,1,0,0,1,0,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,1,0,0,1,0,1,0,0,0,0,1],
-    [1,0,1,1,1,0,1,0,1,0,1,0,0,0,1,0,1,1,1,1],
-    [1,0,1,1,1,0,1,0,0,1,1,0,1,0,1,0,1,1,1,1],
-    [1,0,1,1,1,0,1,0,1,0,0,1,0,0,1,0,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,0,1,1,0,0,1,0,0,0,0,1],
-    [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1],
-    [0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0],
-    [1,1,0,1,1,0,1,1,0,0,1,0,0,1,1,0,1,0,1,1],
-    [0,1,0,0,1,0,0,1,1,0,0,1,0,0,0,1,0,0,1,0],
-    [1,0,1,1,0,1,0,0,0,1,1,0,1,0,1,0,1,1,0,1],
-    [0,0,0,1,0,0,0,1,0,1,0,0,1,0,0,1,0,0,0,0],
-    [1,1,1,0,1,1,1,0,1,0,0,1,0,0,1,1,1,0,1,1],
-    [0,0,0,0,0,0,0,0,1,1,1,0,1,0,0,0,0,0,0,0],
-    [1,1,1,1,1,1,1,0,0,1,0,1,0,0,1,1,1,1,1,1],
-    [1,0,0,0,0,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1],
-    [1,0,1,1,1,0,1,0,0,1,0,0,0,0,1,0,1,1,1,1],
-    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,0,0,1],
-    [1,1,1,1,1,1,1,0,1,0,0,0,1,0,1,1,1,1,1,1],
-  ];
-  const size  = 5;
-  const total = cells.length * size;
-  return (
-    <svg width={total} height={total} viewBox={`0 0 ${total} ${total}`}>
-      {cells.map((row, r) =>
-        row.map((cell, c) =>
-          cell ? (
-            <rect key={`${r}-${c}`} x={c * size} y={r * size} width={size} height={size} fill="#1a2e40" />
-          ) : null
-        )
-      )}
-    </svg>
-  );
+interface ClinicVisit {
+  id: string;
+  visitDate: string;
+  visitTime: string | null;
+  chiefComplaintEnc: string | null;
+  handledBy: {
+    email: string;
+  };
+  dispensedMedicines: Array<{
+    quantity: number;
+    inventory: {
+      itemName: string;
+      unit: string;
+    };
+  }>;
 }
 
+interface StudentProfile {
+  firstName: string;
+  lastName: string;
+  studentNumber: string;
+  courseDept: string;
+  medicalHistory: {
+    allergyEnc?: string | null;
+  } | null;
+  clinicVisits: ClinicVisit[];
+}
 
+interface StudentProfileResponse {
+  success: boolean;
+  data: StudentProfile;
+}
 
-// â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+interface QrResponse {
+  success: boolean;
+  data: {
+    studentNumber: string;
+    qrCodeImage: string;
+    qrTokenExpiresAt?: string;
+  };
+}
+
+function parseAllergyCount(raw?: string | null): number {
+  if (!raw) return 0;
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized || ['none', 'no', 'n/a', 'na'].includes(normalized)) return 0;
+  return raw.split(',').map((value) => value.trim()).filter(Boolean).length;
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function normalizeComplaint(raw?: string | null) {
+  if (!raw || !raw.trim()) return 'General Consultation';
+
+  const text = raw.trim();
+  try {
+    const parsed = JSON.parse(text) as {
+      chiefComplaint?: string;
+      diagnosis?: string;
+      notes?: string;
+    };
+
+    if (parsed && typeof parsed === 'object') {
+      const diagnosis = typeof parsed.diagnosis === 'string' ? parsed.diagnosis.trim() : '';
+      const complaint = typeof parsed.chiefComplaint === 'string' ? parsed.chiefComplaint.trim() : '';
+      const notes = typeof parsed.notes === 'string' ? parsed.notes.trim() : '';
+      return diagnosis || complaint || notes || 'General Consultation';
+    }
+  } catch {
+    // Legacy delimited payload.
+  }
+
+  const parts = text.split('|').map((part) => part.trim()).filter(Boolean);
+  return parts[0] || text;
+}
 
 export default function StudentDashboard() {
-  return (
-    <div className="p-5 space-y-5 max-w-3xl mx-auto">
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [qrImage, setQrImage] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-      {/* â”€â”€ Welcome Banner â”€â”€ */}
-      <div className="relative rounded-2xl overflow-hidden px-6 py-7"
-        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 60%, #134e4a 100%)' }}>
+  async function loadStudentData() {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setError('');
+      const [profileResponse, qrResponse] = await Promise.all([
+        api.get<StudentProfileResponse>('/students/me', token),
+        api.get<QrResponse>('/students/qr', token),
+      ]);
+
+      setProfile(profileResponse.data);
+      setQrImage(qrResponse.data.qrCodeImage || '');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to load student dashboard data.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadStudentData();
+  }, []);
+
+  const recentVisits = useMemo(() => {
+    return [...(profile?.clinicVisits || [])].slice(0, 3);
+  }, [profile]);
+
+  const allergyCount = parseAllergyCount(profile?.medicalHistory?.allergyEnc);
+  const totalVisits = profile?.clinicVisits?.length || 0;
+  const lastVisitDate = profile?.clinicVisits?.[0]?.visitDate;
+
+  return (
+    <div className="p-5 space-y-5 max-w-4xl mx-auto">
+      <div
+        className="relative rounded-2xl overflow-hidden px-6 py-7"
+        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 60%, #134e4a 100%)' }}
+      >
         <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10" />
         <div className="absolute -bottom-6 right-16 w-24 h-24 rounded-full bg-white/5" />
+
         <div className="relative z-10">
           <h1 className="text-xl font-bold text-white">
-            Welcome back, <span className="text-teal-200">{STUDENT.firstName}</span>!
+            {loading
+              ? 'Loading your dashboard...'
+              : `Welcome back, ${profile?.firstName || 'Student'}!`}
           </h1>
-          <p className="text-teal-100 text-sm mt-1.5 max-w-sm">
-            Stay on top of your health. Don&apos;t forget to submit your daily health declaration before entering the campus.
+          <p className="text-teal-100 text-sm mt-1.5 max-w-md">
+            Your profile and clinic records are now connected to the live backend.
           </p>
-          <div className="flex gap-3 mt-4">
-            <Link href="/dashboard/student/registration"
-              className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
+          <div className="flex flex-wrap gap-3 mt-4">
+            <Link href="/dashboard/student/consultation-request" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
+              Request Consultation
+            </Link>
+            <Link href="/dashboard/student/registration" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
               Register
             </Link>
-            <Link href="/dashboard/student/my-record"
-              className="px-4 py-2 bg-white text-teal-700 text-sm font-semibold rounded-xl hover:bg-teal-50 transition-colors">
+            <Link href="/dashboard/student/my-record" className="px-4 py-2 bg-white text-teal-700 text-sm font-semibold rounded-xl hover:bg-teal-50 transition-colors">
               View My Record
+            </Link>
+            <Link href="/dashboard/student/notifications" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
+              Advisories
             </Link>
           </div>
         </div>
       </div>
 
-      {/* â”€â”€ Quick Stats â”€â”€ */}
-      <div className="grid grid-cols-4 gap-3">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-2">
-          <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center">
-            <svg className="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">BMI</p>
-          <p className="text-2xl font-bold text-gray-800 leading-none">{STUDENT.bmi}</p>
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Student Number</p>
+          <p className="text-lg font-bold text-gray-800 mt-1">{loading ? '...' : profile?.studentNumber || '-'}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-2">
-          <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center">
-            <svg className="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C8 8 5 12.5 5 15a7 7 0 0014 0c0-2.5-3-7-7-13z" />
-            </svg>
-          </div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Blood Type</p>
-          <p className="text-2xl font-bold text-gray-800 leading-none">{STUDENT.bloodType}</p>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Total Visits</p>
+          <p className="text-2xl font-bold text-gray-800 mt-1">{loading ? '...' : totalVisits}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-2">
-          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Certificates</p>
-          <p className="text-2xl font-bold text-gray-800 leading-none">1</p>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Known Allergies</p>
+          <p className="text-2xl font-bold text-gray-800 mt-1">{loading ? '...' : allergyCount}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-2">
-          <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
-            <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Last Visit</p>
-          <p className="text-2xl font-bold text-gray-800 leading-none">Mar&nbsp;10</p>
+          <p className="text-lg font-bold text-gray-800 mt-1">{loading ? '...' : (lastVisitDate ? formatDate(lastVisitDate) : '-')}</p>
         </div>
       </div>
 
-      {/* â”€â”€ Recent Clinic Visits â”€â”€ */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
-        <h2 className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-4">Recent Clinic Visits</h2>
-        <div className="space-y-3">
-          {RECENT_VISITS.map(visit => (
-            <div key={visit.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-              <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${visit.dot}`} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{visit.diagnosis}</p>
-                  <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">{visit.date}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-bold text-gray-800 mb-4">Recent Clinic Visits</h2>
+
+          {loading ? (
+            <p className="text-sm text-gray-400">Loading visits...</p>
+          ) : recentVisits.length === 0 ? (
+            <p className="text-sm text-gray-400">No visit records yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {recentVisits.map((visit) => (
+                <div key={visit.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-gray-800 truncate">
+                      {normalizeComplaint(visit.chiefComplaintEnc)}
+                    </p>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">{formatDate(visit.visitDate)}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Handled by: {visit.handledBy?.email || 'Clinic Staff'}</p>
+                  {visit.dispensedMedicines.length > 0 && (
+                    <p className="text-xs text-teal-600 mt-1">
+                      Medicines: {visit.dispensedMedicines.map((item) => `${item.inventory.itemName} x${item.quantity}`).join(', ')}
+                    </p>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{visit.treatment}</p>
-                <span className={`inline-block mt-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full ${visit.typeColor}`}>
-                  {visit.type}
-                </span>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-        <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-          <Link href="/dashboard/student/my-record"
-            className="text-sm text-teal-600 font-semibold hover:text-teal-700 flex items-center gap-1">
-            View Full History
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col items-center">
+          <h2 className="text-sm font-bold text-gray-800 mb-3">My QR Code</h2>
+
+          {loading ? (
+            <p className="text-sm text-gray-400">Loading QR...</p>
+          ) : qrImage ? (
+            <img src={qrImage} alt="Student QR Code" className="w-44 h-44 rounded-xl border border-gray-100" />
+          ) : (
+            <p className="text-sm text-gray-400 text-center">QR code is not available right now.</p>
+          )}
+
+          <p className="text-xs text-gray-500 mt-3 text-center">
+            {profile ? `${profile.firstName} ${profile.lastName}` : ''}
+            {profile ? ` - ${profile.courseDept}` : ''}
+          </p>
         </div>
       </div>
-
-      {/* â”€â”€ QR Code â”€â”€ */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-6 flex flex-col items-center gap-3">
-        <div className="p-4 bg-white dark:bg-gray-700 border-2 border-gray-100 dark:border-gray-600 rounded-xl shadow-inner">
-          <QRPlaceholder />
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{STUDENT.firstName} {STUDENT.lastName}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{STUDENT.id} &bull; {STUDENT.department}</p>
-        </div>
-      </div>
-
     </div>
   );
 }
-

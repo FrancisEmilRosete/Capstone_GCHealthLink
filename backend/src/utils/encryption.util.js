@@ -74,6 +74,49 @@ function decryptString(ciphertext) {
   return decrypted.toString("utf8");
 }
 
+function isEncryptedPayload(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const parts = value.split(".");
+  return parts.length === 3 && parts.every((part) => part.length > 0);
+}
+
+function encryptStringSafe(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  try {
+    return encryptString(value);
+  } catch {
+    // Keep development usable when ENCRYPTION_KEY is not configured.
+    return typeof value === "string" ? value : JSON.stringify(value);
+  }
+}
+
+function decryptStringSafe(ciphertext) {
+  if (ciphertext === null || ciphertext === undefined) {
+    return null;
+  }
+
+  if (typeof ciphertext !== "string") {
+    return String(ciphertext);
+  }
+
+  if (!isEncryptedPayload(ciphertext)) {
+    return ciphertext;
+  }
+
+  try {
+    return decryptString(ciphertext);
+  } catch {
+    // Backward compatibility for legacy/plaintext rows.
+    return ciphertext;
+  }
+}
+
 function encryptBoolean(value) {
   if (value === null || value === undefined) {
     return null;
@@ -113,6 +156,9 @@ function decryptJson(ciphertext) {
 module.exports = {
   encryptString,
   decryptString,
+  encryptStringSafe,
+  decryptStringSafe,
+  isEncryptedPayload,
   encryptBoolean,
   decryptBoolean,
   encryptJson,

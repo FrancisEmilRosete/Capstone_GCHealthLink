@@ -19,10 +19,11 @@
 
 'use client';
 
-import { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar  from '@/components/layout/TopBar';
+import { getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -32,13 +33,42 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Controls the mobile sidebar drawer
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+  const token = getToken();
+  const role = getNormalizedUserRole();
+
+  const hasDedicatedRoleLayout = (
+    pathname?.startsWith('/dashboard/student') || pathname?.startsWith('/dashboard/admin')
+  );
+
+  useEffect(() => {
+    if (hasDedicatedRoleLayout) {
+      return;
+    }
+
+    if (!token || !role) {
+      router.replace('/login');
+      return;
+    }
+
+    if (role !== 'CLINIC_STAFF') {
+      router.replace(getDashboardRouteForRole(role));
+    }
+  }, [hasDedicatedRoleLayout, role, router, token]);
+
+  const isAuthorized = !!token && role === 'CLINIC_STAFF';
 
   // Student and admin pages use their own self-contained layouts
-  if (
-    pathname?.startsWith('/dashboard/student') ||
-    pathname?.startsWith('/dashboard/admin')
-  ) {
+  if (hasDedicatedRoleLayout) {
     return <>{children}</>;
+  }
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-sm text-gray-500">Checking session...</p>
+      </div>
+    );
   }
 
   return (

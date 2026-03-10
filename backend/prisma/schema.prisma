@@ -54,6 +54,7 @@ model StudentProfile {
   firstName      String
   lastName       String
   mi             String?
+  // Stores department code (CAHS, CBA, CCS, CEAS, CHTM) for admin analytics heatmaps.
   courseDept     String
   civilStatus    String?
   age            Int?
@@ -72,6 +73,8 @@ model StudentProfile {
   physicalExaminations PhysicalExamination[]
   labResults           LabResult[]
   clinicVisits         ClinicVisit[]
+  appointments         Appointment[]
+  medicalDocuments     MedicalDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -199,6 +202,18 @@ model ClinicVisit {
   @@index([handledById, visitDate])
 }
 
+model Appointment {
+  id               String         @id @default(cuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  preferredDate    DateTime
+  preferredTime    String
+  symptoms         String
+  status           String         @default("WAITING") // Statuses: WAITING, IN_PROGRESS, COMPLETED, CANCELLED
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
 model VisitMedicine {
   id          String @id @default(cuid())
   visitId     String
@@ -243,4 +258,28 @@ model AuditLog {
 
   @@index([userId, timestamp])
   @@index([action, timestamp])
+}
+
+// NEW MODEL: Health Advisories (Phase 6 of MVP)
+model HealthAdvisory {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  targetDept  String?  @default("ALL") // e.g., "BSCS", "BSIT", or "ALL"
+  severity    String   @default("INFO") // Levels: INFO, WARNING, CRITICAL
+  createdBy   String   // User ID of the Admin who posted it
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
+// NEW MODEL: Digital Medical Records (Module B)
+model MedicalDocument {
+  id               String         @id @default(cuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  fileName         String
+  fileUrl          String         // The path to access the file
+  documentType     String         @default("PHYSICAL_EXAM") // e.g., LAB_RESULT, MED_CERT
+  uploadedAt       DateTime       @default(now())
 }

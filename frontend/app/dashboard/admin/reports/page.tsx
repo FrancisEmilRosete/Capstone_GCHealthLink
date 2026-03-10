@@ -1,266 +1,294 @@
 'use client';
 
-/**
- * ADMIN REPORTS & ANALYTICS
- * Route: /dashboard/admin/reports
- * Weekly Clinic Visits (line), Visits by Department (donut), Top Illnesses (bar).
- */
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Line,
+  LineChart,
+} from 'recharts';
 
-import { useState } from 'react';
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
-// ── Mock data ─────────────────────────────────────────────────
-
-const WEEKLY_VISITS = [
-  { day: 'Mon',  visits: 12 },
-  { day: 'Tue',  visits: 18 },
-  { day: 'Wed',  visits: 15 },
-  { day: 'Thu',  visits: 22 },
-  { day: 'Fri',  visits: 19 },
-  { day: 'Sat',  visits: 7  },
-];
-
-const DEPT_VISITS = [
-  { dept: 'Engineering',   count: 110, color: '#14b8a6' },
-  { dept: 'Nursing',       count: 80,  color: '#3b82f6' },
-  { dept: 'Arts',          count: 55,  color: '#f59e0b' },
-  { dept: 'Science',       count: 75,  color: '#ef4444' },
-];
-
-const TOP_ILLNESSES = [
-  { name: 'Viral Flu',    count: 48 },
-  { name: 'Headache',     count: 35 },
-  { name: 'Stomach Ache', count: 28 },
-  { name: 'Allergy',      count: 20 },
-  { name: 'Injury',       count: 15 },
-];
-
-const MONTHLY_SUMMARY = [
-  { month: 'Aug', count: 52 },
-  { month: 'Sep', count: 68 },
-  { month: 'Oct', count: 74 },
-  { month: 'Nov', count: 61 },
-  { month: 'Dec', count: 29 },
-  { month: 'Jan', count: 83 },
-  { month: 'Feb', count: 70 },
-  { month: 'Mar', count: 45 },
-];
-
-// ── SVG chart helpers ─────────────────────────────────────────
-
-function LineChart({ data }: { data: typeof WEEKLY_VISITS }) {
-  const max   = Math.max(...data.map(d => d.visits));
-  const W     = 500; const H = 140; const pad = 28;
-  const gW    = W - pad * 2; const gH = H - pad * 2;
-
-  const pts = data.map((d, i) => ({
-    x: pad + (i / (data.length - 1)) * gW,
-    y: pad + gH - (d.visits / max) * gH,
-    ...d,
-  }));
-
-  const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-  const areaD = `${pathD} L${pts[pts.length - 1].x},${H - pad} L${pts[0].x},${H - pad} Z`;
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40" preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <linearGradient id="lc-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="#14b8a6" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="#14b8a6" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaD} fill="url(#lc-grad)" />
-      <path d={pathD} fill="none" stroke="#14b8a6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      {pts.map((p, i) => (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r="4" fill="white" stroke="#14b8a6" strokeWidth="2.2" />
-          <text x={p.x} y={H - 6} textAnchor="middle" fontSize="11" fill="#9ca3af">{p.day}</text>
-        </g>
-      ))}
-      {/* Y legend */}
-      <text x={4} y={pad + 4}   fontSize="10" fill="#9ca3af">{max}</text>
-      <text x={4} y={H - pad + 4} fontSize="10" fill="#9ca3af">0</text>
-      {/* Legend */}
-      <circle cx={pad} cy={H - 4} r="4" fill="#14b8a6" />
-      <text x={pad + 8} y={H - 1} fontSize="11" fill="#9ca3af">Visits</text>
-    </svg>
-  );
+interface AnalyticsResponse {
+  success: boolean;
+  data: {
+    totalVisits: number;
+    topConcerns: Array<{ issue: string; count: number }>;
+    departmentHeatmap: Record<string, number>;
+    outbreakWatch: string | Array<{ level: string; message: string; cases: number }>;
+    monthlyVisits: Array<{ month: string; count: number }>;
+    weeklyVisits: Array<{ day: string; count: number }>;
+    resourcePrediction: {
+      busiestHour: { hour: string; count: number };
+      busiestDay: { day: string; count: number };
+      recentTrend: { direction: string; percentChange: number };
+      expectedVisitsNext7Days: number;
+      recommendedStaffing: string;
+    };
+  };
 }
 
-function DonutChart({ data }: { data: typeof DEPT_VISITS }) {
-  const total = data.reduce((s, d) => s + d.count, 0);
-  const r = 70; const cx = 90; const cy = 90;
-  let cum = -90;
-
-  const slices = data.map(d => {
-    const angle = (d.count / total) * 360;
-    const s = (cum * Math.PI) / 180;
-    const e = ((cum + angle) * Math.PI) / 180;
-    cum += angle;
-    const x1 = cx + r * Math.cos(s); const y1 = cy + r * Math.sin(s);
-    const x2 = cx + r * Math.cos(e); const y2 = cy + r * Math.sin(e);
-    return { ...d, d: `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${angle > 180 ? 1 : 0},1 ${x2},${y2} Z` };
-  });
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center gap-6">
-      <svg viewBox="0 0 180 180" className="w-36 h-36 shrink-0">
-        {slices.map((s, i) => <path key={i} d={s.d} fill={s.color} />)}
-        <circle cx={cx} cy={cy} r="38" fill="white" />
-        <text x={cx} y={cy - 6} textAnchor="middle" fontSize="17" fontWeight="700" fill="#0f172a">{total}</text>
-        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="10" fill="#94a3b8">total</text>
-      </svg>
-      <div className="flex flex-wrap gap-x-6 gap-y-2">
-        {data.map(d => (
-          <div key={d.dept} className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-            <span className="text-sm text-gray-600">{d.dept}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BarChart({ data }: { data: typeof TOP_ILLNESSES }) {
-  const max = Math.max(...data.map(d => d.count));
-  return (
-    <div className="flex items-end gap-4 h-44">
-      {data.map(d => (
-        <div key={d.name} className="flex flex-col items-center gap-1 flex-1">
-          <span className="text-xs font-semibold text-gray-600">{d.count}</span>
-          <div
-            className="w-full rounded-t-lg bg-teal-500 min-h-[4px] transition-all"
-            style={{ height: `${(d.count / max) * 130}px` }}
-          />
-          <span className="text-[10px] text-gray-500 text-center leading-tight">{d.name}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MonthlyBarChart({ data }: { data: typeof MONTHLY_SUMMARY }) {
-  const max = Math.max(...data.map(d => d.count));
-  return (
-    <div className="flex items-end gap-3 h-40">
-      {data.map(d => (
-        <div key={d.month} className="flex flex-col items-center gap-1 flex-1">
-          <span className="text-[10px] font-semibold text-gray-500">{d.count}</span>
-          <div
-            className="w-full rounded-t-lg bg-blue-400 min-h-[4px]"
-            style={{ height: `${(d.count / max) * 120}px` }}
-          />
-          <span className="text-[10px] text-gray-500">{d.month}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── CSV Export ────────────────────────────────────────────────
-
-function exportReport() {
-  const rows = [
-    ['Report', 'GC HealthLink Admin Report'],
-    ['Generated', new Date().toLocaleString()],
-    [],
-    ['=== WEEKLY CLINIC VISITS ==='],
-    ['Day', 'Visits'],
-    ...WEEKLY_VISITS.map(d => [d.day, d.visits]),
-    [],
-    ['=== VISITS BY DEPARTMENT ==='],
-    ['Department', 'Count'],
-    ...DEPT_VISITS.map(d => [d.dept, d.count]),
-    [],
-    ['=== TOP ILLNESSES ==='],
-    ['Illness', 'Count'],
-    ...TOP_ILLNESSES.map(d => [d.name, d.count]),
-    [],
-    ['=== MONTHLY SUMMARY ==='],
-    ['Month', 'Count'],
-    ...MONTHLY_SUMMARY.map(d => [d.month, d.count]),
+function downloadCsv(
+  monthly: Array<{ month: string; count: number }>,
+  weekly: Array<{ day: string; count: number }>,
+  topConcerns: Array<{ issue: string; count: number }>,
+  departments: Array<{ dept: string; count: number }>,
+) {
+  const rows: string[][] = [
+    ['Section', 'Label', 'Value'],
+    ...monthly.map((item) => ['Monthly Visits', item.month, String(item.count)]),
+    ...weekly.map((item) => ['Weekly Visits', item.day, String(item.count)]),
+    ...topConcerns.map((item) => ['Top Concerns', item.issue || 'General Consultation', String(item.count)]),
+    ...departments.map((item) => ['Department Heatmap', item.dept, String(item.count)]),
   ];
 
-  const csv  = rows.map(r => r.join(',')).join('\n');
+  const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `admin_report_${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `admin_report_${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
   URL.revokeObjectURL(url);
 }
 
-// ── KPI Cards ─────────────────────────────────────────────────
-
-const KPIS = [
-  { label: 'Total Visits',       value: '482',  sub: 'This academic year'  },
-  { label: 'Monthly Average',    value: '60',   sub: 'Avg visits / month'  },
-  { label: 'Peak Month',         value: 'Jan',  sub: '83 visits recorded'  },
-  { label: 'Clearance Rate',     value: '92%',  sub: 'Health clearance AY' },
-];
-
-// ── Page ──────────────────────────────────────────────────────
+function outbreakSummary(outbreakWatch: AnalyticsResponse['data']['outbreakWatch']) {
+  if (typeof outbreakWatch === 'string') return outbreakWatch;
+  if (!outbreakWatch || outbreakWatch.length === 0) return 'Green - No clusters detected';
+  return outbreakWatch.map((item) => `${item.level}: ${item.message} (${item.cases})`).join(' | ');
+}
 
 export default function AdminReports() {
-  return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+  const [loading, setLoading] = useState(true);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [error, setError] = useState('');
+  const [analytics, setAnalytics] = useState<AnalyticsResponse['data'] | null>(null);
 
-      {/* Header */}
+  useEffect(() => {
+    async function loadData() {
+      const token = getToken();
+      if (!token) {
+        setError('You are not logged in. Please sign in again.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const analyticsResponse = await api.get<AnalyticsResponse>('/admin/analytics', token);
+        setAnalytics(analyticsResponse.data);
+        setError('');
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError('Failed to load analytics reports.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadData();
+  }, []);
+
+  const monthlyVisitSummary = analytics?.monthlyVisits || [];
+  const weeklyVisits = analytics?.weeklyVisits || [];
+
+  const departmentData = useMemo(() => {
+    const heatmap = analytics?.departmentHeatmap || {};
+    return Object.entries(heatmap)
+      .map(([dept, count]) => ({ dept, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [analytics]);
+
+  const topConcerns = useMemo(() => {
+    return (analytics?.topConcerns || []).map((item) => ({
+      issue: item.issue || 'General Consultation',
+      count: item.count,
+    }));
+  }, [analytics]);
+
+  const outbreakText = useMemo(() => {
+    if (!analytics) return 'Loading outbreak watch...';
+    return outbreakSummary(analytics.outbreakWatch);
+  }, [analytics]);
+
+  async function handlePdfDownload() {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      setDownloadingPdf(true);
+      const { blob, fileName } = await api.getBlob('/admin/reports/monthly-pdf', token);
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName || `gc-healthlink-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to generate PDF report.');
+      }
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
+  return (
+    <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Reports &amp; Analytics</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Clinic performance and health trends</p>
+          <h1 className="text-xl font-bold text-gray-900">Reports & Analytics</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Live school-wide insights from backend analytics</p>
         </div>
-        <button
-          onClick={exportReport}
-          className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Export Report
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => { void handlePdfDownload(); }}
+            disabled={downloadingPdf}
+            className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl disabled:opacity-70"
+          >
+            {downloadingPdf ? 'Preparing PDF...' : 'Download PDF'}
+          </button>
+          <button
+            onClick={() => downloadCsv(monthlyVisitSummary, weeklyVisits, topConcerns, departmentData)}
+            className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl"
+          >
+            Export CSV
+          </button>
+        </div>
       </div>
 
-      {/* KPI cards */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {KPIS.map(k => (
-          <div key={k.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-            <p className="text-2xl font-bold text-teal-600">{k.value}</p>
-            <p className="text-xs font-semibold text-gray-700 mt-0.5">{k.label}</p>
-            <p className="text-[11px] text-gray-400">{k.sub}</p>
-          </div>
-        ))}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+          <p className="text-2xl font-bold text-teal-600">{loading ? '...' : (analytics?.totalVisits || 0)}</p>
+          <p className="text-xs font-semibold text-gray-700 mt-0.5">Total Visits</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+          <p className="text-2xl font-bold text-blue-600">{loading ? '...' : topConcerns.length}</p>
+          <p className="text-xs font-semibold text-gray-700 mt-0.5">Top Concern Tags</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+          <p className="text-2xl font-bold text-purple-600">{loading ? '...' : departmentData.length}</p>
+          <p className="text-xs font-semibold text-gray-700 mt-0.5">Active Departments</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+          <p className="text-2xl font-bold text-orange-600">{loading ? '...' : (analytics?.resourcePrediction.expectedVisitsNext7Days || 0)}</p>
+          <p className="text-xs font-semibold text-gray-700 mt-0.5">Forecast (Next 7 Days)</p>
+        </div>
       </div>
 
-      {/* Weekly Clinic Visits */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-800 mb-4">Weekly Clinic Visits</h2>
-        <LineChart data={WEEKLY_VISITS} />
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <span className="font-semibold">Outbreak Watch:</span> {outbreakText}
       </div>
 
-      {/* Row: Donut + Monthly */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-800 mb-4">Visits by Department</h2>
-          <DonutChart data={DEPT_VISITS} />
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Weekly Clinic Visits</h2>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={weeklyVisits}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip />
+              <Line type="monotone" dataKey="count" stroke="#14b8a6" strokeWidth={2.5} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-800 mb-4">Monthly Visit Summary</h2>
-          <MonthlyBarChart data={MONTHLY_SUMMARY} />
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={monthlyVisitSummary}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Top Illnesses */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-800 mb-5">Top Illnesses</h2>
-        <BarChart data={TOP_ILLNESSES} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Top Health Concerns</h2>
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={topConcerns} layout="vertical" margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="issue" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={140} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#14b8a6" radius={[0, 6, 6, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Department Heatmap</h2>
+          {departmentData.length === 0 ? (
+            <p className="text-sm text-gray-400">No department data available.</p>
+          ) : (
+            <div className="space-y-3">
+              {departmentData.map((item, index) => {
+                const max = departmentData[0]?.count || 1;
+                const width = Math.max(6, Math.round((item.count / max) * 100));
+                return (
+                  <div key={`${item.dept}-${index}`}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-600">{item.dept}</span>
+                      <span className="font-semibold text-gray-700">{item.count}</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-teal-500" style={{ width: `${width}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
+        <h2 className="text-sm font-semibold text-gray-800">Resource Prediction</h2>
+        <p className="text-sm text-gray-700">
+          <span className="font-semibold">Busiest Hour:</span> {analytics?.resourcePrediction.busiestHour.hour || 'N/A'}
+          {' '}
+          ({analytics?.resourcePrediction.busiestHour.count || 0} visits)
+        </p>
+        <p className="text-sm text-gray-700">
+          <span className="font-semibold">Busiest Day:</span> {analytics?.resourcePrediction.busiestDay.day || 'N/A'}
+          {' '}
+          ({analytics?.resourcePrediction.busiestDay.count || 0} visits)
+        </p>
+        <p className="text-sm text-gray-700">
+          <span className="font-semibold">Recent Trend:</span> {analytics?.resourcePrediction.recentTrend.direction || 'stable'}
+          {' '}
+          ({analytics?.resourcePrediction.recentTrend.percentChange || 0}%)
+        </p>
+        <p className="text-sm text-gray-700">
+          <span className="font-semibold">Suggested Staffing:</span> {analytics?.resourcePrediction.recommendedStaffing || '1 clinic staff on standby'}
+        </p>
+      </div>
     </div>
   );
 }

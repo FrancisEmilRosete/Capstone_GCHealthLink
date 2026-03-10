@@ -1,241 +1,196 @@
 'use client';
 
-/**
- * ADMIN DASHBOARD
- * Route: /dashboard/admin
- * Department Health Overview with stat cards + monthly trend chart.
- */
+import { useEffect, useMemo, useState } from 'react';
 
-import Link from 'next/link';
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
-// ── Mock data ─────────────────────────────────────────────────
-
-const STAT_CARDS = [
-  {
-    label:    'Student Visits (This Month)',
-    value:    '45',
-    change:   '+5% from last month',
-    positive: true,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-    iconBg: 'bg-teal-50 text-teal-500',
-  },
-  {
-    label:    'Medical Certificates',
-    value:    '8',
-    change:   'Issued this month',
-    positive: true,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    ),
-    iconBg: 'bg-blue-50 text-blue-500',
-  },
-  {
-    label:    'Health Clearance Rate',
-    value:    '92%',
-    change:   'Students cleared this AY',
-    positive: true,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-    iconBg: 'bg-teal-50 text-teal-500',
-  },
-];
-
-// Trend chart data (visits per week for 8 weeks)
-const WEEKLY_TREND = [
-  { week: 'Wk 1',  visits: 38 },
-  { week: 'Wk 2',  visits: 45 },
-  { week: 'Wk 3',  visits: 32 },
-  { week: 'Wk 4',  visits: 50 },
-  { week: 'Wk 5',  visits: 42 },
-  { week: 'Wk 6',  visits: 57 },
-  { week: 'Wk 7',  visits: 44 },
-  { week: 'Wk 8',  visits: 39 },
-];
-
-const DEPARTMENT_BREAKDOWN = [
-  { dept: 'Engineering',   count: 14, color: '#14b8a6' },
-  { dept: 'Computing',     count: 11, color: '#3b82f6' },
-  { dept: 'Health Sciences', count: 8, color: '#a855f7' },
-  { dept: 'Education',     count: 6, color: '#f59e0b' },
-  { dept: 'Business',      count: 6, color: '#ef4444' },
-];
-
-const RECENT_ACTIVITY = [
-  { time: '9:45 AM',  action: 'Physical exam recorded',  detail: 'Juan dela Cruz — 1st Year Exam completed' },
-  { time: '10:20 AM', action: 'Certificate issued',       detail: 'Ana Gomez — Medical excuse letter' },
-  { time: '11:05 AM', action: 'Consultation logged',      detail: 'Marco Reyes — Fever, Biogesic dispensed' },
-  { time: '1:30 PM',  action: 'New student registered',   detail: 'Maria Santos — Health record created' },
-  { time: '2:15 PM',  action: 'Inventory alert',          detail: 'Amoxicillin stock below threshold (12 left)' },
-];
-
-// ── Mini sparkline (pure SVG, no recharts) ────────────────────
-
-function Sparkline({ data }: { data: typeof WEEKLY_TREND }) {
-  const max    = Math.max(...data.map(d => d.visits));
-  const min    = Math.min(...data.map(d => d.visits));
-  const range  = max - min || 1;
-  const W      = 560;
-  const H      = 120;
-  const pad    = 30;
-  const gW     = W - pad * 2;
-  const gH     = H - pad * 2;
-
-  const pts = data.map((d, i) => ({
-    x: pad + (i / (data.length - 1)) * gW,
-    y: pad + gH - ((d.visits - min) / range) * gH,
-    ...d,
-  }));
-
-  const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-  const areaD = `${pathD} L${pts[pts.length - 1].x},${H - pad} L${pts[0].x},${H - pad} Z`;
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-36" preserveAspectRatio="none">
-      {/* Area fill */}
-      <defs>
-        <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="#14b8a6" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#14b8a6" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaD} fill="url(#spark-grad)" />
-      {/* Line */}
-      <path d={pathD} fill="none" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Data points */}
-      {pts.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r="4" fill="#14b8a6" />
-      ))}
-      {/* X labels */}
-      {pts.map((p, i) => (
-        <text key={i} x={p.x} y={H - 6} textAnchor="middle" fontSize="11" fill="#9ca3af">{p.week}</text>
-      ))}
-    </svg>
-  );
+interface TopConcern {
+  issue: string;
+  count: number;
 }
 
-// ── Department donut ──────────────────────────────────────────
+interface OutbreakAlert {
+  level: string;
+  message: string;
+  cases: number;
+}
 
-function DeptDonut({ data }: { data: typeof DEPARTMENT_BREAKDOWN }) {
-  const total  = data.reduce((s, d) => s + d.count, 0);
-  const r = 70;
-  const cx = 90; const cy = 90;
-  let cumAngle = -90; // start from top
+interface AnalyticsData {
+  totalVisits: number;
+  topConcerns: TopConcern[];
+  departmentHeatmap: Record<string, number>;
+  outbreakWatch: OutbreakAlert[] | string;
+}
 
-  const slices = data.map(d => {
-    const angle  = (d.count / total) * 360;
-    const start  = (cumAngle * Math.PI) / 180;
-    const end    = ((cumAngle + angle) * Math.PI) / 180;
-    cumAngle    += angle;
+interface AnalyticsResponse {
+  success: boolean;
+  message: string;
+  data: AnalyticsData;
+}
 
-    const x1 = cx + r * Math.cos(start);
-    const y1 = cy + r * Math.sin(start);
-    const x2 = cx + r * Math.cos(end);
-    const y2 = cy + r * Math.sin(end);
-    const large = angle > 180 ? 1 : 0;
-
-    return { ...d, d: `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z` };
-  });
-
+function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-6">
-      <svg viewBox="0 0 180 180" className="w-36 h-36 shrink-0">
-        {slices.map((s, i) => <path key={i} d={s.d} fill={s.color} />)}
-        {/* Donut hole */}
-        <circle cx={cx} cy={cy} r="38" fill="white" />
-        <text x={cx} y={cy - 6} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#0f172a">{total}</text>
-        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="10" fill="#94a3b8">visits</text>
-      </svg>
-      <div className="flex flex-wrap gap-x-6 gap-y-2">
-        {data.map(d => (
-          <div key={d.dept} className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-            <span className="text-sm text-gray-600">{d.dept}</span>
-            <span className="text-sm font-semibold text-gray-800">{d.count}</span>
-          </div>
-        ))}
-      </div>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <p className="text-xs text-gray-500 font-medium">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────
-
 export default function AdminDashboard() {
-  return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-      {/* Header */}
+  async function loadAnalytics() {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setError('');
+      const response = await api.get<AnalyticsResponse>('/admin/analytics', token);
+      setData(response.data);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to load admin analytics.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadAnalytics();
+  }, []);
+
+  const departmentRows = useMemo(
+    () => Object.entries(data?.departmentHeatmap || {}).sort((a, b) => b[1] - a[1]),
+    [data],
+  );
+
+  const maxDepartmentCount = Math.max(...departmentRows.map(([, count]) => count), 1);
+
+  const topConcern = data?.topConcerns?.[0]?.issue || '-';
+  const outbreakCount = Array.isArray(data?.outbreakWatch) ? data?.outbreakWatch.length : 0;
+
+  return (
+    <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Department Health Overview</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Academic Year 2025–2026 · As of {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+        <p className="text-sm text-gray-500 mt-0.5">Live analytics from backend records</p>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {STAT_CARDS.map(card => (
-          <div key={card.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${card.iconBg}`}>
-              {card.icon}
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium leading-tight">{card.label}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-0.5">{card.value}</p>
-              <p className={`text-xs mt-0.5 ${card.positive ? 'text-teal-600' : 'text-red-500'}`}>
-                {card.change}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Monthly Trends Chart */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-gray-800">Monthly Trends</h2>
-          <span className="text-xs text-gray-400">Weekly visits · Current month</span>
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
         </div>
-        <Sparkline data={WEEKLY_TREND} />
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Total Clinic Visits"
+          value={loading ? '...' : data?.totalVisits ?? 0}
+          sub="All-time recorded visits"
+          color="text-teal-600"
+        />
+        <StatCard
+          label="Tracked Departments"
+          value={loading ? '...' : departmentRows.length}
+          sub="With recorded clinic activity"
+          color="text-blue-600"
+        />
+        <StatCard
+          label="Top Concern"
+          value={loading ? '...' : topConcern}
+          sub="Most frequent complaint"
+          color="text-orange-600"
+        />
+        <StatCard
+          label="Outbreak Alerts"
+          value={loading ? '...' : outbreakCount}
+          sub="Clusters flagged in last 48h"
+          color="text-red-600"
+        />
       </div>
 
-      {/* Bottom Row: Department breakdown + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Top Health Concerns</h2>
 
-        {/* Department breakdown */}
+          {loading ? (
+            <p className="text-sm text-gray-400">Loading concerns...</p>
+          ) : (data?.topConcerns || []).length === 0 ? (
+            <p className="text-sm text-gray-400">No concerns recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {(data?.topConcerns || []).map((concern) => (
+                <div key={`${concern.issue}-${concern.count}`} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                  <p className="text-sm text-gray-700 truncate pr-3">{concern.issue || 'Unknown concern'}</p>
+                  <span className="text-xs font-semibold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
+                    {concern.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-800 mb-4">Visits by Department</h2>
-          <DeptDonut data={DEPARTMENT_BREAKDOWN} />
-        </div>
 
-        {/* Recent Activity */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-800">Recent Activity</h2>
-            <Link href="/dashboard/admin/audit" className="text-xs text-teal-600 hover:underline font-medium">View all</Link>
-          </div>
-          <div className="space-y-3">
-            {RECENT_ACTIVITY.map((a, i) => (
-              <div key={i} className="flex gap-3">
-                <span className="text-[11px] text-gray-400 w-16 shrink-0 pt-0.5">{a.time}</span>
-                <div>
-                  <p className="text-sm font-medium text-gray-700">{a.action}</p>
-                  <p className="text-xs text-gray-400">{a.detail}</p>
+          {loading ? (
+            <p className="text-sm text-gray-400">Loading departments...</p>
+          ) : departmentRows.length === 0 ? (
+            <p className="text-sm text-gray-400">No department activity yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {departmentRows.map(([department, count]) => (
+                <div key={department}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-600">{department}</span>
+                    <span className="font-semibold text-gray-800">{count}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      className="h-full bg-teal-500"
+                      style={{ width: `${Math.max(8, (count / maxDepartmentCount) * 100)}%` }}
+                    />
+                  </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-gray-800 mb-4">Outbreak Watch</h2>
+
+        {loading ? (
+          <p className="text-sm text-gray-400">Checking alerts...</p>
+        ) : Array.isArray(data?.outbreakWatch) && data.outbreakWatch.length > 0 ? (
+          <div className="space-y-2">
+            {data.outbreakWatch.map((alert, index) => (
+              <div key={`${alert.message}-${index}`} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-semibold text-amber-700">{alert.level} Alert</p>
+                <p className="text-sm text-amber-800 mt-0.5">{alert.message}</p>
+                <p className="text-xs text-amber-700 mt-1">Cases: {alert.cases}</p>
               </div>
             ))}
           </div>
-        </div>
+        ) : (
+          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+            {typeof data?.outbreakWatch === 'string' ? data.outbreakWatch : 'Green - No clusters detected'}
+          </p>
+        )}
       </div>
     </div>
   );

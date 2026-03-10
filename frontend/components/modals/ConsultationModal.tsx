@@ -1,152 +1,147 @@
-/**
- * CONSULTATION MODAL
- * ─────────────────────────────────────────────────────────────
- * Opened when staff clicks "Consult" on the scanner found card
- * or from the student record page.
- *
- * Sections:
- *   • Patient Information  (pre-filled from scanned student)
- *   • Vital Signs
- *   • Clinical Notes
- *   • Medicine Dispensed   (add multiple rows)
- *
- * TODO: On "Save Consultation Record" call:
- *   POST /api/consultations  { ...formData }
- */
-
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
-// ── Patient info passed in from parent ────────────────────────
 export interface ConsultationPatient {
-  name:       string;   // "Juan Dela Cruz"
-  age:        string;   // optional — fill if available
-  department: string;   // college/department
-  course:     string;
-  sex:        string;   // optional — fill if available
+  name: string;
+  department: string;
+  course: string;
 }
 
-// ── Medicine row ──────────────────────────────────────────────
 interface MedicineRow {
-  id:       number;
+  id: number;
   medicine: string;
-  qty:      string;
+  qty: string;
 }
 
-// ── Full form ─────────────────────────────────────────────────
 interface ConsultationForm {
-  // Patient info (editable in case staff needs to correct)
-  patientName:   string;
-  age:           string;
-  department:    string;
-  course:        string;
-  sex:           string;
-  // Vital Signs
-  bp:            string;
-  temperature:   string;
-  weight:        string;
-  pulseRate:     string;
-  // Clinical Notes
-  chiefComplaint:      string;
-  diagnosis:           string;
-  treatmentManagement: string;
+  symptoms: string;
+  bp: string;
+  temperature: string;
+  treatmentProvided: string;
 }
 
-// ── Props ─────────────────────────────────────────────────────
 interface ConsultationModalProps {
-  patient:  ConsultationPatient;
-  onClose:  () => void;
-  onSave:   (data: ConsultationForm, medicines: MedicineRow[]) => void;
+  patient: ConsultationPatient;
+  onClose: () => void;
+  onSave: (data: ConsultationForm, medicines: MedicineRow[]) => void;
 }
 
-// ── Small reusable input ──────────────────────────────────────
 function Field({
-  label, placeholder, value, onChange, readOnly = false, as = 'input',
+  label,
+  placeholder,
+  value,
+  onChange,
+  as = 'input',
 }: {
-  label:        string;
+  label: string;
   placeholder?: string;
-  value:        string;
-  onChange?:    (v: string) => void;
-  readOnly?:    boolean;
-  as?:          'input' | 'textarea';
+  value: string;
+  onChange?: (v: string) => void;
+  as?: 'input' | 'textarea';
 }) {
-  const base = `
-    w-full border-b border-gray-200 bg-transparent px-0 py-2 text-sm
-    text-gray-800 placeholder:text-gray-300
-    focus:outline-none focus:border-teal-400 transition
-    ${readOnly ? 'cursor-default text-gray-600' : ''}
-  `;
+  const inputId = useId();
+
+  if (as === 'textarea') {
+    return (
+      <div>
+        <label htmlFor={inputId} className="block text-xs font-semibold text-gray-500 mb-0.5">{label}</label>
+        <textarea
+          id={inputId}
+          rows={3}
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange?.(event.target.value)}
+          className="w-full border-b border-gray-200 bg-transparent px-0 py-2 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-teal-400 transition resize-none"
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
-      <label className="block text-xs font-semibold text-gray-500 mb-0.5">{label}</label>
-      {as === 'textarea' ? (
-        <textarea
-          rows={2}
-          value={value}
-          readOnly={readOnly}
-          placeholder={placeholder}
-          onChange={(e) => onChange?.(e.target.value)}
-          className={base + ' resize-none'}
-        />
-      ) : (
-        <input
-          type="text"
-          value={value}
-          readOnly={readOnly}
-          placeholder={placeholder}
-          onChange={(e) => onChange?.(e.target.value)}
-          className={base}
-        />
-      )}
+      <label htmlFor={inputId} className="block text-xs font-semibold text-gray-500 mb-0.5">{label}</label>
+      <input
+        id={inputId}
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange?.(event.target.value)}
+        className="w-full border-b border-gray-200 bg-transparent px-0 py-2 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-teal-400 transition"
+      />
     </div>
   );
 }
 
-// ── Modal ─────────────────────────────────────────────────────
-export default function ConsultationModal({
-  patient,
-  onClose,
-  onSave,
-}: ConsultationModalProps) {
+export default function ConsultationModal({ patient, onClose, onSave }: ConsultationModalProps) {
   const [form, setForm] = useState<ConsultationForm>({
-    patientName:         patient.name,
-    age:                 patient.age,
-    department:          patient.department,
-    course:              patient.course,
-    sex:                 patient.sex,
-    bp:                  '',
-    temperature:         '',
-    weight:              '',
-    pulseRate:           '',
-    chiefComplaint:      '',
-    diagnosis:           '',
-    treatmentManagement: '',
+    symptoms: '',
+    bp: '',
+    temperature: '',
+    treatmentProvided: '',
   });
-
   const [medicines, setMedicines] = useState<MedicineRow[]>([]);
-  const [newMed,    setNewMed]    = useState('');
-  const [newQty,    setNewQty]    = useState('');
-  const overlayRef = useRef<HTMLDivElement>(null);
-  let nextId = useRef(1);
+  const [newMed, setNewMed] = useState('');
+  const [newQty, setNewQty] = useState('');
+  const [validationError, setValidationError] = useState('');
 
-  // Close on Escape
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const nextId = useRef(1);
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab' || !dialogRef.current) {
+        return;
+      }
+
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])',
+      );
+
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      previousFocusRef.current?.focus();
+    };
   }, [onClose]);
 
-  function handleBackdrop(e: React.MouseEvent<HTMLDivElement>) {
-    if (e.target === overlayRef.current) onClose();
+  function handleBackdrop(event: React.MouseEvent<HTMLDivElement>) {
+    if (event.target === overlayRef.current) onClose();
   }
 
   function set(field: keyof ConsultationForm) {
-    return (v: string) => setForm((prev) => ({ ...prev, [field]: v }));
+    return (value: string) => setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   function addMedicine() {
     if (!newMed.trim()) return;
+
     setMedicines((prev) => [
       ...prev,
       { id: nextId.current++, medicine: newMed.trim(), qty: newQty.trim() || '1' },
@@ -156,10 +151,21 @@ export default function ConsultationModal({
   }
 
   function removeMedicine(id: number) {
-    setMedicines((prev) => prev.filter((m) => m.id !== id));
+    setMedicines((prev) => prev.filter((item) => item.id !== id));
   }
 
   function handleSave() {
+    if (!form.symptoms.trim()) {
+      setValidationError('Symptoms are required.');
+      return;
+    }
+
+    if (!form.treatmentProvided.trim()) {
+      setValidationError('Treatment provided is required.');
+      return;
+    }
+
+    setValidationError('');
     onSave(form, medicines);
     onClose();
   }
@@ -170,126 +176,81 @@ export default function ConsultationModal({
       onClick={handleBackdrop}
       className="fixed inset-0 z-50 bg-black/40 flex items-start justify-end p-0 sm:p-4"
     >
-      {/* Slide-in panel — matches Figma side-sheet style */}
-      <div className="bg-white w-full sm:max-w-sm h-full sm:h-auto sm:max-h-[95vh]
-        sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-
-        {/* ── Header ──────────────────────────────────────── */}
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="consultation-modal-title"
+        tabIndex={-1}
+        className="bg-white w-full sm:max-w-sm h-full sm:h-auto sm:max-h-[95vh] sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+      >
         <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0 border-b border-gray-100">
-          <h2 className="text-base font-bold text-gray-900">New Consultation</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          <h2 id="consultation-modal-title" className="text-base font-bold text-gray-900">New Consultation</h2>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Close consultation modal"
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        {/* ── Scrollable body ──────────────────────────────── */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-
-          {/* Patient Information */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-800 mb-3">Patient Information</h3>
-            <div className="space-y-3">
-              <Field label="Name"       value={form.patientName} readOnly />
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-0.5">Age</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.age}
-                    onChange={(e) => set('age')(e.target.value)}
-                    placeholder="e.g. 20"
-                    className="w-full border-b border-gray-200 bg-transparent px-0 py-2 text-sm
-                      text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-teal-400 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-0.5">Sex</label>
-                  <select
-                    value={form.sex}
-                    onChange={(e) => set('sex')(e.target.value)}
-                    className="w-full border-b border-gray-200 bg-transparent px-0 py-2 text-sm
-                      text-gray-800 focus:outline-none focus:border-teal-400 transition"
-                  >
-                    <option value="">— select —</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                </div>
-              </div>
-              <Field label="Department" value={form.department} readOnly />
-              <Field label="Course"     value={form.course}     readOnly />
-            </div>
+          <section className="space-y-2">
+            <h3 className="text-sm font-bold text-gray-800">Patient</h3>
+            <p className="text-sm text-gray-800">{patient.name}</p>
+            <p className="text-xs text-gray-500">{patient.department} - {patient.course}</p>
           </section>
 
-          {/* Vital Signs */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Symptoms</h3>
+            <Field
+              label="Symptoms"
+              placeholder="Describe patient symptoms..."
+              value={form.symptoms}
+              onChange={set('symptoms')}
+              as="textarea"
+            />
+          </section>
+
           <section>
             <h3 className="text-sm font-bold text-gray-800 mb-3">Vital Signs</h3>
             <div className="space-y-3">
-              <Field label="Blood Pressure"   placeholder="120/80" value={form.bp}          onChange={set('bp')} />
-              <Field label="Temperature (°C)" placeholder="36.5"   value={form.temperature} onChange={set('temperature')} />
-              <Field label="Weight (kg)"      placeholder="60"     value={form.weight}      onChange={set('weight')} />
-              <Field label="Pulse Rate"       placeholder="75 bpm" value={form.pulseRate}   onChange={set('pulseRate')} />
+              <Field label="Blood Pressure" placeholder="120/80" value={form.bp} onChange={set('bp')} />
+              <Field label="Temperature (C)" placeholder="36.8" value={form.temperature} onChange={set('temperature')} />
             </div>
           </section>
 
-          {/* Clinical Notes */}
           <section>
-            <h3 className="text-sm font-bold text-gray-800 mb-3">Clinical Notes</h3>
-            <div className="space-y-3">
-              <Field
-                label="Chief Complaint"
-                placeholder="Patient's main complaint..."
-                value={form.chiefComplaint}
-                onChange={set('chiefComplaint')}
-                as="textarea"
-              />
-              <Field
-                label="Diagnosis"
-                placeholder="Enter diagnosis..."
-                value={form.diagnosis}
-                onChange={set('diagnosis')}
-                as="textarea"
-              />
-              <Field
-                label="Treatment / Management"
-                placeholder="Treatment given..."
-                value={form.treatmentManagement}
-                onChange={set('treatmentManagement')}
-                as="textarea"
-              />
-            </div>
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Treatment Provided</h3>
+            <Field
+              label="Treatment Provided"
+              placeholder="Document treatment provided..."
+              value={form.treatmentProvided}
+              onChange={set('treatmentProvided')}
+              as="textarea"
+            />
           </section>
 
-          {/* Medicine Dispensed */}
           <section>
             <h3 className="text-sm font-bold text-gray-800 mb-3">Medicine Dispensed</h3>
 
-            {/* Added medicines list */}
             {medicines.length > 0 && (
               <div className="mb-3 space-y-1.5">
-                {medicines.map((m) => (
-                  <div key={m.id}
-                    className="flex items-center justify-between bg-teal-50 border border-teal-100
-                      rounded-lg px-3 py-2 text-sm">
-                    <span className="text-gray-700 flex-1 truncate">{m.medicine}</span>
-                    <span className="text-teal-600 font-semibold mx-3 shrink-0">×{m.qty}</span>
+                {medicines.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between bg-teal-50 border border-teal-100 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <span className="text-gray-700 flex-1 truncate">{item.medicine}</span>
+                    <span className="text-teal-600 font-semibold mx-3 shrink-0">x{item.qty}</span>
                     <button
-                      onClick={() => removeMedicine(m.id)}
+                      type="button"
+                      onClick={() => removeMedicine(item.id)}
                       className="text-gray-300 hover:text-red-400 transition-colors"
                       aria-label="Remove"
                     >
@@ -302,58 +263,55 @@ export default function ConsultationModal({
               </div>
             )}
 
-            {/* Add row */}
             <div className="flex gap-2 items-center">
               <input
                 type="text"
                 value={newMed}
-                onChange={(e) => setNewMed(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addMedicine()}
-                placeholder="Select medicine..."
-                className="flex-1 border-b border-gray-200 bg-transparent px-0 py-2 text-sm
-                  text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-teal-400 transition"
+                onChange={(event) => setNewMed(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && addMedicine()}
+                placeholder="Medicine name"
+                className="flex-1 border-b border-gray-200 bg-transparent px-0 py-2 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-teal-400 transition"
               />
-              <span className="text-gray-300 text-xs shrink-0">—</span>
+              <span className="text-gray-300 text-xs shrink-0">-</span>
               <input
                 type="number"
                 min={1}
                 value={newQty}
-                onChange={(e) => setNewQty(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addMedicine()}
+                onChange={(event) => setNewQty(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && addMedicine()}
                 placeholder="Qty"
-                className="w-14 border-b border-gray-200 bg-transparent px-0 py-2 text-sm text-center
-                  text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-teal-400 transition"
+                className="w-14 border-b border-gray-200 bg-transparent px-0 py-2 text-sm text-center text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-teal-400 transition"
               />
               <button
+                type="button"
                 onClick={addMedicine}
-                className="ml-1 px-3 py-1.5 text-xs font-semibold text-teal-600
-                  border border-teal-300 rounded-lg hover:bg-teal-50 transition-colors shrink-0"
+                className="ml-1 px-3 py-1.5 text-xs font-semibold text-teal-600 border border-teal-300 rounded-lg hover:bg-teal-50 transition-colors shrink-0"
               >
                 Add
               </button>
             </div>
           </section>
+
+          {validationError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+              {validationError}
+            </div>
+          )}
         </div>
 
-        {/* ── Footer ──────────────────────────────────────── */}
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 shrink-0">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-gray-500
-              border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-sm font-semibold text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleSave}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white
-              bg-teal-500 hover:bg-teal-600 rounded-xl transition-colors"
+            className="px-5 py-2 text-sm font-semibold text-white bg-teal-500 hover:bg-teal-600 rounded-xl transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3
-                   M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2M8 7h8" />
-            </svg>
             Save Consultation Record
           </button>
         </div>

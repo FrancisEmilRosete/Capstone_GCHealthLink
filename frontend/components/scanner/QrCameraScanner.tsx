@@ -16,7 +16,7 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 interface QrCameraScannerProps {
@@ -33,12 +33,14 @@ export default function QrCameraScanner({
   onError,
   active = true,
 }: QrCameraScannerProps) {
+  const instanceId = useId();
+  const scannerElementId = `${SCANNER_ELEMENT_ID}-${instanceId}`;
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isRunning  = useRef(false);
 
   useEffect(() => {
     if (!active) {
-      stopScanner();
+      void stopScanner();
       return;
     }
 
@@ -46,14 +48,16 @@ export default function QrCameraScanner({
     const timer = setTimeout(() => startScanner(), 100);
     return () => {
       clearTimeout(timer);
-      stopScanner();
+      void stopScanner();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   async function startScanner() {
+    if (isRunning.current || scannerRef.current) return;
+
     try {
-      const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID);
+      const scanner = new Html5Qrcode(scannerElementId);
       scannerRef.current = scanner;
 
       await scanner.start(
@@ -83,9 +87,11 @@ export default function QrCameraScanner({
   }
 
   async function stopScanner() {
-    if (scannerRef.current && isRunning.current) {
+    if (scannerRef.current) {
       try {
-        await scannerRef.current.stop();
+        if (isRunning.current) {
+          await scannerRef.current.stop();
+        }
         scannerRef.current.clear();
       } catch {
         // ignore stop errors
@@ -99,7 +105,7 @@ export default function QrCameraScanner({
     <div className="relative w-full max-w-xs mx-auto">
       {/* html5-qrcode mounts the <video> element inside this div */}
       <div
-        id={SCANNER_ELEMENT_ID}
+        id={scannerElementId}
         className="w-full rounded-xl overflow-hidden"
       />
 
