@@ -24,7 +24,17 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(express.json({ limit: "1mb" }));
+
+// ADD THIS TRACKER BLOCK:
+app.use((req, res, next) => {
+  console.log(`🚨 INCOMING REQUEST: ${req.method} ${req.url}`);
+  next();
+});
+
+// 3. Import Routes (Your existing code)
+const authRoutes = require("./routes/auth.routes");
 
 // 3. Import Routes
 const authRoutes = require("./routes/auth.routes");
