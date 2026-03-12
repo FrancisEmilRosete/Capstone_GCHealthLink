@@ -33,9 +33,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// 3. Import Routes (Your existing code)
-const authRoutes = require("./routes/auth.routes");
-
 // 3. Import Routes
 const authRoutes = require("./routes/auth.routes");
 const clinicRoutes = require("./routes/clinic.routes");
