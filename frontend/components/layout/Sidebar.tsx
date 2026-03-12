@@ -27,7 +27,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect }   from 'react';
 import { authLogout }  from '@/lib/auth';
 
-import { SignOutIcon, SettingsIcon, StethoscopeIcon } from '@/components/icons/NavIcons';
+import { SignOutIcon, StethoscopeIcon } from '@/components/icons/NavIcons';
 import { STAFF_NAV_GROUPS }         from '@/constants/staffNavigation';
 
 interface SidebarProps {
@@ -41,8 +41,8 @@ interface SidebarProps {
 export default function Sidebar({
   isOpen    = false,
   onClose   = () => {},
-  userName  = 'Dr. Maria Santos',
-  userRole  = 'staff',
+  userName  = 'Clinic Staff',
+  userRole  = 'clinic staff',
   userAvatar,
 }: SidebarProps) {
 
@@ -158,24 +158,9 @@ export default function Sidebar({
         ))}
       </nav>
 
-      {/* Bottom: Settings + Sign Out */}
+      {/* Bottom: Sign Out */}
       <div className="px-3 pb-6 mt-4 shrink-0">
         <div className="border-t border-slate-700/50 mb-3" />
-
-        <Link
-          href="/dashboard/staff/settings"
-          className={`
-            flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
-            transition-all mb-0.5
-            ${pathname.startsWith('/dashboard/staff/settings')
-              ? 'bg-slate-700/50 text-white'
-              : 'text-slate-400 hover:bg-slate-700/30 hover:text-white'
-            }
-          `}
-        >
-          <SettingsIcon className="w-[18px] h-[18px] shrink-0" />
-          Settings
-        </Link>
 
         <button
           onClick={() => { authLogout(); window.location.href = '/login'; }}

@@ -1,99 +1,102 @@
 /**
  * AUTH HELPERS
  * ──────────────────────────────────────────────────────────────
- * Centralises token storage and the login / logout flow.
- *
- * Usage:
- *   import { authLogin, authLogout, getToken, getUser } from '@/lib/auth';
- *
- *   // Log in
- *   const { user } = await authLogin({ email, password, role });
- *   router.push(`/dashboard/${user.role}`);
- *
- *   // Log out
- *   authLogout();
- *   router.push('/login');
- *
- *   // Get token for authenticated API calls
- *   const token = getToken();
- *   const data  = await api.get('/registration', token);
+ * Centralizes token storage and login/logout for backend auth.
  */
 
-import { api, ApiError } from '@/lib/api';
-import type { UserRole } from '@/types/auth';
+import { api } from '@/lib/api';
 
-// Keys used in localStorage
-const TOKEN_KEY = 'gchl_token';
-const USER_KEY  = 'gchl_user';
-
-// ── Types ───────────────────────────────────────────────────────
+const TOKEN_KEY = 'token';
+const ROLE_KEY = 'userRole';
+const USER_ID_KEY = 'userId';
 
 export interface AuthUser {
-  id:    number;
-  name:  string;
+  id: string;
   email: string;
-  role:  UserRole;
+  role: string;
 }
+
+export type BackendUserRole = 'ADMIN' | 'CLINIC_STAFF' | 'STUDENT';
 
 interface LoginResponse {
+  success: boolean;
   message: string;
-  token:   string;
-  user:    AuthUser;
+  token: string;
+  user: AuthUser;
 }
-
-// ── Token helpers ───────────────────────────────────────────────
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(TOKEN_KEY);
 }
 
-export function getUser(): AuthUser | null {
+export function getUserRole(): string | null {
   if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem(USER_KEY);
-  if (!raw) return null;
-  try { return JSON.parse(raw) as AuthUser; }
-  catch { return null; }
+  return localStorage.getItem(ROLE_KEY);
+}
+
+export function getUserId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(USER_ID_KEY);
 }
 
 function saveSession(token: string, user: AuthUser): void {
   localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.setItem(ROLE_KEY, user.role);
+  localStorage.setItem(USER_ID_KEY, user.id);
 }
 
 function clearSession(): void {
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(ROLE_KEY);
+  localStorage.removeItem(USER_ID_KEY);
+
+  // Backward-compatible cleanup for previously used keys.
+  localStorage.removeItem('gchl_token');
+  localStorage.removeItem('gchl_user');
 }
 
-// ── Auth actions ────────────────────────────────────────────────
-
-/**
- * Call the backend login endpoint.
- * On success, saves the JWT + user info and returns them.
- * Throws ApiError on invalid credentials or server error.
- */
 export async function authLogin(credentials: {
-  email:    string;
+  email: string;
   password: string;
-  role:     UserRole;
 }): Promise<{ token: string; user: AuthUser }> {
   const data = await api.post<LoginResponse>('/auth/login', credentials);
+
+  if (!data.success || !data.token || !data.user?.id || !data.user?.role) {
+    throw new Error('Invalid login response from server.');
+  }
+
   saveSession(data.token, data.user);
   return { token: data.token, user: data.user };
 }
 
-/**
- * Clears the stored session. Call before redirecting to /login.
- */
 export function authLogout(): void {
   clearSession();
 }
 
-/**
- * Returns true if a token exists in localStorage.
- * Does NOT verify the token's expiry — for a full check use /api/auth/me.
- */
 export function isLoggedIn(): boolean {
   return !!getToken();
+}
+
+function normalizeRole(role: string | null): BackendUserRole | null {
+  if (!role) return null;
+
+  const normalized = role.trim().toUpperCase();
+  if (normalized === 'ADMIN') return 'ADMIN';
+  if (normalized === 'CLINIC_STAFF' || normalized === 'STAFF') return 'CLINIC_STAFF';
+  if (normalized === 'STUDENT') return 'STUDENT';
+  return null;
+}
+
+export function getNormalizedUserRole(): BackendUserRole | null {
+  return normalizeRole(getUserRole());
+}
+
+export function getDashboardRouteForRole(role: string | null | undefined): string {
+  const normalized = normalizeRole(role || null);
+
+  if (normalized === 'ADMIN') return '/dashboard/admin';
+  if (normalized === 'CLINIC_STAFF') return '/dashboard/staff';
+  if (normalized === 'STUDENT') return '/dashboard/student';
+  return '/login';
 }

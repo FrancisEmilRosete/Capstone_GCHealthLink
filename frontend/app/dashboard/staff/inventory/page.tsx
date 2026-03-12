@@ -1,145 +1,196 @@
-/**
- * MEDICINE INVENTORY PAGE
- * ──────────────────────────────────────────────────────────────
- * Route: /dashboard/staff/inventory
- * TODO: Replace MOCK_MEDICINES with GET /api/inventory
- */
-
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-// ── Types ─────────────────────────────────────────────────────
-interface Medicine {
-  id:          string;
-  brand:       string;
-  generic:     string;
-  category:    string;
-  qty:         number;
-  unit:        string;
-  expiration:  string; // ISO date
-  supplier:    string;
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
+
+interface InventoryItem {
+  id: string;
+  itemName: string;
+  currentStock: number;
+  reorderThreshold: number;
+  unit: string;
 }
 
-type SortKey = 'brand' | 'generic' | 'category' | 'qty' | 'expiration';
+interface InventoryResponse {
+  success: boolean;
+  data: InventoryItem[];
+  message?: string;
+}
 
-// ── Helpers ───────────────────────────────────────────────────
-const LOW_STOCK_THRESHOLD = 50;
+interface AddInventoryResponse {
+  success: boolean;
+  data: InventoryItem;
+  message?: string;
+}
 
-function getStatus(m: Medicine): 'In Stock' | 'Low Stock' | 'Out of Stock' | 'Expired' {
-  const expired = new Date(m.expiration) < new Date();
-  if (expired)    return 'Expired';
-  if (m.qty === 0) return 'Out of Stock';
-  if (m.qty <= LOW_STOCK_THRESHOLD) return 'Low Stock';
+type SortKey = 'itemName' | 'currentStock' | 'reorderThreshold';
+
+function getStatus(item: InventoryItem): 'In Stock' | 'Low Stock' | 'Out of Stock' {
+  if (item.currentStock <= 0) return 'Out of Stock';
+  if (item.currentStock <= item.reorderThreshold) return 'Low Stock';
   return 'In Stock';
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  'In Stock':    'bg-green-50  text-green-600  border-green-100',
-  'Low Stock':   'bg-yellow-50 text-yellow-600 border-yellow-100',
-  'Out of Stock':'bg-red-50    text-red-500    border-red-100',
-  'Expired':     'bg-pink-50   text-pink-500   border-pink-100',
+  'In Stock': 'bg-green-50 text-green-600 border-green-100',
+  'Low Stock': 'bg-yellow-50 text-yellow-600 border-yellow-100',
+  'Out of Stock': 'bg-red-50 text-red-500 border-red-100',
 };
 
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+function getStockLevelPercent(item: InventoryItem): number {
+  if (item.currentStock <= 0) return 0;
+
+  const relativeCap = Math.max(item.currentStock, item.reorderThreshold * 2, 1);
+  const rawPercent = Math.round((item.currentStock / relativeCap) * 100);
+
+  return Math.max(8, Math.min(100, rawPercent));
 }
 
-// ── Mock data ─────────────────────────────────────────────────
-const INITIAL_MEDICINES: Medicine[] = [
-  { id: 'm1', brand: 'Biogesic',      generic: 'Paracetamol',                                               category: 'Analgesic',     qty: 500, unit: 'tablets',  expiration: '2025-12-31', supplier: 'Unilab' },
-  { id: 'm2', brand: 'Neozep',        generic: 'Phenylephrine HCl + Chlorphenamine Maleate + Paracetamol', category: 'Cold/Flu',      qty: 45,  unit: 'tablets',  expiration: '2024-10-15', supplier: 'United Lab' },
-  { id: 'm3', brand: 'Kremil-S',      generic: 'Aluminum Hydroxide + Magnesium Hydroxide + Simeticone',   category: 'Antacid',       qty: 200, unit: 'tablets',  expiration: '2025-06-30', supplier: 'Wyeth' },
-  { id: 'm4', brand: 'Amoxicillin',   generic: 'Amoxicillin',                                               category: 'Antibiotic',    qty: 0,   unit: 'capsules', expiration: '2024-05-20', supplier: 'GSK' },
-  { id: 'm5', brand: 'Mefenamic Acid',generic: 'Mefenamic Acid',                                            category: 'Pain Reliever', qty: 20,  unit: 'capsules', expiration: '2023-12-01', supplier: 'Generics Pharma' },
-  { id: 'm6', brand: 'Cetirizine',    generic: 'Cetirizine HCl',                                            category: 'Antihistamine', qty: 150, unit: 'tablets',  expiration: '2026-03-15', supplier: 'Interphil' },
-  { id: 'm7', brand: 'Salbutamol',    generic: 'Salbutamol Sulfate',                                        category: 'Bronchodilator',qty: 30,  unit: 'puffs',    expiration: '2026-01-10', supplier: 'GlaxoSmithKline' },
-];
-
-const CATEGORIES = ['Analgesic','Cold/Flu','Antacid','Antibiotic','Pain Reliever','Antihistamine','Bronchodilator','Vitamins','Other'];
-
-// ── Sort icon ─────────────────────────────────────────────────
-function SortIcon({ active, dir }: { active: boolean; dir: 'asc'|'desc' }) {
-  return (
-    <span className="inline-flex flex-col ml-1 gap-[1px]">
-      <svg className={`w-2.5 h-2.5 ${active && dir === 'asc' ? 'text-teal-500' : 'text-gray-300'}`} viewBox="0 0 10 6" fill="currentColor"><path d="M5 0l5 6H0z"/></svg>
-      <svg className={`w-2.5 h-2.5 ${active && dir === 'desc' ? 'text-teal-500' : 'text-gray-300'}`} viewBox="0 0 10 6" fill="currentColor"><path d="M5 6l5-6H0z"/></svg>
-    </span>
-  );
+function getStockLevelClass(item: InventoryItem): string {
+  const status = getStatus(item);
+  if (status === 'Out of Stock') return 'bg-red-500';
+  if (status === 'Low Stock') return 'bg-yellow-500';
+  return 'bg-green-500';
 }
 
-// ── Add Medicine Modal ────────────────────────────────────────
-interface AddModalProps { onClose: () => void; onAdd: (m: Medicine) => void; }
-function AddMedicineModal({ onClose, onAdd }: AddModalProps) {
-  const blank = { brand:'', generic:'', category:'Analgesic', qty:'', unit:'', expiration:'', supplier:'' };
-  const [form, setForm] = useState(blank);
-  const set = (k: keyof typeof blank) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+function downloadInventoryCsv(items: InventoryItem[]) {
+  const headers = ['Item Name', 'Current Stock', 'Reorder Threshold', 'Unit', 'Status'];
+  const lines = items.map((item) => [
+    item.itemName,
+    String(item.currentStock),
+    String(item.reorderThreshold),
+    item.unit,
+    getStatus(item),
+  ].map((value) => `"${value.replace(/"/g, '""')}"`).join(','));
 
-  function handleSubmit(e: React.FormEvent) {
+  const csv = [headers.join(','), ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = 'inventory_export.csv';
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
+interface AddModalProps {
+  onClose: () => void;
+  onSubmit: (payload: {
+    itemName: string;
+    currentStock: number;
+    reorderThreshold: number;
+    unit: string;
+  }) => Promise<void>;
+  submitting: boolean;
+}
+
+function AddMedicineModal({ onClose, onSubmit, submitting }: AddModalProps) {
+  const [itemName, setItemName] = useState('');
+  const [currentStock, setCurrentStock] = useState('');
+  const [reorderThreshold, setReorderThreshold] = useState('');
+  const [unit, setUnit] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.brand || !form.generic || !form.qty || !form.unit || !form.expiration) return;
-    onAdd({
-      id: `m${Date.now()}`, brand: form.brand, generic: form.generic,
-      category: form.category, qty: parseInt(form.qty), unit: form.unit,
-      expiration: form.expiration, supplier: form.supplier,
+    await onSubmit({
+      itemName: itemName.trim(),
+      currentStock: Number(currentStock),
+      reorderThreshold: Number(reorderThreshold),
+      unit: unit.trim(),
     });
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor:'rgba(0,0,0,0.4)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
+    >
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h2 className="text-base font-bold text-gray-900">Add New Medicine</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></button>
+          <h2 className="text-base font-bold text-gray-900">Add Inventory Item</h2>
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
+            aria-label="Close"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
+
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
-            <label className="text-xs font-semibold text-gray-700 block mb-1">Brand Name</label>
-            <input value={form.brand} onChange={set('brand')} placeholder="e.g. Biogesic" required
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"/>
+            <label className="text-xs font-semibold text-gray-700 block mb-1">Item Name</label>
+            <input
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              required
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+            />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-700 block mb-1">Generic Name</label>
-            <input value={form.generic} onChange={set('generic')} placeholder="e.g. Paracetamol" required
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"/>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-700 block mb-1">Category</label>
-            <select value={form.category} onChange={set('category')}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300">
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-gray-700 block mb-1">Quantity</label>
-              <input type="number" min={0} value={form.qty} onChange={set('qty')} required
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"/>
+              <label className="text-xs font-semibold text-gray-700 block mb-1">Current Stock</label>
+              <input
+                type="number"
+                min={0}
+                value={currentStock}
+                onChange={(e) => setCurrentStock(e.target.value)}
+                required
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+              />
             </div>
+
             <div>
-              <label className="text-xs font-semibold text-gray-700 block mb-1">Unit</label>
-              <input value={form.unit} onChange={set('unit')} placeholder="e.g. tablets" required
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"/>
+              <label className="text-xs font-semibold text-gray-700 block mb-1">Reorder Threshold</label>
+              <input
+                type="number"
+                min={0}
+                value={reorderThreshold}
+                onChange={(e) => setReorderThreshold(e.target.value)}
+                required
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+              />
             </div>
           </div>
+
           <div>
-            <label className="text-xs font-semibold text-gray-700 block mb-1">Expiration Date</label>
-            <input type="date" value={form.expiration} onChange={set('expiration')} required
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"/>
+            <label className="text-xs font-semibold text-gray-700 block mb-1">Unit</label>
+            <input
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              required
+              placeholder="e.g. tablets"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+            />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-700 block mb-1">Supplier</label>
-            <input value={form.supplier} onChange={set('supplier')} placeholder="e.g. Unilab"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"/>
-          </div>
+
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose}
-              className="px-4 py-2 text-sm font-semibold border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors">Cancel</button>
-            <button type="submit"
-              className="px-5 py-2 text-sm font-semibold bg-teal-500 hover:bg-teal-600 text-white rounded-xl transition-colors">Add Medicine</button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-semibold border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-5 py-2 text-sm font-semibold bg-teal-500 hover:bg-teal-600 text-white rounded-xl transition-colors disabled:opacity-70"
+            >
+              {submitting ? 'Saving...' : 'Add Item'}
+            </button>
           </div>
         </form>
       </div>
@@ -147,95 +198,196 @@ function AddMedicineModal({ onClose, onAdd }: AddModalProps) {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────
-export default function InventoryPage() {
-  const [medicines, setMedicines] = useState<Medicine[]>(INITIAL_MEDICINES);
-  const [search,    setSearch]    = useState('');
-  const [sortKey,   setSortKey]   = useState<SortKey>('brand');
-  const [sortDir,   setSortDir]   = useState<'asc'|'desc'>('asc');
-  const [showAdd,   setShowAdd]   = useState(false);
+function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  return (
+    <span className="inline-flex flex-col ml-1 gap-[1px]">
+      <svg className={`w-2.5 h-2.5 ${active && dir === 'asc' ? 'text-teal-500' : 'text-gray-300'}`} viewBox="0 0 10 6" fill="currentColor"><path d="M5 0l5 6H0z" /></svg>
+      <svg className={`w-2.5 h-2.5 ${active && dir === 'desc' ? 'text-teal-500' : 'text-gray-300'}`} viewBox="0 0 10 6" fill="currentColor"><path d="M5 6l5-6H0z" /></svg>
+    </span>
+  );
+}
 
-  function toggleSort(k: SortKey) {
-    if (sortKey === k) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(k); setSortDir('asc'); }
+export default function InventoryPage() {
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('itemName');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  async function loadInventory() {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setError('');
+      const response = await api.get<InventoryResponse>('/inventory', token);
+      setItems(response.data ?? []);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to load inventory.');
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const withStatus = useMemo(() => medicines.map((m) => ({ ...m, status: getStatus(m) })), [medicines]);
-  const lowStock  = withStatus.filter((m) => m.status === 'Low Stock').length;
-  const expired   = withStatus.filter((m) => m.status === 'Expired').length;
-  const outOfStock= withStatus.filter((m) => m.status === 'Out of Stock').length;
+  useEffect(() => {
+    void loadInventory();
+  }, []);
 
-  const q = search.toLowerCase();
+  async function handleAdd(payload: {
+    itemName: string;
+    currentStock: number;
+    reorderThreshold: number;
+    unit: string;
+  }) {
+    if (!payload.itemName || !payload.unit) return;
+
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      setAdding(true);
+      setError('');
+      const response = await api.post<AddInventoryResponse>('/inventory', payload, token);
+      setItems((prev) => [...prev, response.data]);
+      setShowAdd(false);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to add inventory item.');
+      }
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDir('asc');
+  }
+
+  const withStatus = useMemo(
+    () => items.map((item) => ({ ...item, status: getStatus(item) })),
+    [items],
+  );
+
+  const q = search.toLowerCase().trim();
+
   const filtered = useMemo(() => {
     const rows = q
-      ? withStatus.filter((m) => m.brand.toLowerCase().includes(q) || m.generic.toLowerCase().includes(q) || m.category.toLowerCase().includes(q))
+      ? withStatus.filter((item) =>
+          item.itemName.toLowerCase().includes(q) ||
+          item.unit.toLowerCase().includes(q),
+        )
       : [...withStatus];
+
     rows.sort((a, b) => {
       let cmp = 0;
-      if (sortKey === 'brand')      cmp = a.brand.localeCompare(b.brand);
-      if (sortKey === 'generic')    cmp = a.generic.localeCompare(b.generic);
-      if (sortKey === 'category')   cmp = a.category.localeCompare(b.category);
-      if (sortKey === 'qty')        cmp = a.qty - b.qty;
-      if (sortKey === 'expiration') cmp = a.expiration.localeCompare(b.expiration);
+      if (sortKey === 'itemName') cmp = a.itemName.localeCompare(b.itemName);
+      if (sortKey === 'currentStock') cmp = a.currentStock - b.currentStock;
+      if (sortKey === 'reorderThreshold') cmp = a.reorderThreshold - b.reorderThreshold;
       return sortDir === 'asc' ? cmp : -cmp;
     });
+
     return rows;
   }, [withStatus, q, sortKey, sortDir]);
 
+  const lowStock = withStatus.filter((item) => item.status === 'Low Stock').length;
+  const outOfStock = withStatus.filter((item) => item.status === 'Out of Stock').length;
+
   return (
     <div className="p-4 sm:p-6 space-y-5">
-      {showAdd && <AddMedicineModal onClose={() => setShowAdd(false)} onAdd={(m) => { setMedicines((prev) => [...prev, m]); setShowAdd(false); }} />}
+      {showAdd && (
+        <AddMedicineModal
+          onClose={() => setShowAdd(false)}
+          onSubmit={handleAdd}
+          submitting={adding}
+        />
+      )}
 
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Medicine Inventory</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Track stock levels and expiration dates</p>
+          <p className="text-xs text-gray-400 mt-0.5">Live data from the backend inventory table</p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1.5 text-sm font-semibold bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-xl transition-colors self-start sm:self-auto">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
-          Add Medicine
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => downloadInventoryCsv(filtered)}
+            className="text-xs font-semibold border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600 px-3 py-2 rounded-xl transition-colors bg-white"
+          >
+            Download CSV
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 text-sm font-semibold bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-xl transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Item
+          </button>
+        </div>
       </div>
 
-      {/* Analytics stat cards */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs text-gray-400 font-medium">Total Medicines</p>
-          <p className="text-2xl font-bold text-teal-500 mt-1">{medicines.length}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Items in inventory</p>
+          <p className="text-xs text-gray-400 font-medium">Total Items</p>
+          <p className="text-2xl font-bold text-teal-500 mt-1">{items.length}</p>
         </div>
-        <div className={`bg-white rounded-2xl border shadow-sm p-4 ${lowStock > 0 ? 'border-yellow-200' : 'border-gray-100'}`}>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <p className="text-xs text-gray-400 font-medium">Low Stock</p>
-          <p className={`text-2xl font-bold mt-1 ${lowStock > 0 ? 'text-yellow-500' : 'text-gray-300'}`}>{lowStock}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">
-            {lowStock > 0 ? `${lowStock} item${lowStock > 1 ? 's' : ''} below threshold` : 'All items sufficient'}
-          </p>
+          <p className="text-2xl font-bold text-yellow-500 mt-1">{lowStock}</p>
         </div>
-        <div className={`bg-white rounded-2xl border shadow-sm p-4 ${outOfStock > 0 ? 'border-red-200' : 'border-gray-100'}`}>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <p className="text-xs text-gray-400 font-medium">Out of Stock</p>
-          <p className={`text-2xl font-bold mt-1 ${outOfStock > 0 ? 'text-red-500' : 'text-gray-300'}`}>{outOfStock}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">
-            {outOfStock > 0 ? `${outOfStock} item${outOfStock > 1 ? 's' : ''} need restocking` : 'No items empty'}
-          </p>
+          <p className="text-2xl font-bold text-red-500 mt-1">{outOfStock}</p>
         </div>
-        <div className={`bg-white rounded-2xl border shadow-sm p-4 ${expired > 0 ? 'border-red-200' : 'border-gray-100'}`}>
-          <p className="text-xs text-gray-400 font-medium">Expired</p>
-          <p className={`text-2xl font-bold mt-1 ${expired > 0 ? 'text-pink-500' : 'text-gray-300'}`}>{expired}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">
-            {expired > 0 ? `${expired} item${expired > 1 ? 's' : ''} past expiry date` : 'No expired items'}
-          </p>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <p className="text-xs text-gray-400 font-medium">Threshold Alerts</p>
+          <p className="text-2xl font-bold text-orange-500 mt-1">{lowStock + outOfStock}</p>
         </div>
       </div>
 
-      {/* Table card */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-gray-50">
           <div className="relative max-w-xs">
-            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
-            <input type="text" placeholder="Search medicine..." value={search} onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"/>
+            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search item name or unit..."
+              className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"
+            />
           </div>
         </div>
 
@@ -243,40 +395,67 @@ export default function InventoryPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-100 text-gray-400">
-                {([['brand','Name'],['generic','Generic Name'],['category','Category'],['qty','Stock'],['expiration','Expiration']] as [SortKey,string][]).map(([k,label]) => (
-                  <th key={k} onClick={() => toggleSort(k)}
-                    className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:text-teal-500 transition-colors whitespace-nowrap">
-                    {label}<SortIcon active={sortKey===k} dir={sortDir}/>
-                  </th>
-                ))}
+                <th
+                  className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:text-teal-500 transition-colors"
+                  onClick={() => toggleSort('itemName')}
+                >
+                  Item Name
+                  <SortIcon active={sortKey === 'itemName'} dir={sortDir} />
+                </th>
+                <th
+                  className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:text-teal-500 transition-colors"
+                  onClick={() => toggleSort('currentStock')}
+                >
+                  Stock Level
+                  <SortIcon active={sortKey === 'currentStock'} dir={sortDir} />
+                </th>
+                <th
+                  className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:text-teal-500 transition-colors"
+                  onClick={() => toggleSort('reorderThreshold')}
+                >
+                  Reorder Threshold
+                  <SortIcon active={sortKey === 'reorderThreshold'} dir={sortDir} />
+                </th>
+                <th className="text-left px-4 py-3 font-semibold">Unit</th>
                 <th className="text-left px-4 py-3 font-semibold">Status</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m) => (
-                <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-gray-800">{m.brand}</td>
-                  <td className="px-4 py-3 text-gray-500 max-w-[260px] truncate">{m.generic}</td>
-                  <td className="px-4 py-3 text-gray-600">{m.category}</td>
-                  <td className="px-4 py-3">
-                    <span className={`font-bold ${
-                      m.status === 'In Stock' ? 'text-gray-800' : 'text-red-500'
-                    }`}>{m.qty} {m.unit}</span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(m.expiration)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-[11px] font-semibold border px-2.5 py-0.5 rounded-full ${STATUS_STYLE[m.status]}`}>{m.status}</span>
-                  </td>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-gray-400">Loading inventory...</td>
                 </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-300">No medicines match your search.</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-gray-300">No inventory items found.</td>
+                </tr>
+              ) : (
+                filtered.map((item) => (
+                  <tr key={item.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
+                    <td className="px-4 py-3 font-semibold text-gray-800">{item.itemName}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      <div className="space-y-1.5 max-w-[180px]">
+                        <p className="text-xs text-gray-700">{item.currentStock} {item.unit}</p>
+                        <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${getStockLevelClass(item)}`}
+                            style={{ width: `${getStockLevelPercent(item)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{item.reorderThreshold}</td>
+                    <td className="px-4 py-3 text-gray-600">{item.unit}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[11px] font-semibold border px-2.5 py-0.5 rounded-full ${STATUS_STYLE[item.status]}`}>
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
-        </div>
-        <div className="px-4 py-3 border-t border-gray-50 text-[11px] text-gray-400">
-          Showing {filtered.length} of {medicines.length} medicines
         </div>
       </div>
     </div>

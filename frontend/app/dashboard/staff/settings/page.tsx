@@ -1,65 +1,55 @@
-/**
- * SETTINGS PAGE
- * ──────────────────────────────────────────────────────────────
- * Route: /dashboard/staff/settings
- *
- * - Download all records as CSV
- * - Light / dark appearance toggle (persisted per account in localStorage)
- * - Account profile display
- */
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-// ── Mock current user ───────────────────────────────────────────
-// TODO: Replace with actual auth context / session
-const ACCOUNT_ID = 'staff_001';
-const MOCK_USER = { name: 'Dr. Maria Santos', role: 'Clinic Physician', email: 'msantos@gordoncollege.edu.ph', initials: 'MS' };
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
-// ── CSV helpers ───────────────────────────────────────────────
-function makeCsv(headers: string[], rows: string[][]): Blob {
-  const lines = [headers.join(','), ...rows.map((r) => r.map((v) => `"${v}"`).join(','))];
+interface StaffProfile {
+  id: string;
+  email: string;
+  role: string;
+  name: string;
+}
+
+interface StaffSettingsResponse {
+  success: boolean;
+  message?: string;
+  data: {
+    profile: StaffProfile;
+    preference: {
+      darkMode: boolean;
+    };
+  };
+}
+
+function makeCsv(headers: string[], rows: Array<Array<string | number>>): Blob {
+  const lines = [headers.join(','), ...rows.map((row) => row.map((value) => `"${String(value)}"`).join(','))];
   return new Blob([lines.join('\n')], { type: 'text/csv' });
 }
 
-function triggerDownload(blob: Blob, name: string) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
+function triggerDownload(blob: Blob, filename: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = URL.createObjectURL(blob);
+  anchor.download = filename;
+  anchor.click();
 }
 
-// ── Mock record snapshots (in a real app these come from API) ───────
 const CONSULT_ROWS = [
-  ['2023-10-15 09:30','2023-0001','Juan Dela Cruz','Viral Flu','Rest, hydration','Dr. Maria Santos'],
-  ['2023-10-16 14:15','2023-0045','Ana Santos','Hyperacidity','Antacid, bland diet','Nurse John Reyes'],
-  ['2024-03-10 10:15','2023-0001','Juan Dela Cruz','Tension Headache','Paracetamol','Dr. Maria Santos'],
-];
-const EXAM_ROWS = [
-  ['2024-08-05','2023-0001','Juan Dela Cruz','112/72','36.4','61kg','22.8','Dr. Maria Santos'],
-  ['2023-08-10','2023-0001','Juan Dela Cruz','110/70','36.5','60kg','22.5','Dr. Maria Santos'],
-  ['2024-01-15','2023-0002','Pedro Santos','120/80','36.8','55kg','21.0','Dr. Maria Santos'],
-];
-const CERT_ROWS = [
-  ['2024-10-15','2023-0001','Juan Dela Cruz','Illness (Fever)','Dr. Maria Santos'],
-  ['2025-03-05','2024-0010','Carlos Reyes','Illness (Hypertension)','Dr. Maria Santos'],
-];
-const MONTHLY_CONSULT_ROWS: (string|number)[][] = [
-  ['Mar',8],['Apr',12],['May',9],['Jun',15],['Jul',11],['Aug',20],
-  ['Sep',18],['Oct',25],['Nov',22],['Dec',14],['Jan',17],['Feb',10],
-];
-const TOP_DX_ROWS: (string|number)[][] = [
-  ['Viral Flu',18],['Tension Headache',14],['Gastritis',11],['URI',9],['Anemia',7],['Hyperacidity',6],['Ankle Sprain',4],
-];
-const BMI_ROWS: (string|number)[][] = [
-  ['Underweight',8],['Normal',42],['Overweight',15],['Obese',5],
-];
-const BLOOD_ROWS: (string|number)[][] = [
-  ['O+',28],['A+',18],['B+',12],['AB+',6],['O-',4],['A-',2],
+  ['2023-10-15 09:30', '2023-0001', 'Juan Dela Cruz', 'Viral Flu', 'Rest, hydration', 'Dr. Maria Santos'],
+  ['2023-10-16 14:15', '2023-0045', 'Ana Santos', 'Hyperacidity', 'Antacid, bland diet', 'Nurse John Reyes'],
 ];
 
-// ── Section card wrapper ─────────────────────────────────────────
+const EXAM_ROWS = [
+  ['2024-08-05', '2023-0001', 'Juan Dela Cruz', '112/72', '36.4', '61kg', '22.8', 'Dr. Maria Santos'],
+  ['2024-01-15', '2023-0002', 'Pedro Santos', '120/80', '36.8', '55kg', '21.0', 'Dr. Maria Santos'],
+];
+
+const CERT_ROWS = [
+  ['2024-10-15', '2023-0001', 'Juan Dela Cruz', 'Illness (Fever)', 'Dr. Maria Santos'],
+  ['2025-03-05', '2024-0010', 'Carlos Reyes', 'Illness (Hypertension)', 'Dr. Maria Santos'],
+];
+
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
@@ -72,25 +62,27 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-// ── Toggle switch ───────────────────────────────────────────────
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   return (
     <button
       role="switch"
+      type="button"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-60 ${
         checked ? 'bg-teal-500' : 'bg-gray-200'
       }`}
     >
-      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
-        checked ? 'translate-x-5' : 'translate-x-0'
-      }`}/>
+      <span
+        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+          checked ? 'translate-x-5' : 'translate-x-0'
+        }`}
+      />
     </button>
   );
 }
 
-// ── Download row ───────────────────────────────────────────────
 function DownloadRow({ label, sub, onClick }: { label: string; sub: string; onClick: () => void }) {
   return (
     <div className="flex items-center justify-between gap-4 py-2">
@@ -98,151 +90,265 @@ function DownloadRow({ label, sub, onClick }: { label: string; sub: string; onCl
         <p className="text-sm font-semibold text-gray-800">{label}</p>
         <p className="text-xs text-gray-400">{sub}</p>
       </div>
-      <button onClick={onClick}
-        className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600 px-3 py-1.5 rounded-xl transition-colors bg-white shrink-0">
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600 px-3 py-1.5 rounded-xl transition-colors bg-white shrink-0"
+      >
         Download CSV
       </button>
     </div>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────
-export default function SettingsPage() {
-  const THEME_KEY = `theme_${ACCOUNT_ID}`;
-  const [darkMode, setDarkMode] = useState(false);
-  const [saved,    setSaved]    = useState(false);
+function roleLabel(role: string): string {
+  if (role === 'CLINIC_STAFF') return 'Clinic Staff';
+  if (role === 'ADMIN') return 'Administrator';
+  return role;
+}
 
-  // Load saved theme on mount
-  useEffect(() => {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'dark') {
-      setDarkMode(true);
-      document.documentElement.classList.add('dark');
-    }
-  }, [THEME_KEY]);
+function initialsFromName(name: string): string {
+  const clean = name.trim();
+  if (!clean) return 'NA';
 
-  function handleThemeToggle(val: boolean) {
-    setDarkMode(val);
-    if (val) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem(THEME_KEY, 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem(THEME_KEY, 'light');
-    }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
   }
 
-  function downloadAll() {
-    triggerDownload(makeCsv(['Date','Student ID','Student','Diagnosis','Treatment','Staff'], CONSULT_ROWS), 'all_consultations.csv');
-    setTimeout(() => triggerDownload(makeCsv(['Date','Student ID','Student','BP','Temp','Weight','BMI','Examiner'], EXAM_ROWS), 'all_physical_exams.csv'), 300);
-    setTimeout(() => triggerDownload(makeCsv(['Date','Student ID','Student','Reason','Issued By'], CERT_ROWS), 'all_certificates.csv'), 600);
-    setTimeout(() => triggerDownload(makeCsv(['Month','Consultations'], MONTHLY_CONSULT_ROWS), 'report_monthly_consultations.csv'), 900);
-    setTimeout(() => triggerDownload(makeCsv(['Diagnosis','Count'], TOP_DX_ROWS), 'report_top_diagnoses.csv'), 1200);
-    setTimeout(() => triggerDownload(makeCsv(['BMI Category','Count'], BMI_ROWS), 'report_bmi_distribution.csv'), 1500);
-    setTimeout(() => triggerDownload(makeCsv(['Blood Type','Count'], BLOOD_ROWS), 'report_blood_types.csv'), 1800);
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+}
+
+export default function SettingsPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [savingTheme, setSavingTheme] = useState(false);
+
+  const [profile, setProfile] = useState<StaffProfile>({
+    id: '',
+    name: 'Clinic Staff',
+    email: 'staff@gordoncollege.edu.ph',
+    role: 'CLINIC_STAFF',
+  });
+  const [darkMode, setDarkMode] = useState(false);
+
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSaved, setPwSaved] = useState(false);
+
+  useEffect(() => {
+    async function loadSettings() {
+      const token = getToken();
+      if (!token) {
+        setError('You are not logged in. Please sign in again.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError('');
+
+        const response = await api.get<StaffSettingsResponse>('/settings/staff', token);
+        setProfile(response.data.profile);
+        setDarkMode(Boolean(response.data.preference?.darkMode));
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError('Failed to load settings.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadSettings();
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
+
+  async function handleThemeToggle(value: boolean) {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      setSavingTheme(true);
+      setError('');
+
+      await api.put('/settings/staff', { darkMode: value }, token);
+      setDarkMode(value);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to save appearance setting.');
+      }
+    } finally {
+      setSavingTheme(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    setPwError('');
+
+    if (!currentPw) {
+      setPwError('Enter your current password.');
+      return;
+    }
+
+    if (newPw.length < 8) {
+      setPwError('New password must be at least 8 characters.');
+      return;
+    }
+
+    if (newPw !== confirmPw) {
+      setPwError('Passwords do not match.');
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      setPwError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      await api.post(
+        '/settings/change-password',
+        {
+          currentPassword: currentPw,
+          newPassword: newPw,
+        },
+        token,
+      );
+
+      setCurrentPw('');
+      setNewPw('');
+      setConfirmPw('');
+      setPwSaved(true);
+      setTimeout(() => setPwSaved(false), 2000);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setPwError(err.message);
+      } else {
+        setPwError('Failed to update password.');
+      }
+    }
+  }
+
+  const initials = initialsFromName(profile.name || profile.email);
+
+  function downloadAll(): void {
+    triggerDownload(makeCsv(['Date', 'Student ID', 'Student', 'Diagnosis', 'Treatment', 'Staff'], CONSULT_ROWS), 'all_consultations.csv');
+    setTimeout(
+      () => triggerDownload(makeCsv(['Date', 'Student ID', 'Student', 'BP', 'Temp', 'Weight', 'BMI', 'Examiner'], EXAM_ROWS), 'all_physical_exams.csv'),
+      300,
+    );
+    setTimeout(() => triggerDownload(makeCsv(['Date', 'Student ID', 'Student', 'Reason', 'Issued By'], CERT_ROWS), 'all_certificates.csv'), 600);
   }
 
   return (
     <div className="p-4 sm:p-6 max-w-xl mx-auto space-y-5">
-
-      {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-gray-900">Settings</h1>
         <p className="text-xs text-gray-400 mt-0.5">Manage your preferences and data exports</p>
       </div>
 
-      {/* Account info */}
+      {loading && <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">Loading settings...</div>}
+      {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
+
       <Section title="Account" description="Your current account information">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
-            {MOCK_USER.initials}
-          </div>
+          <div className="w-12 h-12 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-lg shrink-0">{initials}</div>
           <div>
-            <p className="text-sm font-bold text-gray-900">{MOCK_USER.name}</p>
-            <p className="text-xs text-teal-500 font-medium">{MOCK_USER.role}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{MOCK_USER.email}</p>
+            <p className="text-sm font-bold text-gray-900">{profile.name || profile.email}</p>
+            <p className="text-xs text-teal-500 font-medium">{roleLabel(profile.role)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{profile.email}</p>
           </div>
         </div>
       </Section>
 
-      {/* Appearance */}
-      <Section title="Appearance" description="Theme preference is saved per account">
+      <Section title="Appearance" description="Theme preference is saved to your account">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gray-100">
-              {darkMode ? (
-                <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z"/></svg>
-              ) : (
-                <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5a.75.75 0 01.75.75V7a.75.75 0 01-1.5 0V5.25A.75.75 0 0112 4.5zM18.364 6.05a.75.75 0 010 1.06l-1.25 1.25a.75.75 0 11-1.06-1.06l1.25-1.25a.75.75 0 011.06 0zM19.5 12a.75.75 0 01-.75.75H17a.75.75 0 010-1.5h1.75a.75.75 0 01.75.75zM17.114 17.114a.75.75 0 01-1.06 0l-1.25-1.25a.75.75 0 111.06-1.06l1.25 1.25a.75.75 0 010 1.06zM12 17a.75.75 0 01.75.75V19a.75.75 0 01-1.5 0v-1.25A.75.75 0 0112 17zM6.886 17.114a.75.75 0 010-1.06l1.25-1.25a.75.75 0 111.06 1.06l-1.25 1.25a.75.75 0 01-1.06 0zM5 12a.75.75 0 01.75-.75H7a.75.75 0 010 1.5H5.75A.75.75 0 015 12zM6.886 6.886a.75.75 0 011.06 0L9.196 8.136a.75.75 0 01-1.06 1.06L6.886 7.946a.75.75 0 010-1.06zM12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z"/></svg>
-              )}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800">{darkMode ? 'Dark Mode' : 'Light Mode'}</p>
-              <p className="text-xs text-gray-400">{darkMode ? 'Dark background, light text' : 'Light background, dark text'}</p>
-            </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-800">{darkMode ? 'Dark Mode' : 'Light Mode'}</p>
+            <p className="text-xs text-gray-400">{darkMode ? 'Dark background, light text' : 'Light background, dark text'}</p>
           </div>
           <div className="flex items-center gap-2">
-            {saved && <span className="text-xs text-teal-500 font-medium">Saved</span>}
-            <Toggle checked={darkMode} onChange={handleThemeToggle}/>
+            {(saved || savingTheme) && <span className="text-xs text-teal-500 font-medium">{savingTheme ? 'Saving...' : 'Saved'}</span>}
+            <Toggle checked={darkMode} onChange={handleThemeToggle} disabled={savingTheme || loading} />
           </div>
         </div>
       </Section>
 
-      {/* Data export */}
+      <Section title="Change Password" description="Update your account password">
+        <div className="space-y-2">
+          {pwError && <p className="text-xs text-red-600">{pwError}</p>}
+          {pwSaved && <p className="text-xs text-teal-600">Password updated successfully.</p>}
+          <input
+            type="password"
+            value={currentPw}
+            onChange={(event) => setCurrentPw(event.target.value)}
+            placeholder="Current password"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+          />
+          <input
+            type="password"
+            value={newPw}
+            onChange={(event) => setNewPw(event.target.value)}
+            placeholder="New password"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+          />
+          <input
+            type="password"
+            value={confirmPw}
+            onChange={(event) => setConfirmPw(event.target.value)}
+            placeholder="Confirm new password"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+          />
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              void handleChangePassword();
+            }}
+            className="px-4 py-2 text-sm font-semibold bg-teal-500 hover:bg-teal-600 text-white rounded-xl transition-colors"
+          >
+            Update Password
+          </button>
+        </div>
+      </Section>
+
       <Section title="Data Export" description="Download records as CSV files">
         <div className="divide-y divide-gray-50">
-          <DownloadRow
-            label="Download All Records"
-            sub="Exports consultations, physical exams, and certificates"
-            onClick={downloadAll}
-          />
+          <DownloadRow label="Download All Records" sub="Exports consultations, physical exams, and certificates" onClick={downloadAll} />
           <DownloadRow
             label="Consultation Records"
             sub="All clinic visit logs with diagnosis and treatment"
-            onClick={() => triggerDownload(makeCsv(['Date','Student ID','Student','Diagnosis','Treatment','Staff'], CONSULT_ROWS), 'consultations.csv')}
+            onClick={() => triggerDownload(makeCsv(['Date', 'Student ID', 'Student', 'Diagnosis', 'Treatment', 'Staff'], CONSULT_ROWS), 'consultations.csv')}
           />
           <DownloadRow
             label="Physical Exam Records"
             sub="Annual physical examination records with vitals"
-            onClick={() => triggerDownload(makeCsv(['Date','Student ID','Student','BP','Temp','Weight','BMI','Examiner'], EXAM_ROWS), 'physical_exams.csv')}
+            onClick={() => triggerDownload(makeCsv(['Date', 'Student ID', 'Student', 'BP', 'Temp', 'Weight', 'BMI', 'Examiner'], EXAM_ROWS), 'physical_exams.csv')}
           />
           <DownloadRow
             label="Medical Certificates"
             sub="All issued excuse letters and clearances"
-            onClick={() => triggerDownload(makeCsv(['Date','Student ID','Student','Reason','Issued By'], CERT_ROWS), 'certificates.csv')}
+            onClick={() => triggerDownload(makeCsv(['Date', 'Student ID', 'Student', 'Reason', 'Issued By'], CERT_ROWS), 'certificates.csv')}
           />
-          <DownloadRow
-            label="Monthly Consultation Report"
-            sub="Monthly consultation counts for the academic year"
-            onClick={() => triggerDownload(makeCsv(['Month','Consultations'], MONTHLY_CONSULT_ROWS), 'report_monthly_consultations.csv')}
-          />
-          <DownloadRow
-            label="Top Diagnoses Report"
-            sub="Most frequent diagnoses across all consultations"
-            onClick={() => triggerDownload(makeCsv(['Diagnosis','Count'], TOP_DX_ROWS), 'report_top_diagnoses.csv')}
-          />
-          <DownloadRow
-            label="BMI Distribution Report"
-            sub="BMI category breakdown from physical examinations"
-            onClick={() => triggerDownload(makeCsv(['BMI Category','Count'], BMI_ROWS), 'report_bmi_distribution.csv')}
-          />
-          <DownloadRow
-            label="Blood Type Distribution Report"
-            sub="Blood type frequency from physical examinations"
-            onClick={() => triggerDownload(makeCsv(['Blood Type','Count'], BLOOD_ROWS), 'report_blood_types.csv')}
-          />
-        </div>
-      </Section>
-
-      {/* App info */}
-      <Section title="About">
-        <div className="space-y-1.5 text-xs text-gray-500">
-          <div className="flex justify-between"><span>System</span><span className="font-medium text-gray-700">GC HealthLink</span></div>
-          <div className="flex justify-between"><span>Version</span><span className="font-medium text-gray-700">1.0.0-beta</span></div>
-          <div className="flex justify-between"><span>Institution</span><span className="font-medium text-gray-700">Gordon College</span></div>
         </div>
       </Section>
     </div>

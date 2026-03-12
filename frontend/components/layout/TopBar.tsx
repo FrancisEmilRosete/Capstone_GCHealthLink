@@ -59,7 +59,7 @@ function BellIcon({ hasUnread }: { hasUnread?: boolean }) {
 
 export default function TopBar({
   onMenuOpen,
-  userName   = 'Dr. Maria Santos',
+  userName   = 'Clinic Staff',
   userAvatar,
 }: TopBarProps) {
   const [search,       setSearch      ] = useState('');

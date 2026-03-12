@@ -1,80 +1,166 @@
-/**
- * CONSULTATIONS PAGE
- * ──────────────────────────────────────────────────────────────
- * Route: /dashboard/staff/consultations
- *
- * Analytics + searchable / sortable consultation table.
- * "Scan QR Code" → scanner page   |   "Download Records" → CSV
- * "View" action → opens ConsultationDetailModal
- *
- * TODO: Replace MOCK_CONSULTATIONS with GET /api/consultations
- */
-
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
-// ── Types ─────────────────────────────────────────────────────
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
+
+interface VisitRecord {
+  id: string;
+  visitDate: string;
+  visitTime: string | null;
+  chiefComplaintEnc: string | null;
+  studentProfile: {
+    studentNumber: string;
+    firstName: string;
+    lastName: string;
+  };
+  handledBy: {
+    email: string;
+  } | null;
+  dispensedMedicines: Array<{
+    quantity: number;
+    inventory: {
+      itemName: string;
+      unit: string;
+    };
+  }>;
+}
+
+interface VisitResponse {
+  success: boolean;
+  data: VisitRecord[];
+  message?: string;
+}
+
 interface ConsultRow {
-  id:          string;
-  dateIso:     string;          // ISO full datetime e.g. "2023-10-15T09:30:00"
-  studentId:   string;
-  student:     string;
-  complaint:   string;
-  diagnosis:   string;
-  treatment:   string;
-  staff:       string;
-  medicines:   string[];        // e.g. ["Paracetamol 500mg x2", "ORS"]
+  id: string;
+  dateIso: string;
+  visitTime: string;
+  studentId: string;
+  student: string;
+  complaint: string;
+  diagnosis: string;
+  treatment: string;
+  staff: string;
+  medicines: string[];
 }
 
 type SortKey = 'date' | 'student';
 
-// ── Mock data ─────────────────────────────────────────────────
-const MOCK_CONSULTATIONS: ConsultRow[] = [
-  { id: 'c01', dateIso: '2023-10-15T09:30:00', studentId: '2023-0001', student: 'Juan Dela Cruz',  complaint: 'Fever and body aches',            diagnosis: 'Viral Flu',                         treatment: 'Rest, hydration, antipyretics',        staff: 'Dr. Maria Santos',  medicines: ['Paracetamol 500mg x6', 'ORS sachet x2'] },
-  { id: 'c02', dateIso: '2023-10-16T14:15:00', studentId: '2023-0045', student: 'Ana Santos',      complaint: 'Stomach pain after eating',        diagnosis: 'Hyperacidity',                      treatment: 'Antacid, bland diet',                 staff: 'Nurse John Reyes',  medicines: ['Antacid tablet x4'] },
-  { id: 'c03', dateIso: '2023-09-01T10:00:00', studentId: '2023-0001', student: 'Juan Dela Cruz',  complaint: 'Cough, runny nose, sore throat',   diagnosis: 'Upper Respiratory Tract Infection', treatment: 'Symptomatic relief, steam inhalation', staff: 'Dr. Maria Santos',  medicines: ['Cetirizine 10mg x6', 'Zinc tablet x10'] },
-  { id: 'c04', dateIso: '2023-11-05T11:00:00', studentId: '2023-0001', student: 'Juan Dela Cruz',  complaint: 'Fatigue, pale skin, shortness of breath', diagnosis: 'Anemia',                  treatment: 'Iron supplementation, dietary advice', staff: 'Dr. Maria Santos',  medicines: ['Ferrous sulfate x30'] },
-  { id: 'c05', dateIso: '2023-12-01T15:30:00', studentId: '2023-0001', student: 'Juan Dela Cruz',  complaint: 'Pain and swelling in left ankle',  diagnosis: 'Ankle Sprain (Grade 1)',             treatment: 'RICE method, pain management',         staff: 'Nurse John Reyes',  medicines: ['Ibuprofen 400mg x6'] },
-  { id: 'c06', dateIso: '2024-01-15T08:45:00', studentId: '2023-0001', student: 'Juan Dela Cruz',  complaint: 'Runny nose and mild cough',        diagnosis: 'Common Cold',                       treatment: 'Rest, increase fluid intake',          staff: 'Dr. Maria Santos',  medicines: ['Vitamin C 500mg x10'] },
-  { id: 'c07', dateIso: '2024-02-20T13:20:00', studentId: '2023-0001', student: 'Juan Dela Cruz',  complaint: 'Stomach pain and nausea',          diagnosis: 'Gastritis',                         treatment: 'Omeprazole, small frequent meals',     staff: 'Nurse John Reyes',  medicines: ['Omeprazole 20mg x14', 'Antacid x6'] },
-  { id: 'c08', dateIso: '2024-03-10T10:15:00', studentId: '2023-0001', student: 'Juan Dela Cruz',  complaint: 'Persistent headache and tight neck', diagnosis: 'Tension Headache',               treatment: 'Paracetamol, stress management',       staff: 'Dr. Maria Santos',  medicines: ['Paracetamol 500mg x4'] },
-  { id: 'c09', dateIso: '2024-06-10T11:00:00', studentId: '2023-0045', student: 'Ana Santos',      complaint: 'Skin rash and itching',            diagnosis: 'Allergic Reaction',                 treatment: 'Antihistamine, avoid triggers',        staff: 'Dr. Maria Santos',  medicines: ['Cetirizine 10mg x10'] },
-  { id: 'c10', dateIso: '2024-08-22T09:00:00', studentId: '2024-0010', student: 'Carlos Reyes',    complaint: 'Dizziness and blurred vision',     diagnosis: 'Hypertensive Episode',              treatment: 'Blood pressure monitoring, rest',      staff: 'Dr. Maria Santos',  medicines: ['Amlodipine 5mg x7'] },
-];
+function parseConsultationPayload(raw?: string | null) {
+  const fallback = {
+    complaint: 'General consultation',
+    diagnosis: 'General consultation',
+    treatment: '',
+  };
 
-// ── Helpers ───────────────────────────────────────────────────
+  if (!raw || !raw.trim()) {
+    return fallback;
+  }
+
+  const text = raw.trim();
+
+  try {
+    const parsed = JSON.parse(text) as {
+      chiefComplaint?: string;
+      diagnosis?: string;
+      treatmentManagement?: string;
+      notes?: string;
+    };
+
+    if (parsed && typeof parsed === 'object') {
+      const complaint = typeof parsed.chiefComplaint === 'string' ? parsed.chiefComplaint.trim() : '';
+      const diagnosis = typeof parsed.diagnosis === 'string' ? parsed.diagnosis.trim() : '';
+      const treatment = typeof parsed.treatmentManagement === 'string' ? parsed.treatmentManagement.trim() : '';
+      const notes = typeof parsed.notes === 'string' ? parsed.notes.trim() : '';
+
+      return {
+        complaint: complaint || diagnosis || notes || fallback.complaint,
+        diagnosis: diagnosis || complaint || notes || fallback.diagnosis,
+        treatment,
+      };
+    }
+  } catch {
+    // Non-JSON legacy visit notes are handled below.
+  }
+
+  const firstPart = text.split('|').map((part) => part.trim()).filter(Boolean)[0];
+  const normalized = firstPart || text;
+  return {
+    complaint: normalized,
+    diagnosis: normalized,
+    treatment: '',
+  };
+}
+
+function mapVisitToRow(visit: VisitRecord): ConsultRow {
+  const parsed = parseConsultationPayload(visit.chiefComplaintEnc);
+  const medicines = visit.dispensedMedicines.map((med) => `${med.inventory.itemName} x${med.quantity}`);
+
+  const treatment = parsed.treatment
+    || (medicines.length > 0 ? 'Medicine dispensed during consultation.' : 'No medicine dispensed.');
+
+  return {
+    id: visit.id,
+    dateIso: visit.visitDate,
+    visitTime: visit.visitTime || '',
+    studentId: visit.studentProfile.studentNumber,
+    student: `${visit.studentProfile.firstName} ${visit.studentProfile.lastName}`,
+    complaint: parsed.complaint,
+    diagnosis: parsed.diagnosis,
+    treatment,
+    staff: visit.handledBy?.email || 'Clinic Staff',
+    medicines,
+  };
+}
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
     month: 'numeric', day: 'numeric', year: 'numeric',
   });
 }
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', {
+
+function fmtTime(row: ConsultRow) {
+  if (row.visitTime) return row.visitTime;
+  return new Date(row.dateIso).toLocaleTimeString('en-US', {
     hour: 'numeric', minute: '2-digit', hour12: true,
   });
 }
+
 function thisMonth(iso: string) {
-  const d = new Date(iso);
+  const date = new Date(iso);
   const now = new Date();
-  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
 }
 
 function downloadCSV(rows: ConsultRow[]) {
   const headers = ['Date', 'Time', 'Student ID', 'Student', 'Chief Complaint', 'Diagnosis', 'Treatment', 'Attending Staff', 'Medicines'];
-  const lines = rows.map((r) => [
-    fmtDate(r.dateIso), fmtTime(r.dateIso), r.studentId, r.student,
-    r.complaint, r.diagnosis, r.treatment, r.staff, r.medicines.join(' | '),
-  ].map((v) => `"${v}"`).join(','));
-  const blob = new Blob([[headers.join(','), ...lines].join('\n')], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'consultation_records.csv';
-  a.click();
+  const lines = rows.map((row) => [
+    fmtDate(row.dateIso),
+    fmtTime(row),
+    row.studentId,
+    row.student,
+    row.complaint,
+    row.diagnosis,
+    row.treatment,
+    row.staff,
+    row.medicines.join(' | '),
+  ].map((value) => `"${value.replace(/"/g, '""')}"`).join(','));
+
+  const csv = [headers.join(','), ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = 'consultation_records.csv';
+  link.click();
+
+  URL.revokeObjectURL(url);
 }
 
-// ── Stat card ─────────────────────────────────────────────────
 function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-1">
@@ -85,36 +171,35 @@ function StatCard({ label, value, sub, color }: { label: string; value: string |
   );
 }
 
-// ── Sort icon ─────────────────────────────────────────────────
 function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   return (
     <svg className={`w-3 h-3 inline ml-1 ${active ? 'text-teal-500' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d={active && dir === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={active && dir === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
     </svg>
   );
 }
 
-// ── Detail modal ──────────────────────────────────────────────
 function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
           <div>
             <h2 className="text-base font-bold text-gray-900">Consultation Details</h2>
             <p className="text-xs text-teal-500 font-semibold mt-0.5">
-              {fmtDate(row.dateIso)} — {fmtTime(row.dateIso)}
+              {fmtDate(row.dateIso)} - {fmtTime(row)}
             </p>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Close"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -122,13 +207,10 @@ function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void })
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-5 space-y-5">
-
-          {/* Patient */}
           <div className="bg-teal-50 rounded-xl p-4 flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
-              {row.student.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+              {row.student.split(' ').map((part) => part[0]).slice(0, 2).join('')}
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">{row.student}</p>
@@ -136,29 +218,27 @@ function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void })
             </div>
           </div>
 
-          {/* Details grid */}
           <div className="grid grid-cols-1 gap-3">
             {[
               ['Chief Complaint', row.complaint],
-              ['Diagnosis',       row.diagnosis],
+              ['Diagnosis', row.diagnosis],
               ['Treatment / Management', row.treatment],
               ['Attending Staff', row.staff],
-            ].map(([label, val]) => (
+            ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
                 <p className="text-[10px] font-semibold text-teal-500 uppercase tracking-wider mb-1">{label}</p>
-                <p className="text-sm text-gray-800">{val}</p>
+                <p className="text-sm text-gray-800">{value}</p>
               </div>
             ))}
           </div>
 
-          {/* Medicines */}
           {row.medicines.length > 0 && (
             <div>
               <p className="text-[10px] font-semibold text-teal-500 uppercase tracking-wider mb-2">Medicine Dispensed</p>
               <div className="flex flex-wrap gap-2">
-                {row.medicines.map((m, i) => (
-                  <span key={i} className="text-xs bg-teal-50 text-teal-700 font-medium border border-teal-100 px-3 py-1 rounded-full">
-                    {m}
+                {row.medicines.map((medicine, index) => (
+                  <span key={`${medicine}-${index}`} className="text-xs bg-teal-50 text-teal-700 font-medium border border-teal-100 px-3 py-1 rounded-full">
+                    {medicine}
                   </span>
                 ))}
               </div>
@@ -170,102 +250,124 @@ function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void })
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────
 export default function ConsultationsPage() {
-  const [search,    setSearch]    = useState('');
-  const [sortKey,   setSortKey]   = useState<SortKey>('date');
-  const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>('desc');
-  const [selected,  setSelected]  = useState<ConsultRow | null>(null);
+  const [records, setRecords] = useState<ConsultRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortKey(key); setSortDir('desc'); }
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [selected, setSelected] = useState<ConsultRow | null>(null);
+
+  async function loadConsultations() {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setError('');
+      const response = await api.get<VisitResponse>('/clinic/visits', token);
+      setRecords((response.data || []).map(mapVisitToRow));
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to load consultation records.');
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const q = search.toLowerCase();
+  useEffect(() => {
+    void loadConsultations();
+  }, []);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDir('desc');
+  }
+
+  const q = search.toLowerCase().trim();
   const filtered = useMemo(() => {
     const rows = q
-      ? MOCK_CONSULTATIONS.filter(
-          (r) =>
-            r.student.toLowerCase().includes(q) ||
-            r.diagnosis.toLowerCase().includes(q) ||
-            r.studentId.toLowerCase().includes(q) ||
-            r.staff.toLowerCase().includes(q)
+      ? records.filter((record) =>
+          record.student.toLowerCase().includes(q) ||
+          record.diagnosis.toLowerCase().includes(q) ||
+          record.studentId.toLowerCase().includes(q) ||
+          record.staff.toLowerCase().includes(q),
         )
-      : [...MOCK_CONSULTATIONS];
+      : [...records];
 
     rows.sort((a, b) => {
       let cmp = 0;
-      if (sortKey === 'date')    cmp = a.dateIso.localeCompare(b.dateIso);
+      if (sortKey === 'date') cmp = a.dateIso.localeCompare(b.dateIso);
       if (sortKey === 'student') cmp = a.student.localeCompare(b.student);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-    return rows;
-  }, [q, sortKey, sortDir]);
 
-  // ── Analytics ────────────────────────────────────────────────
-  const total    = MOCK_CONSULTATIONS.length;
-  const monthly  = MOCK_CONSULTATIONS.filter((r) => thisMonth(r.dateIso)).length;
-  const unique   = new Set(MOCK_CONSULTATIONS.map((r) => r.studentId)).size;
-  const topDx    = (() => {
+    return rows;
+  }, [records, q, sortKey, sortDir]);
+
+  const total = records.length;
+  const monthly = records.filter((record) => thisMonth(record.dateIso)).length;
+  const uniqueStudents = new Set(records.map((record) => record.studentId)).size;
+  const topDiagnosis = (() => {
     const freq: Record<string, number> = {};
-    MOCK_CONSULTATIONS.forEach((r) => { freq[r.diagnosis] = (freq[r.diagnosis] ?? 0) + 1; });
-    return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
+    records.forEach((record) => {
+      freq[record.diagnosis] = (freq[record.diagnosis] || 0) + 1;
+    });
+    return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
   })();
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
-
-      {/* Detail modal */}
       {selected && <DetailModal row={selected} onClose={() => setSelected(null)} />}
 
-      {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Consultations</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Manage clinic visits and patient records</p>
+          <p className="text-xs text-gray-400 mt-0.5">Live records from clinic visits</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link
             href="/dashboard/staff/scanner"
-            className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200
-              text-gray-600 hover:border-teal-300 hover:text-teal-600 px-3 py-2 rounded-xl
-              transition-colors bg-white"
+            className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600 px-3 py-2 rounded-xl transition-colors bg-white"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 4c-1.5 0-3 .6-4.1 1.6M4 8H3m1 8H3m18-8h-1m1 8h-1M8 3v1m8-1v1
-                   M4.2 4.2l.7.7M19.1 4.9l-.7.7M12 20v1
-                   M5 9H3M5 15H3M21 9h-2M21 15h-2" />
-            </svg>
             Scan QR Code
           </Link>
           <button
             onClick={() => downloadCSV(filtered)}
-            className="flex items-center gap-1.5 text-xs font-semibold
-              bg-teal-500 hover:bg-teal-600 text-white px-3 py-2 rounded-xl transition-colors"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-teal-500 hover:bg-teal-600 text-white px-3 py-2 rounded-xl transition-colors"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
             Download Records
           </button>
         </div>
       </div>
 
-      {/* Analytics */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Total Records"   value={total}    color="text-teal-500"  sub="All time" />
-        <StatCard label="This Month"      value={monthly}  color="text-blue-500"  sub="Current month" />
-        <StatCard label="Unique Students" value={unique}   color="text-purple-500" sub="Distinct patients" />
-        <StatCard label="Top Diagnosis"   value={topDx}    color="text-orange-500" sub="Most frequent" />
+        <StatCard label="Total Records" value={total} color="text-teal-500" sub="All time" />
+        <StatCard label="This Month" value={monthly} color="text-blue-500" sub="Current month" />
+        <StatCard label="Unique Students" value={uniqueStudents} color="text-purple-500" sub="Distinct patients" />
+        <StatCard label="Top Diagnosis" value={topDiagnosis} color="text-orange-500" sub="Most frequent" />
       </div>
 
-      {/* Table card */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-
-        {/* Search bar */}
         <div className="p-4 border-b border-gray-50">
           <div className="relative max-w-xs">
             <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,31 +375,25 @@ export default function ConsultationsPage() {
             </svg>
             <input
               type="text"
-              placeholder="Search by student, diagnosis..."
+              placeholder="Search by student, diagnosis, or staff..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-xl
-                focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"
+              className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"
             />
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-100 text-gray-400">
-                <th
-                  className="text-left px-4 py-3 font-semibold cursor-pointer select-none whitespace-nowrap hover:text-teal-500 transition-colors"
-                  onClick={() => toggleSort('date')}
-                >
-                  Date <SortIcon active={sortKey === 'date'} dir={sortDir} />
+                <th className="text-left px-4 py-3 font-semibold cursor-pointer select-none whitespace-nowrap hover:text-teal-500 transition-colors" onClick={() => toggleSort('date')}>
+                  Date
+                  <SortIcon active={sortKey === 'date'} dir={sortDir} />
                 </th>
-                <th
-                  className="text-left px-4 py-3 font-semibold cursor-pointer select-none whitespace-nowrap hover:text-teal-500 transition-colors"
-                  onClick={() => toggleSort('student')}
-                >
-                  Student <SortIcon active={sortKey === 'student'} dir={sortDir} />
+                <th className="text-left px-4 py-3 font-semibold cursor-pointer select-none whitespace-nowrap hover:text-teal-500 transition-colors" onClick={() => toggleSort('student')}>
+                  Student
+                  <SortIcon active={sortKey === 'student'} dir={sortDir} />
                 </th>
                 <th className="text-left px-4 py-3 font-semibold">Diagnosis</th>
                 <th className="text-left px-4 py-3 font-semibold">Attending Staff</th>
@@ -305,18 +401,20 @@ export default function ConsultationsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-gray-300">
-                    No records match your search.
-                  </td>
+                  <td colSpan={5} className="px-4 py-10 text-center text-gray-400">Loading consultation records...</td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-gray-300">No records match your search.</td>
                 </tr>
               ) : (
                 filtered.map((row) => (
                   <tr key={row.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="font-medium text-gray-700">{fmtDate(row.dateIso)}</span>
-                      <span className="text-gray-400 ml-1.5">{fmtTime(row.dateIso)}</span>
+                      <span className="text-gray-400 ml-1.5">{fmtTime(row)}</span>
                     </td>
                     <td className="px-4 py-3 font-semibold text-gray-800">{row.student}</td>
                     <td className="px-4 py-3 text-gray-600">{row.diagnosis}</td>
@@ -336,7 +434,6 @@ export default function ConsultationsPage() {
           </table>
         </div>
 
-        {/* Footer */}
         <div className="px-4 py-3 border-t border-gray-50 text-[11px] text-gray-400">
           Showing {filtered.length} of {total} records
         </div>

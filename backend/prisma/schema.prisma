@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  STUDENT
+  CLINIC_STAFF
+  ADMIN
+}
+
+enum YearLevel {
+  YR_1
+  YR_2
+  YR_3
+  YR_4
+}
+
+enum XrayResult {
+  NORMAL
+  ABNORMAL
+}
+
+model User {
+  id               String         @id @default(cuid())
+  role             UserRole       @default(STUDENT)
+  email            String         @unique
+  passwordHash     String
+  qrToken          String?        @db.Text
+  qrTokenIssuedAt  DateTime?
+  qrTokenExpiresAt DateTime?
+
+  studentProfile StudentProfile?
+  handledVisits  ClinicVisit[] @relation("HandledByUser")
+  auditLogs      AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Demographics
+  studentNumber  String @unique
+  firstName      String
+  lastName       String
+  mi             String?
+  // Stores department code (CAHS, CBA, CCS, CEAS, CHTM) for admin analytics heatmaps.
+  courseDept     String
+  civilStatus    String?
+  age            Int?
+  sex            String?
+  birthday       DateTime?
+  presentAddress String?
+  telNumber      String?
+
+  // Emergency contact
+  emergencyContactName       String?
+  emergencyRelationship      String?
+  emergencyContactAddress    String?
+  emergencyContactTelNumber  String?
+
+  medicalHistory       MedicalHistory?
+  physicalExaminations PhysicalExamination[]
+  labResults           LabResult[]
+  clinicVisits         ClinicVisit[]
+  appointments         Appointment[]
+  medicalDocuments     MedicalDocument[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lastName, firstName])
+}
+
+model MedicalHistory {
+  id               String @id @default(cuid())
+  studentProfileId String @unique
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  // Sensitive medical checklist data. Encrypt at application level before persisting.
+  allergyEnc                         String? @db.Text
+  asthmaEnc                          String? @db.Text
+  chickenPoxEnc                      String? @db.Text
+  diabetesEnc                        String? @db.Text
+  dysmenorrheaEnc                    String? @db.Text
+  epilepsySeizureEnc                 String? @db.Text
+  heartDisorderEnc                   String? @db.Text
+  hepatitisEnc                       String? @db.Text
+  hypertensionEnc                    String? @db.Text
+  measlesEnc                         String? @db.Text
+  mumpsEnc                           String? @db.Text
+  anxietyDisorderEnc                 String? @db.Text
+  panicAttackHyperventilationEnc     String? @db.Text
+  pneumoniaEnc                       String? @db.Text
+  ptbPrimaryComplexEnc               String? @db.Text
+  typhoidFeverEnc                    String? @db.Text
+  covid19Enc                         String? @db.Text
+  urinaryTractInfectionEnc           String? @db.Text
+  hasPastOperationEnc                String? @db.Text
+  operationNatureAndDateEnc          String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PhysicalExamination {
+  id               String    @id @default(cuid())
+  studentProfileId String
+  yearLevel        YearLevel
+  examDate         DateTime
+
+  // Sensitive clinical vitals and exam findings. Encrypt at application level in production.
+  bp          String?
+  cr          String?
+  rr          String?
+  temp        String?
+  weight      String?
+  height      String?
+  bmi         String?
+  visualAcuity String?
+  skin        String?
+  heent       String?
+  chestLungs  String?
+  heart       String?
+  abdomen     String?
+  extremities String?
+  others      String?
+  examinedBy  String?
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentProfileId, yearLevel, examDate])
+}
+
+model LabResult {
+  id               String    @id @default(cuid())
+  studentProfileId String
+  date             DateTime
+  dateReceived     DateTime?
+
+  // CBC
+  hgb       String?
+  hct       String?
+  wbc       String?
+  pltCt     String?
+  bloodType String?
+
+  // U/A
+  glucoseSugar String?
+  protein      String?
+
+  // Chest X-ray
+  xrayResult      XrayResult?
+  // Sensitive findings text. Encrypt at application level before persisting.
+  xrayFindingsEnc String? @db.Text
+
+  // Sensitive free-text notes. Encrypt at application level before persisting.
+  othersEnc String? @db.Text
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentProfileId, date])
+}
+
+model ClinicVisit {
+  id               String   @id @default(cuid())
+  studentProfileId String
+  handledById      String
+
+  visitDate DateTime
+  visitTime String?
+
+  // Sensitive encounter narrative. Encrypt at application level before persisting.
+  chiefComplaintEnc String? @db.Text
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  handledBy      User           @relation("HandledByUser", fields: [handledById], references: [id], onDelete: Restrict)
+
+  dispensedMedicines VisitMedicine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentProfileId, visitDate])
+  @@index([handledById, visitDate])
+}
+
+model Appointment {
+  id               String         @id @default(cuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  preferredDate    DateTime
+  preferredTime    String
+  symptoms         String
+  status           String         @default("WAITING") // Statuses: WAITING, IN_PROGRESS, COMPLETED, CANCELLED
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model VisitMedicine {
+  id          String @id @default(cuid())
+  visitId     String
+  inventoryId String
+  quantity    Int    @default(1)
+
+  visit      ClinicVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  inventory  Inventory   @relation(fields: [inventoryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([visitId])
+  @@index([inventoryId])
+}
+
+model Inventory {
+  id               String @id @default(cuid())
+  itemName         String @unique
+  currentStock     Int
+  reorderThreshold Int
+  unit             String
+
+  dispensedIn VisitMedicine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([itemName])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action    String
+  targetId  String?
+  ipAddress String?
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@index([action, timestamp])
+}
+
+// NEW MODEL: Health Advisories (Phase 6 of MVP)
+model HealthAdvisory {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  targetDept  String?  @default("ALL") // e.g., "BSCS", "BSIT", or "ALL"
+  severity    String   @default("INFO") // Levels: INFO, WARNING, CRITICAL
+  createdBy   String   // User ID of the Admin who posted it
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
+// NEW MODEL: Digital Medical Records (Module B)
+model MedicalDocument {
+  id               String         @id @default(cuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  fileName         String
+  fileUrl          String         // The path to access the file
+  documentType     String         @default("PHYSICAL_EXAM") // e.g., LAB_RESULT, MED_CERT
+  uploadedAt       DateTime       @default(now())
+}

@@ -9,9 +9,6 @@ import {
   DashboardIcon,
   ReportsIcon,
   NotificationsIcon,
-  UsersIcon,
-  AuditIcon,
-  SettingsIcon,
 } from '@/components/icons/NavIcons';
 
 export interface AdminNavItem {
@@ -48,23 +45,6 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         label: 'Notifications',
         href:  '/dashboard/admin/notifications',
         icon:  NotificationsIcon,
-      },
-    ],
-  },
-  {
-    groupLabel: 'Management',
-    items: [
-      {
-        id:    'users',
-        label: 'User Management',
-        href:  '/dashboard/admin/users',
-        icon:  UsersIcon,
-      },
-      {
-        id:    'audit',
-        label: 'Audit Log',
-        href:  '/dashboard/admin/audit',
-        icon:  AuditIcon,
       },
     ],
   },

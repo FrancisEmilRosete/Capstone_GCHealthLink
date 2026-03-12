@@ -1,431 +1,552 @@
-/**
- * STUDENT HEALTH RECORD PAGE
- * ─────────────────────────────────────────────────────────────
- * Route: /dashboard/staff/record/[studentId]
- *
- * Displays the full health profile of a student after their QR
- * code is scanned (via the "View Record" button on the scanner).
- *
- * Sections:
- *   1. Personal Information
- *   2. Emergency Contact
- *   3. Medical Profile  (blood type, allergies, conditions, immunizations)
- *   4. Recent Physical Exam
- *
- * TODO: Replace MOCK_RECORDS with a real API call:
- *   GET /api/students/:id/record  →  { student: {...} }
- */
-
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import PhysicalExamModal from '@/components/modals/PhysicalExamModal';
 
-// ── Extended student record interface ─────────────────────────
-interface StudentRecord {
-  firstName:   string;
-  lastName:    string;
-  studentId:   string;
-  course:      string;
-  college:     string;
-  birthday:    string; // ISO date string e.g. "2003-05-15"
-  contact:     string;
-  address:     string;
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
-  emergency: {
-    name:     string;
-    relation: string;
-    contact:  string;
-  };
+const DOCUMENT_TYPES = [
+  { value: 'PHYSICAL_EXAM', label: 'Physical Exam' },
+  { value: 'LAB_RESULT', label: 'Lab Result' },
+  { value: 'MED_CERT', label: 'Medical Certificate' },
+  { value: 'VACCINATION_RECORD', label: 'Vaccination Record' },
+  { value: 'OTHER', label: 'Other' },
+] as const;
 
-  medical: {
-    bloodType:   string;
-    allergies:   string[];
-    conditions:  string[];          // e.g. ["Asthma"]
-    immunizations: string[];        // e.g. ["Hepatitis B", "Measles"]
-  };
+interface SearchStudent {
+  studentNumber: string;
+  user: { id: string };
+}
 
-  lastExam: {
-    bp:         string;   // e.g. "110/70"
-    temp:       string;   // e.g. "36.5"
-    weight:     string;   // e.g. "60kg"
-    bmi:        string;   // e.g. "22.5"
-    examinedBy: string;
-    date:       string;   // ISO date string
+interface SearchResponse {
+  success: boolean;
+  data: SearchStudent[];
+}
+
+interface PhysicalExam {
+  id: string;
+  examDate: string;
+  bp: string | null;
+  temp: string | null;
+  weight: string | null;
+  bmi: string | null;
+  examinedBy: string | null;
+}
+
+interface ScanProfile {
+  id: string;
+  studentNumber: string;
+  firstName: string;
+  lastName: string;
+  courseDept: string;
+  civilStatus: string | null;
+  age: number | null;
+  sex: string | null;
+  birthday: string | null;
+  presentAddress: string | null;
+  telNumber: string | null;
+  emergencyContactName: string | null;
+  emergencyRelationship: string | null;
+  emergencyContactAddress: string | null;
+  emergencyContactTelNumber: string | null;
+  medicalHistory: {
+    allergyEnc?: string | null;
+    asthmaEnc?: string | null;
+    diabetesEnc?: string | null;
+    hypertensionEnc?: string | null;
+    anxietyDisorderEnc?: string | null;
+    bloodType?: string | null;
+    immunizations?: string[] | null;
+  } | null;
+  physicalExaminations: PhysicalExam[];
+}
+
+interface ScanResponse {
+  success: boolean;
+  data: ScanProfile;
+  emergencyAlert?: {
+    level?: string;
+    warning?: string;
+    instructions?: string;
   } | null;
 }
 
-// ── Mock records ──────────────────────────────────────────────
-// TODO: Replace with GET /api/students/:id/record
-const MOCK_RECORDS: Record<string, StudentRecord> = {
-  '2023-0001': {
-    firstName:  'Juan',
-    lastName:   'Dela Cruz',
-    studentId:  '2023-0001',
-    course:     'BS Civil Engineering',
-    college:    'College of Engineering',
-    birthday:   '2003-05-15',
-    contact:    '09173234087',
-    address:    '123 Sampaguita St, Quezon City',
-    emergency: {
-      name:     'Maria Dela Cruz',
-      relation: 'Mother',
-      contact:  '09170054321',
-    },
-    medical: {
-      bloodType:     'O+',
-      allergies:     ['Peanuts', 'Penicillin'],
-      conditions:    ['Asthma'],
-      immunizations: ['Hepatitis B', 'Measles', 'COVID-19'],
-    },
-    lastExam: {
-      bp:         '110/70',
-      temp:       '36.5',
-      weight:     '60kg',
-      bmi:        '22.5',
-      examinedBy: 'Dr. Maria Santos',
-      date:       '2023-08-10',
-    },
-  },
-  '2023-0002': {
-    firstName:  'Maria',
-    lastName:   'Santos',
-    studentId:  '2023-0002',
-    course:     'BS Nursing',
-    college:    'College of Health Sciences',
-    birthday:   '2002-11-20',
-    contact:    '09181234567',
-    address:    '45 Rizal Ave, Davao City',
-    emergency: {
-      name:     'Jose Santos',
-      relation: 'Father',
-      contact:  '09189876543',
-    },
-    medical: {
-      bloodType:     'A+',
-      allergies:     ['Aspirin'],
-      conditions:    [],
-      immunizations: ['Hepatitis B', 'COVID-19'],
-    },
-    lastExam: {
-      bp:         '120/80',
-      temp:       '36.8',
-      weight:     '55kg',
-      bmi:        '21.0',
-      examinedBy: 'Dr. Maria Santos',
-      date:       '2024-01-15',
-    },
-  },
-  '2024-0010': {
-    firstName:  'Carlos',
-    lastName:   'Reyes',
-    studentId:  '2024-0010',
-    course:     'BS Education',
-    college:    'College of Education',
-    birthday:   '2004-03-08',
-    contact:    '09209876543',
-    address:    '78 Mabini St, Cebu City',
-    emergency: {
-      name:     'Ana Reyes',
-      relation: 'Mother',
-      contact:  '09205554321',
-    },
-    medical: {
-      bloodType:     'B+',
-      allergies:     [],
-      conditions:    [],
-      immunizations: ['Hepatitis B', 'Measles', 'Varicella', 'COVID-19'],
-    },
-    lastExam: null,
-  },
-};
-
-// ── Helpers ───────────────────────────────────────────────────
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+interface EmergencyAlertResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    recipient?: string;
+    status?: string;
+    timestamp?: string;
+  };
 }
 
-function calcAge(iso: string) {
-  const birth = new Date(iso);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
+interface MedicalDocument {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  documentType: string;
+  uploadedAt: string;
 }
 
-// Reusable label + value pair
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-teal-500 font-medium mb-0.5">{label}</p>
-      <p className="text-sm text-gray-800">{value}</p>
-    </div>
-  );
+interface DocumentsResponse {
+  success: boolean;
+  data: MedicalDocument[];
 }
 
-// Section card wrapper
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
-      <h2 className="text-sm font-bold text-gray-900 mb-4">{title}</h2>
-      {children}
-    </div>
-  );
+interface UploadDocumentResponse {
+  success: boolean;
+  message: string;
+  data: MedicalDocument;
 }
 
-// ── Page ──────────────────────────────────────────────────────
+function toLabel(value?: string | null) {
+  return value && value.trim() ? value : 'N/A';
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return 'N/A';
+  return new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatDocumentType(value: string) {
+  switch (value) {
+    case 'PHYSICAL_EXAM':
+      return 'Physical Exam';
+    case 'LAB_RESULT':
+      return 'Lab Result';
+    case 'MED_CERT':
+      return 'Medical Certificate';
+    case 'VACCINATION_RECORD':
+      return 'Vaccination Record';
+    default:
+      return 'Other';
+  }
+}
+
+function splitCsv(value?: string | null) {
+  if (!value) return [];
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || ['none', 'no', 'n/a', 'na'].includes(normalized)) return [];
+  return value.split(',').map((part) => part.trim()).filter(Boolean);
+}
+
+function findConditions(history: ScanProfile['medicalHistory']) {
+  if (!history) return [];
+
+  const conditions: string[] = [];
+  if (history.asthmaEnc && !['none', 'no', 'n/a', 'na'].includes(history.asthmaEnc.toLowerCase().trim())) conditions.push('Asthma');
+  if (history.diabetesEnc && !['none', 'no', 'n/a', 'na'].includes(history.diabetesEnc.toLowerCase().trim())) conditions.push('Diabetes');
+  if (history.hypertensionEnc && !['none', 'no', 'n/a', 'na'].includes(history.hypertensionEnc.toLowerCase().trim())) conditions.push('Hypertension');
+  if (history.anxietyDisorderEnc && !['none', 'no', 'n/a', 'na'].includes(history.anxietyDisorderEnc.toLowerCase().trim())) conditions.push('Anxiety Disorder');
+
+  return conditions;
+}
+
 export default function StudentRecordPage() {
-  const params    = useParams();
-  const router    = useRouter();
-  const studentId = typeof params.studentId === 'string' ? params.studentId : '';
-  const record    = MOCK_RECORDS[studentId];
-  const [showExamModal, setShowExamModal] = useState(false);
+  const params = useParams();
+  const router = useRouter();
 
-  // ── Not found ──────────────────────────────────────────────
-  if (!record) {
+  const studentNumberParam = typeof params.studentId === 'string' ? decodeURIComponent(params.studentId) : '';
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [record, setRecord] = useState<ScanProfile | null>(null);
+  const [emergencyMessage, setEmergencyMessage] = useState('');
+  const [sendingEmergency, setSendingEmergency] = useState(false);
+  const [documents, setDocuments] = useState<MedicalDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsError, setDocumentsError] = useState('');
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState<(typeof DOCUMENT_TYPES)[number]['value']>('PHYSICAL_EXAM');
+  const [documentFeedback, setDocumentFeedback] = useState('');
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState('');
+
+  async function loadDocuments(studentProfileId: string, token: string) {
+    try {
+      setDocumentsLoading(true);
+      const response = await api.get<DocumentsResponse>(`/documents/${studentProfileId}`, token);
+      setDocuments(response.data || []);
+      setDocumentsError('');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setDocumentsError(err.message);
+      } else {
+        setDocumentsError('Unable to load medical documents.');
+      }
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    async function loadRecord() {
+      const token = getToken();
+      if (!token) {
+        setError('You are not logged in. Please sign in again.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const search = await api.get<SearchResponse>(`/clinic/search?q=${encodeURIComponent(studentNumberParam)}`, token);
+        const exact = (search.data || []).find((item) => item.studentNumber.toLowerCase() === studentNumberParam.toLowerCase());
+
+        if (!exact) {
+          setRecord(null);
+          setError(`No student found for ${studentNumberParam}.`);
+          return;
+        }
+
+        const scan = await api.get<ScanResponse>(`/clinic/scan/${exact.user.id}`, token);
+        setRecord(scan.data);
+        setEmergencyMessage(scan.emergencyAlert?.warning || '');
+        await loadDocuments(scan.data.id, token);
+        setError('');
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError('Unable to load student record.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (studentNumberParam) {
+      void loadRecord();
+    } else {
+      setLoading(false);
+      setError('Missing student number in route.');
+    }
+  }, [studentNumberParam]);
+
+  const allergies = useMemo(() => splitCsv(record?.medicalHistory?.allergyEnc), [record]);
+  const conditions = useMemo(() => findConditions(record?.medicalHistory || null), [record]);
+  const latestExam = record?.physicalExaminations?.[0] || null;
+
+  async function handleEmergencyAlert() {
+    if (!record) return;
+
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      setSendingEmergency(true);
+      setError('');
+
+      const response = await api.post<EmergencyAlertResponse>(
+        '/clinic/emergency-alert',
+        {
+          studentProfileId: record.id,
+          incidentDetails: 'Urgent health concern detected during on-site clinic assessment.',
+        },
+        token,
+      );
+
+      const recipient = response.data?.recipient || 'the emergency contact';
+      setEmergencyMessage(`Guardian alert sent successfully to ${recipient}.`);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to send guardian emergency alert.');
+      }
+    } finally {
+      setSendingEmergency(false);
+    }
+  }
+
+  async function handleDocumentUpload(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!record) {
+      setDocumentsError('Student profile is not loaded yet.');
+      return;
+    }
+
+    if (!selectedFile) {
+      setDocumentFeedback('Please select a file before uploading.');
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      setDocumentsError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      setUploadingDocument(true);
+      setDocumentsError('');
+      setDocumentFeedback('');
+
+      const formData = new FormData();
+      formData.append('studentProfileId', record.id);
+      formData.append('documentType', documentType);
+      formData.append('file', selectedFile);
+
+      const response = await api.postForm<UploadDocumentResponse>('/documents/upload', formData, token);
+      setSelectedFile(null);
+      setDocumentFeedback(response.message || 'Document uploaded successfully.');
+      await loadDocuments(record.id, token);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setDocumentFeedback(err.message);
+      } else {
+        setDocumentFeedback('Failed to upload document.');
+      }
+    } finally {
+      setUploadingDocument(false);
+    }
+  }
+
+  async function handleDownloadDocument(document: MedicalDocument) {
+    const token = getToken();
+    if (!token) {
+      setDocumentsError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    try {
+      setDownloadingDocumentId(document.id);
+      const { blob, fileName } = await api.getBlob(`/documents/file/${document.id}`, token);
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName || document.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setDocumentsError(err.message);
+      } else {
+        setDocumentsError('Failed to download document.');
+      }
+    } finally {
+      setDownloadingDocumentId('');
+    }
+  }
+
+  if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6">
-        <svg className="w-14 h-14 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-            d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p className="text-gray-500 font-medium">Student record not found</p>
-        <p className="text-xs text-gray-400 mt-1">ID: {studentId}</p>
-        <button
-          onClick={() => router.back()}
-          className="mt-5 text-sm text-teal-500 hover:underline"
-        >
-          ← Go back
-        </button>
+      <div className="p-6 max-w-3xl mx-auto">
+        <div className="rounded-xl border border-gray-100 bg-white px-4 py-8 text-center text-sm text-gray-400">
+          Loading student record...
+        </div>
       </div>
     );
   }
 
-  const { emergency, medical, lastExam } = record;
-
-  // ── Layout ─────────────────────────────────────────────────
-  return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-4">
-
-      {/* Physical Exam Modal */}
-      {showExamModal && record && (
-        <PhysicalExamModal
-          studentName={`${record.firstName} ${record.lastName}`}
-          onClose={() => setShowExamModal(false)}
-          onSave={(data) => {
-            // TODO: POST /api/students/:id/physical-exams
-            console.log('Saving physical exam:', data);
-            setShowExamModal(false);
-          }}
-        />
-      )}
-
-      {/* ── Page header ──────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-
-        {/* Back + Name row */}
-        <div className="flex items-start gap-3">
-          {/* Back button */}
-          <button
-            onClick={() => router.back()}
-            aria-label="Go back"
-            className="mt-0.5 p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-teal-500 transition-colors shrink-0"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+  if (!record) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-center">
+          <p className="text-sm text-red-600">{error || 'Student record not found.'}</p>
+          <button onClick={() => router.back()} className="mt-3 text-xs font-semibold text-teal-600 hover:underline">
+            ← Back to Patient
           </button>
+        </div>
+      </div>
+    );
+  }
 
-          {/* Name + meta */}
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold text-gray-900 leading-tight truncate">
-              {record.lastName}
-              <span className="font-normal text-gray-400">,</span>{' '}
-              {record.firstName}
-            </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              <span className="text-teal-500 font-semibold">{record.studentId}</span>
-              <span className="mx-1.5 text-gray-300">•</span>
-              {record.course}
+  return (
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-4">
+      <button
+        onClick={() => router.back()}
+        className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-teal-600"
+      >
+        <span aria-hidden="true">←</span>
+        Back to Patient
+      </button>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">{record.lastName}, {record.firstName}</h1>
+            <p className="text-xs text-gray-500 mt-1">
+              <span className="font-semibold text-teal-600">{record.studentNumber}</span>
+              <span className="mx-2 text-gray-300">•</span>
+              {record.courseDept}
             </p>
           </div>
         </div>
 
-        {/* Action buttons */}
         <div className="flex flex-wrap gap-2 mt-4">
-          {/* Add Physical Exam */}
           <button
-            onClick={() => setShowExamModal(true)}
-            className="flex items-center gap-1.5 text-xs font-semibold
-            border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600
-            px-3 py-2 rounded-xl transition-colors bg-white">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Physical Exam
+            onClick={() => router.push(`/dashboard/staff/record/${encodeURIComponent(record.studentNumber)}/history`)}
+            className="text-xs font-semibold border border-gray-200 px-3 py-2 rounded-xl text-gray-600 hover:border-teal-300 hover:text-teal-600"
+          >
+            View Full History
           </button>
-
-          {/* History */}
           <button
-            onClick={() => router.push(`/dashboard/staff/record/${studentId}/history`)}
-            className="flex items-center gap-1.5 text-xs font-semibold
-            border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600
-            px-3 py-2 rounded-xl transition-colors bg-white">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            History
-          </button>
-
-          {/* Edit Record */}
-          <button className="flex items-center gap-1.5 text-xs font-semibold
-            bg-teal-500 hover:bg-teal-600 text-white
-            px-3 py-2 rounded-xl transition-colors">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5
-                   m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Edit Record
+            onClick={() => { void handleEmergencyAlert(); }}
+            disabled={sendingEmergency}
+            className="text-xs font-semibold px-3 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white disabled:opacity-70"
+          >
+            {sendingEmergency ? 'Sending Alert...' : 'One-Click Guardian Alert'}
           </button>
         </div>
       </div>
 
-      {/* ── Personal Information ──────────────────────────────── */}
-      <Section title="Personal Information">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <InfoRow label="Department" value={record.college} />
-          <InfoRow
-            label="Birthday"
-            value={`${formatDate(record.birthday)} (${calcAge(record.birthday)} yrs)`}
-          />
-          <InfoRow label="Contact" value={record.contact} />
-          <InfoRow label="Address"  value={record.address} />
+      {emergencyMessage && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          {emergencyMessage}
         </div>
-      </Section>
+      )}
 
-      {/* ── Emergency Contact ─────────────────────────────────── */}
-      <Section title="Emergency Contact">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <InfoRow label="Name"     value={emergency.name} />
-          <InfoRow label="Relation" value={emergency.relation} />
-          <InfoRow label="Contact"  value={emergency.contact} />
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
         </div>
-      </Section>
+      )}
 
-      {/* ── Medical Profile ───────────────────────────────────── */}
-      <Section title="Medical Profile">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-          {/* Blood Type */}
-          <div>
-            <p className="text-xs text-teal-500 font-medium mb-1.5">Blood Type</p>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full
-              text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
-              {medical.bloodType}
-            </span>
-          </div>
-
-          {/* Allergies */}
-          <div>
-            <p className="text-xs text-teal-500 font-medium mb-1.5">Allergies</p>
-            {medical.allergies.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {medical.allergies.map((a) => (
-                  <span key={a} className="inline-flex items-center px-2.5 py-0.5 rounded-full
-                    text-xs font-medium bg-rose-50 text-rose-500 border border-rose-100">
-                    {a}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400 italic">No known allergies</span>
-            )}
-          </div>
-
-          {/* Existing Conditions */}
-          <div>
-            <p className="text-xs text-teal-500 font-medium mb-1.5">Existing Conditions</p>
-            {medical.conditions.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {medical.conditions.map((c) => (
-                  <span key={c} className="inline-flex items-center px-2.5 py-0.5 rounded-full
-                    text-xs font-medium bg-amber-50 text-amber-600 border border-amber-100">
-                    {c}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400 italic">None on record</span>
-            )}
-          </div>
-
-          {/* Immunizations */}
-          <div>
-            <p className="text-xs text-teal-500 font-medium mb-1.5">Immunizations</p>
-            {medical.immunizations.length > 0 ? (
-              <ul className="space-y-1">
-                {medical.immunizations.map((i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />
-                    {i}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <span className="text-xs text-gray-400 italic">No records</span>
-            )}
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
+          <h2 className="text-sm font-bold text-gray-800 mb-2">Personal Information</h2>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Age/Sex:</span> {record.age || 'N/A'} / {toLabel(record.sex)}</p>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Birthday:</span> {formatDate(record.birthday)}</p>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Civil Status:</span> {toLabel(record.civilStatus)}</p>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Contact:</span> {toLabel(record.telNumber)}</p>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Address:</span> {toLabel(record.presentAddress)}</p>
         </div>
-      </Section>
 
-      {/* ── Recent Physical Exam ──────────────────────────────── */}
-      <Section title="Recent Physical Exam">
-        {lastExam ? (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
+          <h2 className="text-sm font-bold text-gray-800 mb-2">Emergency Contact</h2>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Name:</span> {toLabel(record.emergencyContactName)}</p>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Relationship:</span> {toLabel(record.emergencyRelationship)}</p>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Contact:</span> {toLabel(record.emergencyContactTelNumber)}</p>
+          <p className="text-sm text-gray-700"><span className="font-semibold">Address:</span> {toLabel(record.emergencyContactAddress)}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
+        <h2 className="text-sm font-bold text-gray-800">Medical Profile</h2>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Allergies:</span> {allergies.join(', ') || 'None'}</p>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Blood Type:</span> {toLabel(record.medicalHistory?.bloodType)}</p>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Immunizations:</span> {(record.medicalHistory?.immunizations || []).join(', ') || 'None'}</p>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Conditions:</span> {conditions.join(', ') || 'None'}</p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
+        <h2 className="text-sm font-bold text-gray-800">Latest Physical Examination</h2>
+        {latestExam ? (
           <>
-            {/* Vitals grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {/* BP */}
-              <div className="bg-gray-50 rounded-xl p-3 text-center">
-                <p className="text-xs text-teal-500 font-medium mb-1">BP</p>
-                <p className="text-base font-bold text-gray-900">{lastExam.bp}</p>
-              </div>
-              {/* Temp */}
-              <div className="bg-gray-50 rounded-xl p-3 text-center">
-                <p className="text-xs text-teal-500 font-medium mb-1">Temp</p>
-                <p className="text-base font-bold text-gray-900">
-                  {lastExam.temp}
-                  <span className="text-xs font-normal text-gray-400">°C</span>
-                </p>
-              </div>
-              {/* Weight */}
-              <div className="bg-gray-50 rounded-xl p-3 text-center">
-                <p className="text-xs text-teal-500 font-medium mb-1">Weight</p>
-                <p className="text-base font-bold text-gray-900">{lastExam.weight}</p>
-              </div>
-              {/* BMI */}
-              <div className="bg-gray-50 rounded-xl p-3 text-center">
-                <p className="text-xs text-teal-500 font-medium mb-1">BMI</p>
-                <p className="text-base font-bold text-gray-900">{lastExam.bmi}</p>
-              </div>
-            </div>
-
-            {/* Examiner */}
-            <p className="text-xs text-gray-400 mt-3">
-              Examined by{' '}
-              <span className="font-medium text-gray-600">{lastExam.examinedBy}</span>
-              {' '}on {formatDate(lastExam.date)}
-            </p>
+            <p className="text-sm text-gray-700"><span className="font-semibold">Date:</span> {formatDate(latestExam.examDate)}</p>
+            <p className="text-sm text-gray-700"><span className="font-semibold">Blood Pressure:</span> {toLabel(latestExam.bp)}</p>
+            <p className="text-sm text-gray-700"><span className="font-semibold">Temperature:</span> {toLabel(latestExam.temp)}</p>
+            <p className="text-sm text-gray-700"><span className="font-semibold">Weight:</span> {toLabel(latestExam.weight)}</p>
+            <p className="text-sm text-gray-700"><span className="font-semibold">BMI:</span> {toLabel(latestExam.bmi)}</p>
+            <p className="text-sm text-gray-700"><span className="font-semibold">Examined By:</span> {toLabel(latestExam.examinedBy)}</p>
           </>
         ) : (
-          <p className="text-sm text-gray-400 italic">No physical exam on record yet.</p>
+          <p className="text-sm text-gray-400">No physical examination records available.</p>
         )}
-      </Section>
+      </div>
 
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-gray-800">Medical Documents</h2>
+          <p className="text-xs text-gray-500 mt-1">Upload and retrieve supporting files (PDF, JPG, PNG).</p>
+        </div>
+
+        <form onSubmit={(event) => { void handleDocumentUpload(event); }} className="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-2 items-center">
+          <select
+            value={documentType}
+            onChange={(event) => setDocumentType(event.target.value as (typeof DOCUMENT_TYPES)[number]['value'])}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-300"
+          >
+            {DOCUMENT_TYPES.map((item) => (
+              <option key={item.value} value={item.value}>{item.label}</option>
+            ))}
+          </select>
+
+          <input
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg"
+            onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm file:mr-3 file:border-0 file:bg-teal-50 file:text-teal-700 file:px-2.5 file:py-1.5 file:rounded-lg"
+          />
+
+          <button
+            type="submit"
+            disabled={uploadingDocument || !selectedFile}
+            className="px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold disabled:opacity-70"
+          >
+            {uploadingDocument ? 'Uploading...' : 'Upload'}
+          </button>
+        </form>
+
+        {documentFeedback && (
+          <p className={`text-xs ${documentFeedback.toLowerCase().includes('failed') || documentFeedback.toLowerCase().includes('required') || documentFeedback.toLowerCase().includes('invalid') ? 'text-red-600' : 'text-teal-600'}`}>
+            {documentFeedback}
+          </p>
+        )}
+
+        {documentsError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {documentsError}
+          </div>
+        )}
+
+        {documentsLoading ? (
+          <p className="text-sm text-gray-400">Loading documents...</p>
+        ) : documents.length === 0 ? (
+          <p className="text-sm text-gray-400">No documents uploaded for this student yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[620px] text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                  <th className="text-left py-2 pr-3">File Name</th>
+                  <th className="text-left py-2 pr-3">Type</th>
+                  <th className="text-left py-2 pr-3">Uploaded</th>
+                  <th className="text-left py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {documents.map((document) => (
+                  <tr key={document.id} className="border-b border-gray-50">
+                    <td className="py-2 pr-3 text-gray-700">{document.fileName}</td>
+                    <td className="py-2 pr-3 text-gray-600">{formatDocumentType(document.documentType)}</td>
+                    <td className="py-2 pr-3 text-gray-600">{formatDateTime(document.uploadedAt)}</td>
+                    <td className="py-2">
+                      <button
+                        onClick={() => { void handleDownloadDocument(document); }}
+                        disabled={downloadingDocumentId === document.id}
+                        className="text-xs font-semibold border border-gray-200 px-3 py-1.5 rounded-lg text-gray-600 hover:border-teal-300 hover:text-teal-600 disabled:opacity-70"
+                      >
+                        {downloadingDocumentId === document.id ? 'Downloading...' : 'Download'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

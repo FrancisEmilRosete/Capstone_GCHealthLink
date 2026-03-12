@@ -4,18 +4,24 @@
  * STUDENT HEALTH REGISTRATION
  * Route: /register
  *
- * 6-step health registration wizard:
+ * 5-step health registration wizard:
  *   1 — Personal Info
  *   2 — Emergency Contact
  *   3 — Medical History
  *   4 — Surgical History
  *   5 — Data Privacy
- *   6 — E-Signature
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { api, ApiError } from '@/lib/api';
+import {
+  DEPARTMENT_COURSE_MAP,
+  getCoursesByDepartmentCode,
+  isValidCourseForDepartment,
+  isValidDepartmentCode,
+} from '@/constants/departments';
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -25,29 +31,6 @@ const STEPS = [
   'Medical History',
   'Surgical History',
   'Data Privacy',
-  'E-Signature',
-];
-
-const COURSES = [
-  'BS Civil Engineering',
-  'BS Computer Science',
-  'BS Information Technology',
-  'BS Nursing',
-  'BS Pharmacy',
-  'BS Business Administration',
-  'BS Accountancy',
-  'BS Education',
-  'BS Psychology',
-  'BS Architecture',
-];
-
-const DEPARTMENTS = [
-  'College of Engineering',
-  'College of Computing',
-  'College of Health Sciences',
-  'College of Business',
-  'College of Education',
-  'College of Arts & Sciences',
 ];
 
 const RELATIONSHIPS = ['Parent', 'Spouse', 'Sibling', 'Guardian', 'Relative', 'Friend'];
@@ -159,6 +142,9 @@ function Step1({
   data: Record<string, string>;
   setData: (d: Record<string, string>) => void;
 }) {
+  const selectedDepartment = data.department ?? '';
+  const availableCourses = getCoursesByDepartmentCode(selectedDepartment);
+
   function set(key: string, val: string) {
     setData({ ...data, [key]: val });
   }
@@ -188,17 +174,38 @@ function Step1({
           <Input placeholder="M.I." maxLength={3} value={data.middleInitial ?? ''} onChange={e => set('middleInitial', e.target.value)} />
         </div>
         <div>
-          <Label required>Course</Label>
-          <Select value={data.course ?? ''} onChange={e => set('course', e.target.value)}>
-            <option value="">Select Course</option>
-            {COURSES.map(c => <option key={c} value={c}>{c}</option>)}
+          <Label required>College (Department)</Label>
+          <Select
+            value={selectedDepartment}
+            onChange={e => {
+              const nextDepartment = e.target.value;
+              const nextCourses = getCoursesByDepartmentCode(nextDepartment);
+              const currentCourse = data.course ?? '';
+
+              setData({
+                ...data,
+                department: nextDepartment,
+                course: nextCourses.includes(currentCourse) ? currentCourse : '',
+              });
+            }}
+          >
+            <option value="">Select College (Department)</option>
+            {DEPARTMENT_COURSE_MAP.map((entry) => (
+              <option key={entry.code} value={entry.code}>{`${entry.name} (${entry.code})`}</option>
+            ))}
           </Select>
         </div>
         <div>
-          <Label required>Department</Label>
-          <Select value={data.department ?? ''} onChange={e => set('department', e.target.value)}>
-            <option value="">Select Department</option>
-            {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+          <Label required>Course</Label>
+          <Select
+            value={data.course ?? ''}
+            onChange={e => set('course', e.target.value)}
+            disabled={!selectedDepartment}
+          >
+            <option value="">{selectedDepartment ? 'Select Course' : 'Select College First'}</option>
+            {availableCourses.map((course) => (
+              <option key={course} value={course}>{course}</option>
+            ))}
           </Select>
         </div>
       </div>
@@ -247,6 +254,27 @@ function Step1({
       <div>
         <Label required>Email Address</Label>
         <Input type="email" placeholder="student@gchealth.edu" value={data.email ?? ''} onChange={e => set('email', e.target.value)} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <Label required>Password</Label>
+          <Input
+            type="password"
+            placeholder="Minimum 8 characters"
+            value={data.password ?? ''}
+            onChange={e => set('password', e.target.value)}
+          />
+        </div>
+        <div>
+          <Label required>Confirm Password</Label>
+          <Input
+            type="password"
+            placeholder="Re-enter password"
+            value={data.confirmPassword ?? ''}
+            onChange={e => set('confirmPassword', e.target.value)}
+          />
+        </div>
       </div>
 
       <div>
@@ -516,163 +544,6 @@ function Step5({ agreed, setAgreed }: { agreed: boolean; setAgreed: (v: boolean)
   );
 }
 
-// ── Step 6: E-Signature ───────────────────────────────────────
-
-function Step6({
-  signatureDataUrl,
-  setSignatureDataUrl,
-}: {
-  signatureDataUrl: string;
-  setSignatureDataUrl: (s: string) => void;
-}) {
-  const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const drawing    = useRef(false);
-  const fileRef    = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth   = 2;
-    ctx.lineCap     = 'round';
-    ctx.lineJoin    = 'round';
-  }, []);
-
-  function getPos(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    if ('touches' in e) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    }
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
-  }
-
-  function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    e.preventDefault();
-    drawing.current = true;
-    const ctx = canvasRef.current?.getContext('2d');
-    if (ctx) {
-      const { x, y } = getPos(e);
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-    }
-  }
-
-  function draw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    e.preventDefault();
-    if (!drawing.current) return;
-    const ctx = canvasRef.current?.getContext('2d');
-    if (ctx) {
-      const { x, y } = getPos(e);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    }
-  }
-
-  function stopDraw() {
-    drawing.current = false;
-    setSignatureDataUrl(canvasRef.current?.toDataURL() ?? '');
-  }
-
-  function clearCanvas() {
-    const ctx = canvasRef.current?.getContext('2d');
-    if (ctx && canvasRef.current) {
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    }
-    setSignatureDataUrl('');
-  }
-
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setSignatureDataUrl(ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-  }
-
-  return (
-    <div className="space-y-5">
-      <h2 className="text-lg font-semibold text-gray-800">Upload Your Electronic Signature</h2>
-      <p className="text-sm text-gray-500">
-        Please upload a clear image of your signature. This will be used for verification purposes.
-      </p>
-
-      {/* Upload area */}
-      <div
-        onClick={() => fileRef.current?.click()}
-        className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-teal-400 hover:bg-teal-50 transition-all"
-      >
-        <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-        </svg>
-        <div className="text-center">
-          <p className="text-sm font-medium text-gray-600">
-            <span className="text-teal-600">Click to upload</span> or drag and drop
-          </p>
-          <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 5MB</p>
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          accept="image/*"
-          onChange={handleFileUpload}
-        />
-      </div>
-
-      {/* Uploaded image preview */}
-      {signatureDataUrl && (
-        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-          <p className="text-xs text-gray-500 mb-2">Preview:</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={signatureDataUrl} alt="Signature" className="max-h-24 object-contain" />
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-gray-200" />
-        <span className="text-xs text-gray-400">Or draw your signature below</span>
-        <div className="flex-1 h-px bg-gray-200" />
-      </div>
-
-      {/* Drawing canvas */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden relative">
-        <canvas
-          ref={canvasRef}
-          width={600}
-          height={160}
-          className="w-full touch-none cursor-crosshair bg-white"
-          onMouseDown={startDraw}
-          onMouseMove={draw}
-          onMouseUp={stopDraw}
-          onMouseLeave={stopDraw}
-          onTouchStart={startDraw}
-          onTouchMove={draw}
-          onTouchEnd={stopDraw}
-        />
-        <p className="absolute inset-0 flex items-center justify-center text-2xl text-gray-200 font-light pointer-events-none select-none">
-          Sign Here
-        </p>
-        <button
-          type="button"
-          onClick={clearCanvas}
-          className="absolute top-2 right-2 text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 bg-white rounded border border-gray-200"
-        >
-          Clear
-        </button>
-      </div>
-
-      <p className="text-xs text-gray-400 italic text-center">
-        Your e-signature serves as your digital consent to this registration.
-      </p>
-    </div>
-  );
-}
-
 // ── Main Registration Page ────────────────────────────────────
 
 export default function RegisterPage() {
@@ -689,8 +560,9 @@ export default function RegisterPage() {
   const [hadSurgery, setHadSurgery] = useState<boolean | null>(null);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [agreed,     setAgreed]     = useState(false);
-  const [sigUrl,     setSigUrl]     = useState('');
   const [submitted,  setSubmitted]  = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   function handleNext() {
     if (step < STEPS.length) setStep(s => s + 1);
@@ -700,13 +572,80 @@ export default function RegisterPage() {
     if (step > 1) setStep(s => s - 1);
   }
 
-  function handleSubmit() {
-    // TODO: POST to backend
-    console.log('Registration data:', {
-      personal, emergency, conditions, medExtras,
-      hadSurgery, operations, agreed, sigUrl,
-    });
-    setSubmitted(true);
+  async function handleSubmit() {
+    setSubmitError('');
+
+    const department = (personal.department ?? '').trim();
+    const course = (personal.course ?? '').trim();
+    const password = (personal.password ?? '').trim();
+    const confirmPassword = (personal.confirmPassword ?? '').trim();
+
+    if (!isValidDepartmentCode(department)) {
+      setSubmitError('Please select a valid college (department).');
+      return;
+    }
+
+    if (!isValidCourseForDepartment(course, department)) {
+      setSubmitError('Please select a valid course for the selected college.');
+      return;
+    }
+
+    if (!password || password.length < 8) {
+      setSubmitError('Password is required and must be at least 8 characters.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setSubmitError('Password and confirm password do not match.');
+      return;
+    }
+
+    if (!agreed) {
+      setSubmitError('You must agree to the data privacy consent before submitting.');
+      return;
+    }
+
+    const payload = {
+      personal,
+      emergency: {
+        name: emergency.contactName ?? '',
+        relationship: emergency.relationship ?? '',
+        contact: emergency.emergencyContact ?? '',
+        address: emergency.emergencyAddress ?? '',
+      },
+      medical: {
+        conditions,
+        others: medExtras.others ?? '',
+        bloodType: medExtras.bloodType ?? '',
+        allergies: medExtras.allergies ?? '',
+        existingConditions: medExtras.existingConditions ?? '',
+      },
+      surgical: {
+        hasSurgery: hadSurgery,
+        entries: operations.map((operation) => ({
+          operation: operation.name,
+          year: operation.year,
+        })),
+      },
+      consentAgreed: agreed,
+      credentials: {
+        password,
+      },
+    };
+
+    try {
+      setSubmitLoading(true);
+      await api.post('/students/registration/public', payload);
+      setSubmitted(true);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setSubmitError(error.message);
+      } else {
+        setSubmitError('Failed to submit registration. Please try again.');
+      }
+    } finally {
+      setSubmitLoading(false);
+    }
   }
 
   // ── Success Screen ─────────────────────────────────────────
@@ -785,7 +724,12 @@ export default function RegisterPage() {
             />
           )}
           {step === 5 && <Step5 agreed={agreed} setAgreed={setAgreed} />}
-          {step === 6 && <Step6 signatureDataUrl={sigUrl} setSignatureDataUrl={setSigUrl} />}
+
+          {submitError && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {submitError}
+            </div>
+          )}
 
           {/* Navigation */}
           <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-100">
@@ -816,10 +760,10 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!agreed}
+                disabled={!agreed || submitLoading}
                 className="flex items-center gap-2 px-5 py-2.5 bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition"
               >
-                Submit Registration
+                {submitLoading ? 'Submitting…' : 'Submit Registration'}
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>

@@ -6,9 +6,31 @@
  * Provides: dark sidebar (Dashboard, My Record, Registration) + top bar.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { api } from '@/lib/api';
+import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken, getUserId } from '@/lib/auth';
+
+interface StudentProfileSummary {
+  firstName: string;
+  lastName: string;
+  studentNumber: string;
+  courseDept: string;
+}
+
+interface StudentProfileResponse {
+  success: boolean;
+  data: StudentProfileSummary;
+}
+
+interface StudentQrResponse {
+  success: boolean;
+  data: {
+    studentNumber: string;
+    qrCodeImage: string;
+  };
+}
 
 // ── Nav items ─────────────────────────────────────────────────
 
@@ -46,13 +68,46 @@ const NAV = [
       </svg>
     ),
   },
+  {
+    href:  '/dashboard/student/consultation-request',
+    label: 'Consultation Request',
+    exact: false,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M8 10h8m-8 4h5m-7 7l-4-4m0 0l4-4m-4 4h13a4 4 0 004-4V7a4 4 0 00-4-4H7a4 4 0 00-4 4" />
+      </svg>
+    ),
+  },
+  {
+    href: '/dashboard/student/notifications',
+    label: 'Notifications',
+    exact: false,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0m6 0H9"
+        />
+      </svg>
+    ),
+  },
 ];
 
 // ── Sidebar ───────────────────────────────────────────────────
 
-function StudentSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+function StudentSidebar({ open, onClose, profileName }: { open: boolean; onClose: () => void; profileName: string }) {
   const pathname = usePathname();
   const router   = useRouter();
+
+  const initials = profileName
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   function isActive(href: string, exact: boolean) {
     return exact ? pathname === href : pathname?.startsWith(href);
@@ -95,6 +150,7 @@ function StudentSidebar({ open, onClose }: { open: boolean; onClose: () => void 
           {/* X — mobile only */}
           <button
             onClick={onClose}
+            aria-label="Close menu"
             className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,17 +185,20 @@ function StudentSidebar({ open, onClose }: { open: boolean; onClose: () => void 
           {/* Profile */}
           <div className="flex items-center gap-3 px-4 py-3">
             <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
-              JD
+              {initials || 'SU'}
             </div>
             <div className="min-w-0">
-              <p className="text-white text-sm font-semibold truncate">Juan Dela Cruz</p>
+              <p className="text-white text-sm font-semibold truncate">{profileName}</p>
               <p className="text-gray-400 text-xs">student</p>
             </div>
           </div>
 
           {/* Sign Out */}
           <button
-            onClick={() => router.push('/login')}
+            onClick={() => {
+              authLogout();
+              router.push('/login');
+            }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,7 +215,19 @@ function StudentSidebar({ open, onClose }: { open: boolean; onClose: () => void 
 
 // ── QR Modal ─────────────────────────────────────────────────
 
-function QRModal({ onClose }: { onClose: () => void }) {
+function QRModal({
+  onClose,
+  profileName,
+  studentNumber,
+  courseDept,
+  qrImage,
+}: {
+  onClose: () => void;
+  profileName: string;
+  studentNumber: string;
+  courseDept: string;
+  qrImage: string;
+}) {
   // Simple SVG QR-like pattern
   const cells: { x: number; y: number }[] = [];
   // Seed a deterministic pattern
@@ -176,7 +247,7 @@ function QRModal({ onClose }: { onClose: () => void }) {
         (r === 0 || r === 6 || c === SIZE-7 || c === SIZE-1) && r < 7 && c >= SIZE-7 ||
         (r === SIZE-7 || r === SIZE-1 || c === 0 || c === 6) && r >= SIZE-7 && c < 7;
       if (inFinder) {
-        const tr = r % 7; const tc = c % (c < 7 ? 7 : SIZE - c < 7 ? 7 : 7);
+        const tr = r % 7;
         if (onFinderBorder || (tr >= 2 && tr <= 4 && (c < 7 ? (c%7>=2&&c%7<=4) : (c>=SIZE-5&&c<=SIZE-3)) )) {
           cells.push({ x: c, y: r });
         }
@@ -193,7 +264,7 @@ function QRModal({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div className="w-full flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-gray-900">My Student QR Code</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
+          <button aria-label="Close QR code" onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -202,25 +273,29 @@ function QRModal({ onClose }: { onClose: () => void }) {
 
         {/* QR Code SVG */}
         <div className="mb-4">
-          <svg width="180" height="180" viewBox={`0 0 ${SIZE} ${SIZE}`} shapeRendering="crispEdges">
-            <rect width={SIZE} height={SIZE} fill="white" />
-            {cells.map((cell, i) => (
-              <rect key={i} x={cell.x} y={cell.y} width={1} height={1} fill="#111" />
-            ))}
-            {/* Finder pattern outlines */}
-            <rect x={0} y={0} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
-            <rect x={2} y={2} width={3} height={3} fill="#111" />
-            <rect x={SIZE-7} y={0} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
-            <rect x={SIZE-5} y={2} width={3} height={3} fill="#111" />
-            <rect x={0} y={SIZE-7} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
-            <rect x={2} y={SIZE-5} width={3} height={3} fill="#111" />
-          </svg>
+          {qrImage ? (
+            <img src={qrImage} alt="Student QR Code" className="w-[180px] h-[180px] rounded-lg border border-gray-100" />
+          ) : (
+            <svg width="180" height="180" viewBox={`0 0 ${SIZE} ${SIZE}`} shapeRendering="crispEdges">
+              <rect width={SIZE} height={SIZE} fill="white" />
+              {cells.map((cell, i) => (
+                <rect key={i} x={cell.x} y={cell.y} width={1} height={1} fill="#111" />
+              ))}
+              {/* Finder pattern outlines */}
+              <rect x={0} y={0} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
+              <rect x={2} y={2} width={3} height={3} fill="#111" />
+              <rect x={SIZE-7} y={0} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
+              <rect x={SIZE-5} y={2} width={3} height={3} fill="#111" />
+              <rect x={0} y={SIZE-7} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
+              <rect x={2} y={SIZE-5} width={3} height={3} fill="#111" />
+            </svg>
+          )}
         </div>
 
         {/* Student info */}
-        <p className="text-[11px] text-gray-400 tracking-widest mb-0.5">2023-0001</p>
-        <p className="text-base font-bold text-gray-900">Juan&nbsp; Dela Cruz</p>
-        <p className="text-sm text-gray-500 mb-3">BS Civil Engineering</p>
+        <p className="text-[11px] text-gray-400 tracking-widest mb-0.5">{studentNumber || 'N/A'}</p>
+        <p className="text-base font-bold text-gray-900">{profileName}</p>
+        <p className="text-sm text-gray-500 mb-3">{courseDept || 'N/A'}</p>
         <p className="text-xs text-teal-600 text-center mb-5">
           Scan this code at the clinic kiosk for<br />faster check-in.
         </p>
@@ -239,7 +314,23 @@ function QRModal({ onClose }: { onClose: () => void }) {
 
 // ── Top Bar ───────────────────────────────────────────────────
 
-function StudentTopBar({ onMenuClick, isDark, onToggleDark }: { onMenuClick: () => void; isDark: boolean; onToggleDark: () => void }) {
+function StudentTopBar({
+  onMenuClick,
+  isDark,
+  onToggleDark,
+  profileName,
+  studentNumber,
+  courseDept,
+  qrImage,
+}: {
+  onMenuClick: () => void;
+  isDark: boolean;
+  onToggleDark: () => void;
+  profileName: string;
+  studentNumber: string;
+  courseDept: string;
+  qrImage: string;
+}) {
   const [qrOpen, setQrOpen] = useState(false);
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', {
@@ -248,11 +339,20 @@ function StudentTopBar({ onMenuClick, isDark, onToggleDark }: { onMenuClick: () 
 
   return (
     <>
-      {qrOpen && <QRModal onClose={() => setQrOpen(false)} />}
+      {qrOpen && (
+        <QRModal
+          onClose={() => setQrOpen(false)}
+          profileName={profileName}
+          studentNumber={studentNumber}
+          courseDept={courseDept}
+          qrImage={qrImage}
+        />
+      )}
       <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700 px-4 flex items-center gap-3 sticky top-0 z-20 shrink-0">
         {/* Hamburger */}
         <button
           onClick={onMenuClick}
+          aria-label="Open menu"
           className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -278,6 +378,7 @@ function StudentTopBar({ onMenuClick, isDark, onToggleDark }: { onMenuClick: () 
           {/* Dark mode toggle */}
           <button
             onClick={onToggleDark}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             className="p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
             {isDark ? (
@@ -315,16 +416,81 @@ function StudentTopBar({ onMenuClick, isDark, onToggleDark }: { onMenuClick: () 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark,      setIsDark]      = useState(false);
+  const userId = getUserId();
+  const fallbackProfileName = userId ? `Student ${userId.slice(0, 6)}` : 'Student User';
+  const [profileName, setProfileName] = useState(fallbackProfileName);
+  const [studentNumber, setStudentNumber] = useState('');
+  const [courseDept, setCourseDept] = useState('');
+  const [qrImage, setQrImage] = useState('');
+  const router = useRouter();
+  const token = getToken();
+  const role = getNormalizedUserRole();
+  const isAuthorized = !!token && role === 'STUDENT';
+
+  useEffect(() => {
+    if (!token || !role) {
+      router.replace('/login');
+      return;
+    }
+
+    if (role !== 'STUDENT') {
+      router.replace(getDashboardRouteForRole(role));
+      return;
+    }
+
+    const authToken = token;
+
+    let mounted = true;
+    async function loadStudentSession() {
+      try {
+        const [profileResponse, qrResponse] = await Promise.all([
+          api.get<StudentProfileResponse>('/students/me', authToken),
+          api.get<StudentQrResponse>('/students/qr', authToken),
+        ]);
+
+        if (!mounted) return;
+
+        const profile = profileResponse.data;
+        const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim();
+
+        setProfileName(fullName || fallbackProfileName);
+        setStudentNumber(qrResponse.data?.studentNumber || profile?.studentNumber || '');
+        setCourseDept(profile?.courseDept || '');
+        setQrImage(qrResponse.data?.qrCodeImage || '');
+      } catch {
+        if (!mounted) return;
+        setQrImage('');
+      }
+    }
+
+    void loadStudentSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, [fallbackProfileName, role, router, token]);
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <p className="text-sm text-gray-500 dark:text-gray-400">Checking session...</p>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex h-screen overflow-hidden${isDark ? ' dark' : ''}`}>
-      <StudentSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <StudentSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} profileName={profileName} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50 dark:bg-gray-950">
         <StudentTopBar
           onMenuClick={() => setSidebarOpen(true)}
           isDark={isDark}
           onToggleDark={() => setIsDark(d => !d)}
+          profileName={profileName}
+          studentNumber={studentNumber}
+          courseDept={courseDept}
+          qrImage={qrImage}
         />
         <main className="flex-1 overflow-y-auto">
           {children}

@@ -42,14 +42,19 @@ export default function LoginForm({
   error,
   loading = false,
 }: LoginFormProps) {
+  const emailInputId = 'login-email';
+  const passwordInputId = 'login-password';
+  const rememberInputId = 'login-remember-me';
+
   return (
     <>
       {/* ── Email Field ── */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        <label htmlFor={emailInputId} className="block text-sm font-medium text-gray-700 mb-1.5">
           Email Address
         </label>
         <input
+          id={emailInputId}
           type="email"
           placeholder="Enter your email"
           value={email}
@@ -63,10 +68,11 @@ export default function LoginForm({
 
       {/* ── Password Field ── */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        <label htmlFor={passwordInputId} className="block text-sm font-medium text-gray-700 mb-1.5">
           Password
         </label>
         <input
+          id={passwordInputId}
           type="password"
           placeholder="••••••••"
           value={password}
@@ -80,8 +86,9 @@ export default function LoginForm({
 
       {/* ── Remember Me + Forgot Password ── */}
       <div className="flex items-center justify-between mb-5">
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+        <label htmlFor={rememberInputId} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
           <input
+            id={rememberInputId}
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => onRememberChange(e.target.checked)}
@@ -90,7 +97,7 @@ export default function LoginForm({
           Remember me
         </label>
 
-        <button className="text-sm text-teal-600 font-medium hover:text-teal-700 hover:underline transition-colors cursor-pointer">
+        <button type="button" className="text-sm text-teal-600 font-medium hover:text-teal-700 hover:underline transition-colors cursor-pointer">
           Forgot password?
         </button>
       </div>
