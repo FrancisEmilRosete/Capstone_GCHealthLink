@@ -9,7 +9,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken, getUserId } from '@/lib/auth';
+import { api, ApiError } from '@/lib/api';
+import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
 import { SignOutIcon, SettingsIcon, ShieldIcon } from '@/components/icons/NavIcons';
 import { ADMIN_NAV_GROUPS } from '@/constants/adminNavigation';
 
@@ -17,15 +18,27 @@ interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
+interface AdminSessionResponse {
+  success: boolean;
+  data: {
+    id: string;
+    email: string;
+    role: string;
+    displayName: string;
+  };
+}
+
 // ── Admin Sidebar ────────────────────────────────────────────
 
 function AdminSidebar({
   isOpen,
   displayName,
+  roleLabel,
   onClose,
 }: {
   isOpen: boolean;
   displayName: string;
+  roleLabel: string;
   onClose: () => void;
 }) {
   const pathname = usePathname();
@@ -128,7 +141,7 @@ function AdminSidebar({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">{displayName}</p>
-            <p className="text-[10px] text-slate-400 capitalize">admin</p>
+            <p className="text-[10px] text-slate-400 capitalize">{roleLabel}</p>
           </div>
         </div>
 
@@ -239,14 +252,16 @@ function AdminTopBar({ onMenuOpen, isDark, onToggleDark }: { onMenuOpen: () => v
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark,      setIsDark]      = useState(false);
+  const [displayName, setDisplayName] = useState('Admin User');
+  const [roleLabel, setRoleLabel] = useState('Admin');
   const router = useRouter();
   const token = getToken();
   const role = getNormalizedUserRole();
-  const userId = getUserId();
-  const displayName = userId ? `Admin ${userId.slice(0, 6)}` : 'Admin User';
   const isAuthorized = !!token && role === 'ADMIN';
 
   useEffect(() => {
+    let mounted = true;
+
     if (!token || !role) {
       router.replace('/login');
       return;
@@ -254,7 +269,39 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
     if (role !== 'ADMIN') {
       router.replace(getDashboardRouteForRole(role));
+      return;
     }
+
+    const authToken = token;
+
+    async function loadAdminSessionProfile() {
+      try {
+        const response = await api.get<AdminSessionResponse>('/admin/me', authToken);
+        if (!mounted) return;
+
+        const resolvedName = response.data?.displayName?.trim() || response.data?.email || 'Admin User';
+        const resolvedRole = response.data?.role?.toLowerCase().replace('_', ' ') || 'admin';
+        setDisplayName(resolvedName);
+        setRoleLabel(resolvedRole);
+      } catch (error) {
+        if (!mounted) return;
+
+        if (error instanceof ApiError && error.status === 401) {
+          authLogout();
+          router.replace('/login');
+          return;
+        }
+
+        setDisplayName('Admin User');
+        setRoleLabel('admin');
+      }
+    }
+
+    void loadAdminSessionProfile();
+
+    return () => {
+      mounted = false;
+    };
   }, [role, router, token]);
 
   if (!isAuthorized) {
@@ -270,6 +317,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <AdminSidebar
         isOpen={sidebarOpen}
         displayName={displayName}
+        roleLabel={roleLabel}
         onClose={() => setSidebarOpen(false)}
       />
       <div className="flex flex-col flex-1 min-w-0 bg-gray-50 dark:bg-gray-950">

@@ -189,6 +189,7 @@ model ClinicVisit {
 
   // Sensitive encounter narrative. Encrypt at application level before persisting.
   chiefComplaintEnc String? @db.Text
+  concernTag       String   @default("General Consultation")
 
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
   handledBy      User           @relation("HandledByUser", fields: [handledById], references: [id], onDelete: Restrict)
@@ -200,6 +201,7 @@ model ClinicVisit {
 
   @@index([studentProfileId, visitDate])
   @@index([handledById, visitDate])
+  @@index([concernTag, visitDate])
 }
 
 model Appointment {

@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const { getHealthAnalytics } = require("../controllers/admin.controller");
+const { getHealthAnalytics, getAdminSessionProfile } = require("../controllers/admin.controller");
 const { exportMonthlyReportPdf } = require("../controllers/report.controller");
 const { protect } = require("../middleware/auth.middleware");
 const { authorize } = require("../middleware/rbac.middleware");
 
 const ALLOWED_ADMIN_AGGREGATED_PATHS = new Set([
+  "/me",
   "/analytics",
   "/reports/monthly-pdf",
 ]);
@@ -22,6 +23,11 @@ function enforceAggregatedAdminScope(req, res, next) {
 }
 
 router.use(protect, authorize("ADMIN"), enforceAggregatedAdminScope);
+
+router.get(
+  "/me",
+  getAdminSessionProfile
+);
 
 // GET /api/v1/admin/analytics
 router.get(

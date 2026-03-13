@@ -45,7 +45,7 @@ interface AnalyticsResponse {
   success: boolean;
   data: {
     totalVisits: number;
-    topConcerns: Array<{ issue: string; count: number }>;
+    topConcerns: Array<{ tag: string; count: number }>;
     departmentHeatmap: Record<string, number>;
     outbreakWatch: string | Array<{ level: string; message: string; cases: number }>;
   };
@@ -98,6 +98,13 @@ export default function AdminNotifications() {
   const [broadcastSeverity, setBroadcastSeverity] = useState<'INFO' | 'WARNING' | 'CRITICAL'>('INFO');
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [broadcastFeedback, setBroadcastFeedback] = useState('');
+  const [broadcastConfirmOpen, setBroadcastConfirmOpen] = useState(false);
+  const [pendingBroadcastPayload, setPendingBroadcastPayload] = useState<{
+    title: string;
+    message: string;
+    targetDept: string;
+    severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  } | null>(null);
 
   async function loadAlerts() {
     const token = getToken();
@@ -174,7 +181,7 @@ export default function AdminNotifications() {
         level: 'info',
         category: 'system',
         title: 'Top Concern Snapshot',
-        message: `${concern.issue || 'General consultation'} has ${concern.count} recorded visits.`,
+        message: `${concern.tag || 'General consultation'} has ${concern.count} recorded visits.`,
         time: 'Analytics summary',
         read: false,
       }));
@@ -196,14 +203,8 @@ export default function AdminNotifications() {
     void loadAlerts();
   }, []);
 
-  async function handleBroadcastSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleBroadcastSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    const token = getToken();
-    if (!token) {
-      setError('You are not logged in. Please sign in again.');
-      return;
-    }
 
     const title = broadcastTitle.trim();
     const message = broadcastMessage.trim();
@@ -214,6 +215,36 @@ export default function AdminNotifications() {
       return;
     }
 
+    setBroadcastFeedback('');
+    setPendingBroadcastPayload({
+      title,
+      message,
+      targetDept,
+      severity: broadcastSeverity,
+    });
+    setBroadcastConfirmOpen(true);
+  }
+
+  function closeBroadcastModal() {
+    if (sendingBroadcast) return;
+    setBroadcastConfirmOpen(false);
+    setPendingBroadcastPayload(null);
+  }
+
+  async function handleBroadcastConfirm() {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      setBroadcastConfirmOpen(false);
+      setPendingBroadcastPayload(null);
+      return;
+    }
+
+    if (!pendingBroadcastPayload) {
+      setBroadcastConfirmOpen(false);
+      return;
+    }
+
     try {
       setSendingBroadcast(true);
       setBroadcastFeedback('');
@@ -221,17 +252,16 @@ export default function AdminNotifications() {
 
       const response = await api.post<BroadcastResponse>(
         '/advisories/broadcast',
-        {
-          title,
-          message,
-          targetDept,
-          severity: broadcastSeverity,
-        },
+        pendingBroadcastPayload,
         token,
       );
 
       setBroadcastTitle('');
       setBroadcastMessage('');
+      setBroadcastDept('ALL');
+      setBroadcastSeverity('INFO');
+      setPendingBroadcastPayload(null);
+      setBroadcastConfirmOpen(false);
       setBroadcastFeedback(response.message || 'Advisory broadcast sent successfully.');
       await loadAlerts();
     } catch (err) {
@@ -350,6 +380,36 @@ export default function AdminNotifications() {
           </div>
         </form>
       </div>
+
+      {broadcastConfirmOpen && pendingBroadcastPayload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl border border-gray-100">
+            <h3 className="text-base font-bold text-gray-900">Confirm Broadcast</h3>
+            <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+              Are you sure you want to broadcast this [{pendingBroadcastPayload.severity}] advisory to [{pendingBroadcastPayload.targetDept === 'ALL' ? 'All' : pendingBroadcastPayload.targetDept}]?
+            </p>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeBroadcastModal}
+                disabled={sendingBroadcast}
+                className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { void handleBroadcastConfirm(); }}
+                disabled={sendingBroadcast}
+                className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 rounded-xl hover:bg-teal-700 disabled:opacity-60"
+              >
+                {sendingBroadcast ? 'Sending...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
         {TABS.map((tab) => {

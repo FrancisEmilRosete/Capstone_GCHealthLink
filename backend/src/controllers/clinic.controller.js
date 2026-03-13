@@ -3,6 +3,7 @@ const {
   encryptStringSafe,
   decryptStringSafe,
 } = require("../utils/encryption.util");
+const { deriveConcernTag } = require("../utils/concernTag.util");
 const prisma = new PrismaClient();
 
 function normalizeText(value) {
@@ -383,6 +384,7 @@ const recordVisit = async (req, res, next) => {
           visitDate: parsedVisitDate,
           visitTime: normalizedVisitTime || null,
           chiefComplaintEnc: encryptStringSafe(normalizedComplaint),
+          concernTag: deriveConcernTag(normalizedComplaint),
         },
       });
 
