@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -161,46 +163,103 @@ function pickConditions(history: StudentProfile['medicalHistory']) {
   return conditions;
 }
 
-function downloadCsv(profile: StudentProfile) {
-  const rows: string[][] = [
-    ['Field', 'Value'],
-    ['Student Number', profile.studentNumber],
-    ['Name', `${profile.lastName}, ${profile.firstName}`],
-    ['Course/Dept', profile.courseDept],
-    ['Age', profile.age ? String(profile.age) : 'N/A'],
-    ['Sex', toLabel(profile.sex)],
+function downloadPdf(profile: StudentProfile) {
+  const generatedAt = new Date();
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFillColor(13, 148, 136);
+  doc.rect(0, 0, pageWidth, 86, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('GC HealthLink Student Medical Record', 40, 38);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(`Generated: ${generatedAt.toLocaleString('en-US')}`, 40, 58);
+  doc.text(`Student Number: ${profile.studentNumber}`, 40, 74);
+
+  const profileRows: string[][] = [
+    ['Full Name', `${profile.lastName}, ${profile.firstName}`],
+    ['Course/Department', profile.courseDept],
+    ['Age / Sex', `${profile.age ?? 'N/A'} / ${toLabel(profile.sex)}`],
     ['Birthday', formatDate(profile.birthday)],
-    ['Contact', toLabel(profile.telNumber)],
+    ['Contact Number', toLabel(profile.telNumber)],
     ['Address', toLabel(profile.presentAddress)],
     ['Emergency Contact', toLabel(profile.emergencyContactName)],
     ['Emergency Relationship', toLabel(profile.emergencyRelationship)],
     ['Emergency Number', toLabel(profile.emergencyContactTelNumber)],
-    ['Allergies', splitCsv(profile.medicalHistory?.allergyEnc).join('; ') || 'None'],
+    ['Allergies', splitCsv(profile.medicalHistory?.allergyEnc).join(', ') || 'None'],
     ['Blood Type', toLabel(profile.medicalHistory?.bloodType)],
-    ['Immunizations', (profile.medicalHistory?.immunizations || []).join('; ') || 'None'],
-    ['Conditions', pickConditions(profile.medicalHistory).join('; ') || 'None'],
-    [],
-    ['Visit Date', 'Visit Time', 'Complaint', 'Handled By', 'Medicines'],
+    ['Immunizations', (profile.medicalHistory?.immunizations || []).join(', ') || 'None'],
+    ['Known Conditions', pickConditions(profile.medicalHistory).join(', ') || 'None'],
   ];
 
-  for (const visit of profile.clinicVisits) {
-    rows.push([
-      formatDate(visit.visitDate),
-      visit.visitTime || 'N/A',
-      normalizeComplaint(visit.chiefComplaintEnc),
-      visit.handledBy?.email || 'Clinic Staff',
-      visit.dispensedMedicines.map((item) => `${item.inventory.itemName} x${item.quantity}`).join('; ') || 'None',
-    ]);
-  }
+  autoTable(doc, {
+    startY: 104,
+    head: [['Profile Field', 'Value']],
+    body: profileRows,
+    theme: 'grid',
+    margin: { left: 40, right: 40 },
+    styles: {
+      fontSize: 9,
+      cellPadding: 6,
+      textColor: [55, 65, 81],
+      valign: 'top',
+    },
+    headStyles: {
+      fillColor: [15, 118, 110],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 170, fontStyle: 'bold' },
+      1: { cellWidth: 345 },
+    },
+  });
 
-  const csv = rows.map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `my_record_${profile.studentNumber}.csv`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  const docWithTable = doc as jsPDF & { lastAutoTable?: { finalY: number } };
+  const visitRows: string[][] = profile.clinicVisits.length
+    ? profile.clinicVisits.map((visit) => [
+        formatDate(visit.visitDate),
+        visit.visitTime || 'N/A',
+        normalizeComplaint(visit.chiefComplaintEnc),
+        visit.handledBy?.email || 'Clinic Staff',
+        visit.dispensedMedicines.length
+          ? visit.dispensedMedicines.map((item) => `${item.inventory.itemName} x${item.quantity}`).join(', ')
+          : 'None',
+      ])
+    : [['No consultation records yet.', '', '', '', '']];
+
+  autoTable(doc, {
+    startY: (docWithTable.lastAutoTable?.finalY || 130) + 22,
+    head: [['Visit Date', 'Time', 'Concern', 'Handled By', 'Medicines']],
+    body: visitRows,
+    theme: 'striped',
+    margin: { left: 40, right: 40, bottom: 40 },
+    styles: {
+      fontSize: 8.5,
+      cellPadding: 5,
+      textColor: [31, 41, 55],
+      valign: 'top',
+    },
+    headStyles: {
+      fillColor: [13, 27, 42],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 70 },
+      1: { cellWidth: 55 },
+      2: { cellWidth: 150 },
+      3: { cellWidth: 130 },
+      4: { cellWidth: 140 },
+    },
+  });
+
+  doc.save(`my_record_${profile.studentNumber}.pdf`);
 }
 
 export default function MyRecordPage() {
@@ -298,12 +357,30 @@ export default function MyRecordPage() {
         </div>
         {profile && (
           <button
-            onClick={() => downloadCsv(profile)}
+            onClick={() => downloadPdf(profile)}
             className="text-xs font-semibold border border-gray-200 px-3 py-2 rounded-xl text-gray-600 hover:border-teal-300 hover:text-teal-600"
           >
-            Export CSV
+            Export PDF
           </button>
         )}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex items-start gap-2.5">
+          <div className="mt-0.5 shrink-0 rounded-full bg-slate-200 p-1.5 text-slate-600">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 00-6 0v2c0 1.657 1.343 3 3 3zm-7 2a2 2 0 012-2h10a2 2 0 012 2v7H5v-7z"
+              />
+            </svg>
+          </div>
+          <p className="text-sm text-slate-700">
+            These records are encrypted and securely stored. To update your medical history, please visit the clinic in person.
+          </p>
+        </div>
       </div>
 
       {error && (

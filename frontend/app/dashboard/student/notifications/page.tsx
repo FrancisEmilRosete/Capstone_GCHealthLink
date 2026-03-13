@@ -188,10 +188,15 @@ export default function StudentNotificationsPage() {
                 : severity === 'WARNING'
                   ? 'bg-amber-100 text-amber-700'
                   : 'bg-blue-100 text-blue-700';
+              const itemSurfaceStyle = severity === 'CRITICAL'
+                ? 'bg-red-50'
+                : severity === 'WARNING'
+                  ? 'bg-amber-50'
+                  : 'bg-blue-50';
               const targetDept = (advisory.targetDept || 'ALL').toUpperCase();
 
               return (
-                <article key={advisory.id} className="px-4 py-4">
+                <article key={advisory.id} className={`px-4 py-4 ${itemSurfaceStyle}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900">{advisory.title}</p>

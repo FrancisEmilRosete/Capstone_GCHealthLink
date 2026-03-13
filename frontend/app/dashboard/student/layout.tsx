@@ -3,14 +3,14 @@
 /**
  * STUDENT LAYOUT
  * Wraps all /dashboard/student/* pages.
- * Provides: dark sidebar (Dashboard, My Record, Registration) + top bar.
+ * Provides: dark sidebar (Dashboard, My Record, optional Registration) + top bar.
  */
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '@/lib/api';
-import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken, getUserId } from '@/lib/auth';
+import { ApiError, api } from '@/lib/api';
+import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
 
 interface StudentProfileSummary {
   firstName: string;
@@ -31,6 +31,9 @@ interface StudentQrResponse {
     qrCodeImage: string;
   };
 }
+
+const REGISTRATION_ROUTE = '/dashboard/student/registration';
+const DEFAULT_PROFILE_NAME = 'Student';
 
 // ── Nav items ─────────────────────────────────────────────────
 
@@ -58,7 +61,7 @@ const NAV = [
     ),
   },
   {
-    href:  '/dashboard/student/registration',
+    href:  REGISTRATION_ROUTE,
     label: 'Registration',
     exact: false,
     icon: (
@@ -98,9 +101,24 @@ const NAV = [
 
 // ── Sidebar ───────────────────────────────────────────────────
 
-function StudentSidebar({ open, onClose, profileName }: { open: boolean; onClose: () => void; profileName: string }) {
+function StudentSidebar({
+  open,
+  onClose,
+  profileName,
+  roleLabel,
+  showRegistration,
+}: {
+  open: boolean;
+  onClose: () => void;
+  profileName: string;
+  roleLabel: string;
+  showRegistration: boolean;
+}) {
   const pathname = usePathname();
   const router   = useRouter();
+  const navItems = showRegistration
+    ? NAV
+    : NAV.filter((item) => item.href !== REGISTRATION_ROUTE);
 
   const initials = profileName
     .split(' ')
@@ -161,7 +179,7 @@ function StudentSidebar({ open, onClose, profileName }: { open: boolean; onClose
 
         {/* Nav */}
         <nav className="flex-1 px-3 pt-4 space-y-1">
-          {NAV.map(item => {
+          {navItems.map(item => {
             const active = isActive(item.href, item.exact);
             return (
               <Link
@@ -189,7 +207,7 @@ function StudentSidebar({ open, onClose, profileName }: { open: boolean; onClose
             </div>
             <div className="min-w-0">
               <p className="text-white text-sm font-semibold truncate">{profileName}</p>
-              <p className="text-gray-400 text-xs">student</p>
+              <p className="text-gray-400 text-xs">{roleLabel}</p>
             </div>
           </div>
 
@@ -416,15 +434,15 @@ function StudentTopBar({
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark,      setIsDark]      = useState(false);
-  const userId = getUserId();
-  const fallbackProfileName = userId ? `Student ${userId.slice(0, 6)}` : 'Student User';
-  const [profileName, setProfileName] = useState(fallbackProfileName);
+  const [profileName, setProfileName] = useState(DEFAULT_PROFILE_NAME);
+  const [hasCompletedProfile, setHasCompletedProfile] = useState<boolean | null>(null);
   const [studentNumber, setStudentNumber] = useState('');
   const [courseDept, setCourseDept] = useState('');
   const [qrImage, setQrImage] = useState('');
   const router = useRouter();
   const token = getToken();
   const role = getNormalizedUserRole();
+  const roleLabel = role === 'STUDENT' ? 'Student' : 'User';
   const isAuthorized = !!token && role === 'STUDENT';
 
   useEffect(() => {
@@ -443,22 +461,46 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     let mounted = true;
     async function loadStudentSession() {
       try {
-        const [profileResponse, qrResponse] = await Promise.all([
+        const [profileResponse, qrResponse] = await Promise.allSettled([
           api.get<StudentProfileResponse>('/students/me', authToken),
           api.get<StudentQrResponse>('/students/qr', authToken),
         ]);
 
         if (!mounted) return;
 
-        const profile = profileResponse.data;
-        const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim();
+        let profile: StudentProfileSummary | null = null;
 
-        setProfileName(fullName || fallbackProfileName);
-        setStudentNumber(qrResponse.data?.studentNumber || profile?.studentNumber || '');
-        setCourseDept(profile?.courseDept || '');
-        setQrImage(qrResponse.data?.qrCodeImage || '');
+        if (profileResponse.status === 'fulfilled') {
+          profile = profileResponse.value.data;
+          const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim();
+
+          setProfileName(fullName || DEFAULT_PROFILE_NAME);
+          setStudentNumber(profile?.studentNumber || '');
+          setCourseDept(profile?.courseDept || '');
+          setHasCompletedProfile(true);
+        } else {
+          setProfileName(DEFAULT_PROFILE_NAME);
+          setStudentNumber('');
+          setCourseDept('');
+
+          if (profileResponse.reason instanceof ApiError && profileResponse.reason.status === 404) {
+            setHasCompletedProfile(false);
+          } else {
+            setHasCompletedProfile(false);
+          }
+        }
+
+        if (qrResponse.status === 'fulfilled') {
+          setQrImage(qrResponse.value.data?.qrCodeImage || '');
+          setStudentNumber(qrResponse.value.data?.studentNumber || profile?.studentNumber || '');
+        } else {
+          setQrImage('');
+        }
       } catch {
         if (!mounted) return;
+
+        setProfileName(DEFAULT_PROFILE_NAME);
+        setHasCompletedProfile(false);
         setQrImage('');
       }
     }
@@ -468,7 +510,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     return () => {
       mounted = false;
     };
-  }, [fallbackProfileName, role, router, token]);
+  }, [role, router, token]);
 
   if (!isAuthorized) {
     return (
@@ -480,7 +522,13 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className={`flex h-screen overflow-hidden${isDark ? ' dark' : ''}`}>
-      <StudentSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} profileName={profileName} />
+      <StudentSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        profileName={profileName}
+        roleLabel={roleLabel}
+        showRegistration={hasCompletedProfile === false}
+      />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50 dark:bg-gray-950">
         <StudentTopBar
