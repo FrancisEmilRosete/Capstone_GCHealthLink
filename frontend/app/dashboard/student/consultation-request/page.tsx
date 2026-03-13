@@ -18,12 +18,15 @@ interface AppointmentResponse {
   };
 }
 
+const SERVICE_OPTIONS = ['Medical Consultation', 'Dental Check-up', 'Medical Clearance'] as const;
+type ServiceType = (typeof SERVICE_OPTIONS)[number];
+
 function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
 export default function ConsultationRequestPage() {
-  const [serviceType, setServiceType] = useState<'Consultation' | 'Dental Check-up'>('Consultation');
+  const [serviceType, setServiceType] = useState<ServiceType>('Medical Consultation');
   const [preferredDate, setPreferredDate] = useState(todayDateString());
   const [preferredTime, setPreferredTime] = useState('09:00 AM');
   const [symptoms, setSymptoms] = useState('');
@@ -79,7 +82,7 @@ export default function ConsultationRequestPage() {
       <div>
         <h1 className="text-xl font-bold text-gray-900">Consultation Request</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Book a clinic consultation or dental check-up to avoid queue congestion.
+          Book a medical consultation, dental check-up, or medical clearance request to avoid queue congestion.
         </p>
       </div>
 
@@ -100,11 +103,12 @@ export default function ConsultationRequestPage() {
           <label className="block text-xs font-semibold text-gray-600 mb-1">Service Type</label>
           <select
             value={serviceType}
-            onChange={(event) => setServiceType(event.target.value as 'Consultation' | 'Dental Check-up')}
+            onChange={(event) => setServiceType(event.target.value as ServiceType)}
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-300"
           >
-            <option value="Consultation">Consultation</option>
-            <option value="Dental Check-up">Dental Check-up</option>
+            {SERVICE_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
           </select>
         </div>
 
@@ -144,6 +148,9 @@ export default function ConsultationRequestPage() {
         </div>
 
         <div className="pt-1">
+          <p className="mb-3 text-sm font-bold text-red-600">
+            ⚠️ For severe emergencies (e.g., difficulty breathing, severe bleeding), do not use this form. Proceed immediately to the Gordon College Clinic.
+          </p>
           <button
             type="submit"
             disabled={submitting}
