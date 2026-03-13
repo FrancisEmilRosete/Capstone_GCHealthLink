@@ -20,7 +20,7 @@ interface AnalyticsResponse {
   success: boolean;
   data: {
     totalVisits: number;
-    topConcerns: Array<{ issue: string; count: number }>;
+    topConcerns: Array<{ tag: string; count: number }>;
     departmentHeatmap: Record<string, number>;
     outbreakWatch: string | Array<{ level: string; message: string; cases: number }>;
     monthlyVisits: Array<{ month: string; count: number }>;
@@ -38,14 +38,14 @@ interface AnalyticsResponse {
 function downloadCsv(
   monthly: Array<{ month: string; count: number }>,
   weekly: Array<{ day: string; count: number }>,
-  topConcerns: Array<{ issue: string; count: number }>,
+  topConcerns: Array<{ tag: string; count: number }>,
   departments: Array<{ dept: string; count: number }>,
 ) {
   const rows: string[][] = [
     ['Section', 'Label', 'Value'],
     ...monthly.map((item) => ['Monthly Visits', item.month, String(item.count)]),
     ...weekly.map((item) => ['Weekly Visits', item.day, String(item.count)]),
-    ...topConcerns.map((item) => ['Top Concerns', item.issue || 'General Consultation', String(item.count)]),
+    ...topConcerns.map((item) => ['Top Concerns', item.tag || 'General Consultation', String(item.count)]),
     ...departments.map((item) => ['Department Heatmap', item.dept, String(item.count)]),
   ];
 
@@ -63,6 +63,26 @@ function outbreakSummary(outbreakWatch: AnalyticsResponse['data']['outbreakWatch
   if (typeof outbreakWatch === 'string') return outbreakWatch;
   if (!outbreakWatch || outbreakWatch.length === 0) return 'Green - No clusters detected';
   return outbreakWatch.map((item) => `${item.level}: ${item.message} (${item.cases})`).join(' | ');
+}
+
+function mapTopConcernTags(items: Array<{ tag: string; count: number }>) {
+  return items.map((item) => ({
+    tag: item.tag?.trim() || 'General Consultation',
+    count: item.count,
+  }));
+}
+
+function getOutbreakStatus(outbreakWatch: AnalyticsResponse['data']['outbreakWatch']) {
+  if (Array.isArray(outbreakWatch)) {
+    if (outbreakWatch.some((item) => item.level?.toUpperCase() === 'RED')) return 'CRITICAL';
+    if (outbreakWatch.some((item) => item.level?.toUpperCase() === 'YELLOW')) return 'WARNING';
+    return 'GREEN';
+  }
+
+  const text = outbreakWatch.toUpperCase();
+  if (text.includes('RED') || text.includes('CRITICAL')) return 'CRITICAL';
+  if (text.includes('YELLOW') || text.includes('WARNING') || text.includes('AMBER') || text.includes('ORANGE')) return 'WARNING';
+  return 'GREEN';
 }
 
 export default function AdminReports() {
@@ -109,16 +129,24 @@ export default function AdminReports() {
   }, [analytics]);
 
   const topConcerns = useMemo(() => {
-    return (analytics?.topConcerns || []).map((item) => ({
-      issue: item.issue || 'General Consultation',
-      count: item.count,
-    }));
+    return mapTopConcernTags(analytics?.topConcerns || []);
   }, [analytics]);
 
   const outbreakText = useMemo(() => {
     if (!analytics) return 'Loading outbreak watch...';
     return outbreakSummary(analytics.outbreakWatch);
   }, [analytics]);
+
+  const outbreakStatus = useMemo(() => {
+    if (!analytics) return 'GREEN';
+    return getOutbreakStatus(analytics.outbreakWatch);
+  }, [analytics]);
+
+  const outbreakBannerClass = outbreakStatus === 'CRITICAL'
+    ? 'border-red-300 bg-red-100 text-red-800'
+    : outbreakStatus === 'WARNING'
+      ? 'border-amber-300 bg-amber-100 text-amber-800'
+      : 'border-green-300 bg-green-100 text-green-800';
 
   async function handlePdfDownload() {
     const token = getToken();
@@ -196,7 +224,7 @@ export default function AdminReports() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+      <div className={`rounded-xl border px-4 py-3 text-sm ${outbreakBannerClass}`}>
         <span className="font-semibold">Outbreak Watch:</span> {outbreakText}
       </div>
 
@@ -235,7 +263,7 @@ export default function AdminReports() {
             <BarChart data={topConcerns} layout="vertical" margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="issue" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={140} />
+              <YAxis type="category" dataKey="tag" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={140} />
               <Tooltip />
               <Bar dataKey="count" fill="#14b8a6" radius={[0, 6, 6, 0]} />
             </BarChart>

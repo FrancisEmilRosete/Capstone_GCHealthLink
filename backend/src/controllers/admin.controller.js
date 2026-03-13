@@ -1,60 +1,12 @@
 const { PrismaClient } = require("@prisma/client");
-const { decryptStringSafe } = require("../utils/encryption.util");
+const {
+  normalizeConcernTag,
+  isOutbreakConcernTag,
+} = require("../utils/concernTag.util");
 const prisma = new PrismaClient();
 
-const OUTBREAK_KEYWORDS = ["fever", "flu", "cough", "sore throat", "diarrhea", "vomiting", "rash", "conjunctivitis", "headache"];
 const ALERT_PRIORITY = { RED: 3, YELLOW: 2, GREEN: 1 };
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function parseStructuredComplaint(decryptedText) {
-  if (!decryptedText) return null;
-
-  try {
-    const parsed = JSON.parse(decryptedText);
-    if (!parsed || typeof parsed !== "object") {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeConcern(raw) {
-  const decrypted = decryptStringSafe(raw) || "";
-  const structured = parseStructuredComplaint(decrypted);
-
-  if (structured) {
-    const diagnosis = typeof structured.diagnosis === "string" ? structured.diagnosis.trim() : "";
-    const complaint = typeof structured.chiefComplaint === "string" ? structured.chiefComplaint.trim() : "";
-    if (diagnosis) return diagnosis;
-    if (complaint) return complaint;
-  }
-
-  const primary = decrypted.split("|")[0]?.trim();
-  return primary || decrypted.trim() || "General Consultation";
-}
-
-function normalizeConcernText(raw) {
-  const decrypted = decryptStringSafe(raw) || "";
-  const structured = parseStructuredComplaint(decrypted);
-
-  if (!structured) {
-    return decrypted.toLowerCase();
-  }
-
-  const fields = [
-    structured.chiefComplaint,
-    structured.diagnosis,
-    structured.treatmentManagement,
-    structured.notes,
-  ]
-    .filter((value) => typeof value === "string")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  return fields.join(" ").toLowerCase();
-}
 
 function normalizeDepartment(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "Unspecified";
@@ -139,13 +91,12 @@ function createOutbreakWatch(visits) {
     const timestamp = date.getTime();
     if (timestamp < baselineWindowStart) continue;
 
-    const text = normalizeConcernText(visit.chiefComplaintEnc);
-    const keyword = OUTBREAK_KEYWORDS.find((entry) => text.includes(entry));
-    if (!keyword) continue;
+    const concernTag = normalizeConcernTag(visit.concernTag);
+    if (!isOutbreakConcernTag(concernTag)) continue;
 
     const dept = normalizeDepartment(visit.studentProfile?.courseDept);
-    const key = `${dept}::${keyword}`;
-    const bucket = counter.get(key) || { dept, keyword, recent: 0, baseline: 0 };
+    const key = `${dept}::${concernTag}`;
+    const bucket = counter.get(key) || { dept, concernTag, recent: 0, baseline: 0 };
 
     if (timestamp >= recentWindowStart) {
       bucket.recent += 1;
@@ -173,7 +124,7 @@ function createOutbreakWatch(visits) {
     alerts.push({
       level,
       cases: bucket.recent,
-      message: `${bucket.keyword} trend in ${bucket.dept} over the last 48 hours.`,
+      message: `${bucket.concernTag} trend in ${bucket.dept} over the last 48 hours.`,
     });
   }
 
@@ -290,24 +241,43 @@ function createResourcePrediction(visits) {
   };
 }
 
-function buildHealthAnalyticsPayload(visits) {
-  const totalVisits = visits.length;
+function buildTopConcernsFromGroups(concernGroups = []) {
+  return concernGroups
+    .map((group) => ({
+      tag: normalizeConcernTag(group.concernTag),
+      count: group?._count?._all || 0,
+    }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 7);
+}
 
+function buildTopConcernsFromVisits(visits = []) {
   const concernMap = new Map();
+
+  for (const visit of visits) {
+    const tag = normalizeConcernTag(visit.concernTag);
+    concernMap.set(tag, (concernMap.get(tag) || 0) + 1);
+  }
+
+  return [...concernMap.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 7);
+}
+
+function buildHealthAnalyticsPayload(visits, concernGroups = null) {
+  const totalVisits = visits.length;
   const departmentHeatmap = {};
 
   for (const visit of visits) {
-    const concern = normalizeConcern(visit.chiefComplaintEnc);
-    concernMap.set(concern, (concernMap.get(concern) || 0) + 1);
-
     const dept = normalizeDepartment(visit.studentProfile?.courseDept);
     departmentHeatmap[dept] = (departmentHeatmap[dept] || 0) + 1;
   }
 
-  const topConcerns = [...concernMap.entries()]
-    .map(([issue, count]) => ({ issue, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 7);
+  const topConcerns = Array.isArray(concernGroups)
+    ? buildTopConcernsFromGroups(concernGroups)
+    : buildTopConcernsFromVisits(visits);
 
   return {
     totalVisits,
@@ -318,6 +288,18 @@ function buildHealthAnalyticsPayload(visits) {
     weeklyVisits: createWeeklySeries(visits),
     resourcePrediction: createResourcePrediction(visits),
   };
+}
+
+function toDisplayNameFromEmail(email) {
+  const localPart = typeof email === "string" ? email.split("@")[0] : "";
+  const cleaned = localPart.replace(/[._-]+/g, " ").trim();
+  if (!cleaned) return "Admin User";
+
+  return cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 }
 
 const getUsers = async (req, res, next) => {
@@ -367,24 +349,70 @@ const getAuditLogs = async (req, res, next) => {
   }
 };
 
-const getHealthAnalytics = async (req, res, next) => {
+const getAdminSessionProfile = async (req, res, next) => {
   try {
-    const allVisits = await prisma.clinicVisit.findMany({
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
       select: {
         id: true,
-        chiefComplaintEnc: true,
-        createdAt: true,
-        visitDate: true,
-        visitTime: true,
-        studentProfile: {
-          select: {
-            courseDept: true,
-          },
-        },
+        email: true,
+        role: true,
       },
     });
 
-    const analytics = buildHealthAnalyticsPayload(allVisits);
+    if (!user || user.role !== "ADMIN") {
+      return res.status(404).json({
+        success: false,
+        message: "Admin profile not found.",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Admin session profile retrieved successfully",
+      data: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        displayName: toDisplayNameFromEmail(user.email),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getHealthAnalytics = async (req, res, next) => {
+  try {
+    const [allVisits, concernGroups] = await prisma.$transaction([
+      prisma.clinicVisit.findMany({
+        select: {
+          id: true,
+          concernTag: true,
+          createdAt: true,
+          visitDate: true,
+          visitTime: true,
+          studentProfile: {
+            select: {
+              courseDept: true,
+            },
+          },
+        },
+      }),
+      prisma.clinicVisit.groupBy({
+        by: ["concernTag"],
+        where: {
+          concernTag: {
+            not: "",
+          },
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+    ]);
+
+    const analytics = buildHealthAnalyticsPayload(allVisits, concernGroups);
 
     res.json({
       success: true,
@@ -396,4 +424,10 @@ const getHealthAnalytics = async (req, res, next) => {
   }
 };
 
-module.exports = { getHealthAnalytics, getUsers, getAuditLogs, buildHealthAnalyticsPayload };
+module.exports = {
+  getHealthAnalytics,
+  getAdminSessionProfile,
+  getUsers,
+  getAuditLogs,
+  buildHealthAnalyticsPayload,
+};

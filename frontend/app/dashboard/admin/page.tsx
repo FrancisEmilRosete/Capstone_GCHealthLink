@@ -6,7 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 
 interface TopConcern {
-  issue: string;
+  tag: string;
   count: number;
 }
 
@@ -27,6 +27,13 @@ interface AnalyticsResponse {
   success: boolean;
   message: string;
   data: AnalyticsData;
+}
+
+function mapTopConcernTags(items: TopConcern[]) {
+  return items.map((item) => ({
+    tag: item.tag?.trim() || 'General Consultation',
+    count: item.count,
+  }));
 }
 
 function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
@@ -76,9 +83,14 @@ export default function AdminDashboard() {
     [data],
   );
 
+  const topConcerns = useMemo(
+    () => mapTopConcernTags(data?.topConcerns || []),
+    [data?.topConcerns],
+  );
+
   const maxDepartmentCount = Math.max(...departmentRows.map(([, count]) => count), 1);
 
-  const topConcern = data?.topConcerns?.[0]?.issue || '-';
+  const topConcern = topConcerns[0]?.tag || '-';
   const outbreakCount = Array.isArray(data?.outbreakWatch) ? data?.outbreakWatch.length : 0;
 
   return (
@@ -127,13 +139,13 @@ export default function AdminDashboard() {
 
           {loading ? (
             <p className="text-sm text-gray-400">Loading concerns...</p>
-          ) : (data?.topConcerns || []).length === 0 ? (
+          ) : topConcerns.length === 0 ? (
             <p className="text-sm text-gray-400">No concerns recorded yet.</p>
           ) : (
             <div className="space-y-2">
-              {(data?.topConcerns || []).map((concern) => (
-                <div key={`${concern.issue}-${concern.count}`} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-                  <p className="text-sm text-gray-700 truncate pr-3">{concern.issue || 'Unknown concern'}</p>
+              {topConcerns.map((concern) => (
+                <div key={`${concern.tag}-${concern.count}`} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                  <p className="text-sm text-gray-700 truncate pr-3">{concern.tag}</p>
                   <span className="text-xs font-semibold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
                     {concern.count}
                   </span>

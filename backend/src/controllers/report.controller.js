@@ -27,22 +27,35 @@ function writeSectionTitle(doc, title) {
 
 const exportMonthlyReportPdf = async (req, res, next) => {
   try {
-    const visits = await prisma.clinicVisit.findMany({
-      select: {
-        id: true,
-        chiefComplaintEnc: true,
-        createdAt: true,
-        visitDate: true,
-        visitTime: true,
-        studentProfile: {
-          select: {
-            courseDept: true,
+    const [visits, concernGroups] = await prisma.$transaction([
+      prisma.clinicVisit.findMany({
+        select: {
+          id: true,
+          concernTag: true,
+          createdAt: true,
+          visitDate: true,
+          visitTime: true,
+          studentProfile: {
+            select: {
+              courseDept: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.clinicVisit.groupBy({
+        by: ["concernTag"],
+        where: {
+          concernTag: {
+            not: "",
+          },
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+    ]);
 
-    const analytics = buildHealthAnalyticsPayload(visits);
+    const analytics = buildHealthAnalyticsPayload(visits, concernGroups);
     const generatedAt = new Date();
     const fileName = `gc-healthlink-report-${generatedAt.toISOString().slice(0, 10)}.pdf`;
 
@@ -95,7 +108,7 @@ const exportMonthlyReportPdf = async (req, res, next) => {
       doc.fontSize(10).text("No top concern data available.");
     } else {
       analytics.topConcerns.forEach((item) => {
-        doc.fontSize(10).text(`${item.issue}: ${item.count}`);
+        doc.fontSize(10).text(`${item.tag}: ${item.count}`);
       });
     }
 
