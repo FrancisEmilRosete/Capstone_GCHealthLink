@@ -478,8 +478,10 @@ export default function ScannerPage() {
 
   async function handleConsultSave(
     form: {
+      visitDate: string;
       concernTag: string;
       symptoms: string;
+      diagnosisDetails: string;
       bp: string;
       temperature: string;
       treatmentProvided: string;
@@ -508,20 +510,23 @@ export default function ScannerPage() {
 
     const normalizedTag = form.concernTag?.trim() || 'General Consultation';
     const normalizedSymptoms = form.symptoms?.trim() || '';
+    const normalizedDiagnosis = form.diagnosisDetails?.trim() || '';
     const normalizedTreatment = form.treatmentProvided?.trim() || '';
+    const normalizedVisitDate = form.visitDate?.trim() || new Date().toISOString();
 
     const structuredComplaint = {
       concernTag: normalizedTag,
       symptoms: normalizedSymptoms,
       chiefComplaint: normalizedSymptoms || normalizedTag,
-      diagnosis: normalizedTag,
+      diagnosis: normalizedDiagnosis || normalizedTag,
+      diagnosisDetails: normalizedDiagnosis,
       treatmentProvided: normalizedTreatment,
       treatmentManagement: normalizedTreatment,
       vitals: {
         bp: form.bp?.trim() || null,
         temperature: form.temperature?.trim() || null,
       },
-      notes: [normalizedTag, normalizedSymptoms, normalizedTreatment]
+      notes: [normalizedTag, normalizedSymptoms, normalizedDiagnosis, normalizedTreatment]
         .map((part) => part?.trim())
         .filter(Boolean)
         .join(' | ') || 'General consultation',
@@ -532,7 +537,7 @@ export default function ScannerPage() {
         '/clinic/visits',
         {
           studentProfileId: foundStudent.studentProfileId,
-          visitDate: new Date().toISOString(),
+          visitDate: normalizedVisitDate,
           visitTime: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           chiefComplaintEnc: JSON.stringify(structuredComplaint),
           dispensedMedicines,
