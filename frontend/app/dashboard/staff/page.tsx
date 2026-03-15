@@ -62,6 +62,19 @@ function formatDate(iso: string) {
   });
 }
 
+function EmptyQueueState() {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+      <div className="mb-3 rounded-full bg-gray-100 p-3 text-gray-400">
+        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 7h14M5 12h14M5 17h10" />
+        </svg>
+      </div>
+      <p className="text-sm font-medium text-gray-500">No patients currently waiting.</p>
+    </div>
+  );
+}
+
 export default function StaffCommandCenterPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState('');
@@ -197,46 +210,42 @@ export default function StaffCommandCenterPage() {
           <h2 className="text-sm font-bold text-gray-800">Live Patient Queue</h2>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase tracking-wide text-gray-500">
-                <th className="px-4 py-3 text-left">Student</th>
-                <th className="px-4 py-3 text-left">Department</th>
-                <th className="px-4 py-3 text-left">Preferred Slot</th>
-                <th className="px-4 py-3 text-left">Reason</th>
-                <th className="px-4 py-3 text-left">Risk Flag</th>
-                <th className="px-4 py-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-gray-400">Loading queue...</td>
+        {loading ? (
+          <div className="px-4 py-10 text-center text-gray-400 text-sm">Loading queue...</div>
+        ) : queue.length === 0 ? (
+          <EmptyQueueState />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[920px] text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase tracking-wide text-gray-500">
+                  <th className="px-4 py-3 text-left">Student</th>
+                  <th className="px-4 py-3 text-left">Department</th>
+                  <th className="px-4 py-3 text-left">Preferred Slot</th>
+                  <th className="px-4 py-3 text-left">Reason</th>
+                  <th className="px-4 py-3 text-left">Risk Flag</th>
+                  <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
-              ) : queue.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-gray-400">No patients in the waiting queue.</td>
-                </tr>
-              ) : (
-                queue.map((entry) => {
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {queue.map((entry) => {
                   const history = entry.studentProfile.medicalHistory;
                   const hasRisk = hasRiskFlag(history?.asthmaEnc) || hasRiskFlag(history?.diabetesEnc);
 
                   return (
                     <tr key={entry.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-left">
                         <p className="font-semibold text-gray-800">
                           {entry.studentProfile.lastName}, {entry.studentProfile.firstName}
                         </p>
                         <p className="text-xs text-teal-600 font-semibold mt-0.5">{entry.studentProfile.studentNumber}</p>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{entry.studentProfile.courseDept}</td>
-                      <td className="px-4 py-3 text-gray-600">
+                      <td className="px-4 py-3 text-left text-gray-600">{entry.studentProfile.courseDept}</td>
+                      <td className="px-4 py-3 text-left text-gray-600">
                         {formatDate(entry.preferredDate)} at {entry.preferredTime}
                       </td>
-                      <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate">{entry.symptoms}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-left text-gray-700 max-w-[260px] truncate">{entry.symptoms}</td>
+                      <td className="px-4 py-3 text-left">
                         {hasRisk ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
                             Priority Monitor
@@ -247,7 +256,7 @@ export default function StaffCommandCenterPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-left">
                         <div className="flex flex-wrap gap-2">
                           <Link
                             href={`/dashboard/staff/record/${encodeURIComponent(entry.studentProfile.studentNumber)}`}
@@ -273,11 +282,11 @@ export default function StaffCommandCenterPage() {
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

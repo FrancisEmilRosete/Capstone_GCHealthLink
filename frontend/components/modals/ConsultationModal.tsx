@@ -10,11 +10,20 @@ export interface ConsultationPatient {
 
 interface MedicineRow {
   id: number;
+  inventoryId: string;
   medicine: string;
   qty: string;
 }
 
+export interface InventoryOption {
+  id: string;
+  itemName: string;
+  currentStock: number;
+  unit: string;
+}
+
 interface ConsultationForm {
+  concernTag: string;
   symptoms: string;
   bp: string;
   temperature: string;
@@ -23,9 +32,30 @@ interface ConsultationForm {
 
 interface ConsultationModalProps {
   patient: ConsultationPatient;
+  inventoryOptions: InventoryOption[];
   onClose: () => void;
   onSave: (data: ConsultationForm, medicines: MedicineRow[]) => void;
 }
+
+const CONCERN_TAG_OPTIONS = [
+  'General Consultation',
+  'Medical Clearance',
+  'Dental Concern',
+  'Fever',
+  'Headache',
+  'Stomach Pain',
+  'Diarrhea',
+  'Vomiting',
+  'Cough',
+  'Sore Throat',
+  'Flu-like Illness',
+  'Skin Rash',
+  'Eye Irritation',
+  'Dizziness',
+  'Injury',
+  'Menstrual Pain',
+  'Respiratory Concern',
+];
 
 function Field({
   label,
@@ -73,15 +103,16 @@ function Field({
   );
 }
 
-export default function ConsultationModal({ patient, onClose, onSave }: ConsultationModalProps) {
+export default function ConsultationModal({ patient, inventoryOptions, onClose, onSave }: ConsultationModalProps) {
   const [form, setForm] = useState<ConsultationForm>({
+    concernTag: 'General Consultation',
     symptoms: '',
     bp: '',
     temperature: '',
     treatmentProvided: '',
   });
   const [medicines, setMedicines] = useState<MedicineRow[]>([]);
-  const [newMed, setNewMed] = useState('');
+  const [newMedId, setNewMedId] = useState('');
   const [newQty, setNewQty] = useState('');
   const [validationError, setValidationError] = useState('');
 
@@ -140,13 +171,25 @@ export default function ConsultationModal({ patient, onClose, onSave }: Consulta
   }
 
   function addMedicine() {
-    if (!newMed.trim()) return;
+    if (!newMedId) return;
+    const selectedMedicine = inventoryOptions.find((item) => item.id === newMedId);
+    if (!selectedMedicine || selectedMedicine.currentStock <= 0) {
+      setValidationError('Selected medicine is unavailable or out of stock.');
+      return;
+    }
+
+    setValidationError('');
 
     setMedicines((prev) => [
       ...prev,
-      { id: nextId.current++, medicine: newMed.trim(), qty: newQty.trim() || '1' },
+      {
+        id: nextId.current++,
+        inventoryId: selectedMedicine.id,
+        medicine: selectedMedicine.itemName,
+        qty: newQty.trim() || '1',
+      },
     ]);
-    setNewMed('');
+    setNewMedId('');
     setNewQty('');
   }
 
@@ -207,7 +250,20 @@ export default function ConsultationModal({ patient, onClose, onSave }: Consulta
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-gray-800 mb-3">Symptoms</h3>
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Symptoms / Diagnosis</h3>
+            <div className="mb-4">
+              <label htmlFor="consult-standardized-tag" className="block text-xs font-semibold text-gray-500 mb-1">Standardized Concern Tag</label>
+              <select
+                id="consult-standardized-tag"
+                value={form.concernTag}
+                onChange={(event) => set('concernTag')(event.target.value)}
+                className="w-full border border-gray-200 bg-white rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-teal-400 transition"
+              >
+                {CONCERN_TAG_OPTIONS.map((tag) => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            </div>
             <Field
               label="Symptoms"
               placeholder="Describe patient symptoms..."
@@ -264,14 +320,22 @@ export default function ConsultationModal({ patient, onClose, onSave }: Consulta
             )}
 
             <div className="flex gap-2 items-center">
-              <input
-                type="text"
-                value={newMed}
-                onChange={(event) => setNewMed(event.target.value)}
-                onKeyDown={(event) => event.key === 'Enter' && addMedicine()}
-                placeholder="Medicine name"
-                className="flex-1 border-b border-gray-200 bg-transparent px-0 py-2 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-teal-400 transition"
-              />
+              <select
+                value={newMedId}
+                onChange={(event) => setNewMedId(event.target.value)}
+                className="flex-1 border border-gray-200 bg-white rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-teal-400 transition"
+              >
+                <option value="">Select medicine from inventory</option>
+                {inventoryOptions.map((item) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                    disabled={item.currentStock <= 0}
+                  >
+                    {item.itemName} ({item.currentStock} {item.unit})
+                  </option>
+                ))}
+              </select>
               <span className="text-gray-300 text-xs shrink-0">-</span>
               <input
                 type="number"
@@ -290,6 +354,12 @@ export default function ConsultationModal({ patient, onClose, onSave }: Consulta
                 Add
               </button>
             </div>
+
+            {inventoryOptions.length === 0 && (
+              <p className="mt-2 text-xs text-amber-600">
+                Inventory list is unavailable. Prescribed medicine cannot be selected right now.
+              </p>
+            )}
           </section>
 
           {validationError && (
@@ -299,7 +369,7 @@ export default function ConsultationModal({ patient, onClose, onSave }: Consulta
           )}
         </div>
 
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 shrink-0">
+        <div className="sticky bottom-0 z-10 flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-white shrink-0">
           <button
             type="button"
             onClick={onClose}

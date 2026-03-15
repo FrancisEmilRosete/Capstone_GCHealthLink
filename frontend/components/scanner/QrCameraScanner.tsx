@@ -102,11 +102,11 @@ export default function QrCameraScanner({
   }
 
   return (
-    <div className="relative w-full max-w-xs mx-auto">
+    <div className="relative w-full max-w-sm mx-auto">
       {/* html5-qrcode mounts the <video> element inside this div */}
       <div
         id={scannerElementId}
-        className="w-full rounded-xl overflow-hidden"
+        className="w-full aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-100"
       />
 
       {/* Teal corner-bracket overlay on top of the live video */}

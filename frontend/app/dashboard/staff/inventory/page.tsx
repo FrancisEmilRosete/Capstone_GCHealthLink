@@ -403,14 +403,14 @@ export default function InventoryPage() {
                   <SortIcon active={sortKey === 'itemName'} dir={sortDir} />
                 </th>
                 <th
-                  className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:text-teal-500 transition-colors"
+                  className="text-right px-4 py-3 font-semibold cursor-pointer select-none hover:text-teal-500 transition-colors"
                   onClick={() => toggleSort('currentStock')}
                 >
                   Stock Level
                   <SortIcon active={sortKey === 'currentStock'} dir={sortDir} />
                 </th>
                 <th
-                  className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:text-teal-500 transition-colors"
+                  className="text-right px-4 py-3 font-semibold cursor-pointer select-none hover:text-teal-500 transition-colors"
                   onClick={() => toggleSort('reorderThreshold')}
                 >
                   Reorder Threshold
@@ -433,9 +433,9 @@ export default function InventoryPage() {
                 filtered.map((item) => (
                   <tr key={item.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
                     <td className="px-4 py-3 font-semibold text-gray-800">{item.itemName}</td>
-                    <td className="px-4 py-3 text-gray-700">
-                      <div className="space-y-1.5 max-w-[180px]">
-                        <p className="text-xs text-gray-700">{item.currentStock} {item.unit}</p>
+                    <td className="px-4 py-3 text-right text-gray-700">
+                      <div className="space-y-1.5 max-w-[180px] ml-auto">
+                        <p className="text-xs text-gray-700 text-right">{item.currentStock} {item.unit}</p>
                         <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
                           <div
                             className={`h-full rounded-full ${getStockLevelClass(item)}`}
@@ -444,7 +444,7 @@ export default function InventoryPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{item.reorderThreshold}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">{item.reorderThreshold}</td>
                     <td className="px-4 py-3 text-gray-600">{item.unit}</td>
                     <td className="px-4 py-3">
                       <span className={`text-[11px] font-semibold border px-2.5 py-0.5 rounded-full ${STATUS_STYLE[item.status]}`}>

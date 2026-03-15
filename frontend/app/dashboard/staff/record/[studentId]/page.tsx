@@ -422,29 +422,48 @@ export default function StudentRecordPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
-          <h2 className="text-sm font-bold text-gray-800 mb-2">Personal Information</h2>
-          <p className="text-sm text-gray-700"><span className="font-semibold">Age/Sex:</span> {record.age || 'N/A'} / {toLabel(record.sex)}</p>
-          <p className="text-sm text-gray-700"><span className="font-semibold">Birthday:</span> {formatDate(record.birthday)}</p>
-          <p className="text-sm text-gray-700"><span className="font-semibold">Civil Status:</span> {toLabel(record.civilStatus)}</p>
-          <p className="text-sm text-gray-700"><span className="font-semibold">Contact:</span> {toLabel(record.telNumber)}</p>
-          <p className="text-sm text-gray-700"><span className="font-semibold">Address:</span> {toLabel(record.presentAddress)}</p>
-        </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
+        <h2 className="text-sm font-bold text-gray-800 mb-2">Personal Information</h2>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Age/Sex:</span> {record.age || 'N/A'} / {toLabel(record.sex)}</p>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Birthday:</span> {formatDate(record.birthday)}</p>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Civil Status:</span> {toLabel(record.civilStatus)}</p>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Contact:</span> {toLabel(record.telNumber)}</p>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Address:</span> {toLabel(record.presentAddress)}</p>
+      </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="h-full bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
           <h2 className="text-sm font-bold text-gray-800 mb-2">Emergency Contact</h2>
           <p className="text-sm text-gray-700"><span className="font-semibold">Name:</span> {toLabel(record.emergencyContactName)}</p>
           <p className="text-sm text-gray-700"><span className="font-semibold">Relationship:</span> {toLabel(record.emergencyRelationship)}</p>
           <p className="text-sm text-gray-700"><span className="font-semibold">Contact:</span> {toLabel(record.emergencyContactTelNumber)}</p>
           <p className="text-sm text-gray-700"><span className="font-semibold">Address:</span> {toLabel(record.emergencyContactAddress)}</p>
         </div>
+
+        <div className="h-full bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-bold text-gray-800 mb-2">Blood Type</h2>
+          <p className="text-2xl font-bold text-blue-600 mt-4">{toLabel(record.medicalHistory?.bloodType)}</p>
+          <p className="text-xs text-gray-400 mt-2">Latest declared blood group</p>
+        </div>
+
+        <div className="h-full bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-bold text-gray-800 mb-2">Allergies</h2>
+          {allergies.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {allergies.map((allergy) => (
+                <span key={allergy} className="inline-flex items-center rounded-full border border-rose-100 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600">
+                  {allergy}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 mt-3">No known allergies.</p>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
         <h2 className="text-sm font-bold text-gray-800">Medical Profile</h2>
-        <p className="text-sm text-gray-700"><span className="font-semibold">Allergies:</span> {allergies.join(', ') || 'None'}</p>
-        <p className="text-sm text-gray-700"><span className="font-semibold">Blood Type:</span> {toLabel(record.medicalHistory?.bloodType)}</p>
         <p className="text-sm text-gray-700"><span className="font-semibold">Immunizations:</span> {(record.medicalHistory?.immunizations || []).join(', ') || 'None'}</p>
         <p className="text-sm text-gray-700"><span className="font-semibold">Conditions:</span> {conditions.join(', ') || 'None'}</p>
       </div>
@@ -546,6 +565,10 @@ export default function StudentRecordPage() {
             </table>
           </div>
         )}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+        🔒 Access to this medical record is logged for audit purposes (RA 10173).
       </div>
     </div>
   );
