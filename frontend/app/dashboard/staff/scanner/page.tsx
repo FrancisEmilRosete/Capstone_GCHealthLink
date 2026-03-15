@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import PhysicalExamModal from '@/components/modals/PhysicalExamModal';
-import ConsultationModal from '@/components/modals/ConsultationModal';
+import ConsultationModal, { type InventoryOption } from '@/components/modals/ConsultationModal';
 
 const QrCameraScanner = dynamic(() => import('@/components/scanner/QrCameraScanner'), {
   ssr: false,
@@ -55,14 +55,9 @@ interface ScanResponse {
   } | null;
 }
 
-interface InventoryItem {
-  id: string;
-  itemName: string;
-}
-
 interface InventoryResponse {
   success: boolean;
-  data: InventoryItem[];
+  data: InventoryOption[];
 }
 
 interface EmergencyAlertResponse {
@@ -274,7 +269,7 @@ export default function ScannerPage() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousStudentIdParam = useRef(studentIdParam);
 
-  const [inventoryByName, setInventoryByName] = useState<Record<string, string>>({});
+  const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
 
   useEffect(() => {
     if (toastType) {
@@ -323,13 +318,7 @@ export default function ScannerPage() {
 
       try {
         const response = await api.get<InventoryResponse>('/inventory', token);
-        const mapped: Record<string, string> = {};
-
-        for (const item of response.data || []) {
-          mapped[item.itemName.trim().toLowerCase()] = item.id;
-        }
-
-        setInventoryByName(mapped);
+        setInventoryOptions(response.data || []);
       } catch {
         // Keep scanner usable even when inventory lookup fails.
       }
@@ -489,12 +478,13 @@ export default function ScannerPage() {
 
   async function handleConsultSave(
     form: {
+      concernTag: string;
       symptoms: string;
       bp: string;
       temperature: string;
       treatmentProvided: string;
     },
-    medicines: Array<{ medicine: string; qty: string }>,
+    medicines: Array<{ inventoryId: string; medicine: string; qty: string }>,
   ) {
     if (!foundStudent) return;
 
@@ -506,31 +496,32 @@ export default function ScannerPage() {
 
     const dispensedMedicines = medicines
       .map((medicine) => {
-        const inventoryId = inventoryByName[medicine.medicine.trim().toLowerCase()];
-        if (!inventoryId) return null;
+        if (!medicine.inventoryId) return null;
 
         const qty = Number(medicine.qty);
         return {
-          inventoryId,
+          inventoryId: medicine.inventoryId,
           quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
         };
       })
       .filter((entry): entry is { inventoryId: string; quantity: number } => entry !== null);
 
+    const normalizedTag = form.concernTag?.trim() || 'General Consultation';
     const normalizedSymptoms = form.symptoms?.trim() || '';
     const normalizedTreatment = form.treatmentProvided?.trim() || '';
 
     const structuredComplaint = {
+      concernTag: normalizedTag,
       symptoms: normalizedSymptoms,
-      chiefComplaint: normalizedSymptoms,
-      diagnosis: normalizedSymptoms,
+      chiefComplaint: normalizedSymptoms || normalizedTag,
+      diagnosis: normalizedTag,
       treatmentProvided: normalizedTreatment,
       treatmentManagement: normalizedTreatment,
       vitals: {
         bp: form.bp?.trim() || null,
         temperature: form.temperature?.trim() || null,
       },
-      notes: [normalizedSymptoms, normalizedTreatment]
+      notes: [normalizedTag, normalizedSymptoms, normalizedTreatment]
         .map((part) => part?.trim())
         .filter(Boolean)
         .join(' | ') || 'General consultation',
@@ -553,7 +544,7 @@ export default function ScannerPage() {
       if (skipped > 0) {
         setActionMessage(`Consultation saved. ${skipped} medicine item(s) were not in inventory and were skipped.`);
       } else {
-        setActionMessage('Consultation saved successfully.');
+        setActionMessage('Consultation saved successfully and inventory levels were updated.');
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -643,6 +634,7 @@ export default function ScannerPage() {
             department: foundStudent.college,
             course: foundStudent.course,
           }}
+          inventoryOptions={inventoryOptions}
           onClose={() => setShowConsultModal(false)}
           onSave={(data, medicines) => {
             void handleConsultSave(data, medicines);
@@ -691,7 +683,7 @@ export default function ScannerPage() {
       )}
 
       {status === 'found' && foundStudent ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 max-w-lg mx-auto w-full">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-teal-500 flex items-center justify-center shrink-0 shadow-md shadow-teal-100">
               <span className="text-white text-lg font-bold tracking-wide">{initials}</span>
@@ -753,12 +745,12 @@ export default function ScannerPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 max-w-lg mx-auto w-full">
           <div className="mb-5">
             {cameraActive ? (
               <QrCameraScanner active={true} onScan={(value) => { void handleQrScan(value); }} />
             ) : (
-              <div className="max-w-xs mx-auto">
+              <div className="max-w-sm mx-auto">
                 <button
                   type="button"
                   onClick={() => {
@@ -766,7 +758,7 @@ export default function ScannerPage() {
                     setStatus('idle');
                     setToastType(null);
                   }}
-                  className="w-full flex flex-col items-center justify-center h-52 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 hover:text-teal-500 hover:border-teal-300 transition-colors"
+                  className="w-full flex flex-col items-center justify-center aspect-square bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 hover:text-teal-500 hover:border-teal-300 transition-colors"
                 >
                   <span className="text-sm font-medium">Tap to scan again</span>
                 </button>
