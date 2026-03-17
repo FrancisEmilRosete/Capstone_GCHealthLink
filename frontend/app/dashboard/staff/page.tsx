@@ -44,8 +44,29 @@ interface VisitsResponse {
   success: boolean;
   data: Array<{
     id: string;
-    visitDate: string;
+    visitDate?: string | null;
+    createdAt?: string | null;
   }>;
+}
+
+function isSameLocalDay(date: Date, reference: Date) {
+  return (
+    date.getFullYear() === reference.getFullYear()
+    && date.getMonth() === reference.getMonth()
+    && date.getDate() === reference.getDate()
+  );
+}
+
+function resolveVisitTimestamp(visit: { createdAt?: string | null; visitDate?: string | null }) {
+  const raw = visit.createdAt || visit.visitDate;
+  if (!raw) return null;
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
 }
 
 function hasRiskFlag(value?: string | null) {
@@ -100,14 +121,11 @@ export default function StaffCommandCenterPage() {
         api.get<VisitsResponse>('/clinic/visits', token),
       ]);
 
+      const now = new Date();
       const visitsToday = (visitsResponse.data || []).filter((visit) => {
-        const date = new Date(visit.visitDate);
-        const now = new Date();
-        return (
-          date.getFullYear() === now.getFullYear()
-          && date.getMonth() === now.getMonth()
-          && date.getDate() === now.getDate()
-        );
+        const visitTimestamp = resolveVisitTimestamp(visit);
+        if (!visitTimestamp) return false;
+        return isSameLocalDay(visitTimestamp, now);
       }).length;
 
       const stockAlerts = (inventoryResponse.data || []).filter((item) => item.currentStock <= item.reorderThreshold).length;
