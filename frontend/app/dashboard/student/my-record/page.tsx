@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { normalizeComplaintDisplay } from '@/lib/complaint';
 
 interface VisitMedicine {
   quantity: number;
@@ -96,31 +97,6 @@ function formatDocumentType(value: string) {
     default:
       return 'Other';
   }
-}
-
-function normalizeComplaint(raw?: string | null) {
-  if (!raw || !raw.trim()) return 'General consultation';
-
-  const text = raw.trim();
-  try {
-    const parsed = JSON.parse(text) as {
-      chiefComplaint?: string;
-      diagnosis?: string;
-      notes?: string;
-    };
-
-    if (parsed && typeof parsed === 'object') {
-      const diagnosis = typeof parsed.diagnosis === 'string' ? parsed.diagnosis.trim() : '';
-      const complaint = typeof parsed.chiefComplaint === 'string' ? parsed.chiefComplaint.trim() : '';
-      const notes = typeof parsed.notes === 'string' ? parsed.notes.trim() : '';
-      return diagnosis || complaint || notes || 'General consultation';
-    }
-  } catch {
-    // Legacy notes fallback.
-  }
-
-  const firstPart = text.split('|').map((part) => part.trim()).filter(Boolean)[0];
-  return firstPart || text;
 }
 
 function toLabel(value?: string | null) {
@@ -225,7 +201,7 @@ function downloadPdf(profile: StudentProfile) {
     ? profile.clinicVisits.map((visit) => [
         formatDate(visit.visitDate),
         visit.visitTime || 'N/A',
-        normalizeComplaint(visit.chiefComplaintEnc),
+        normalizeComplaintDisplay(visit.chiefComplaintEnc),
         visit.handledBy?.email || 'Clinic Staff',
         visit.dispensedMedicines.length
           ? visit.dispensedMedicines.map((item) => `${item.inventory.itemName} x${item.quantity}`).join(', ')
@@ -448,7 +424,7 @@ export default function MyRecordPage() {
                       <tr key={visit.id} className="border-b border-gray-50 align-top">
                         <td className="py-2 pr-3 text-gray-700">{formatDate(visit.visitDate)}</td>
                         <td className="py-2 pr-3 text-gray-600">{visit.visitTime || 'N/A'}</td>
-                        <td className="py-2 pr-3 text-gray-700">{normalizeComplaint(visit.chiefComplaintEnc)}</td>
+                        <td className="py-2 pr-3 text-gray-700">{normalizeComplaintDisplay(visit.chiefComplaintEnc)}</td>
                         <td className="py-2 pr-3 text-gray-600">
                           {visit.dispensedMedicines.length > 0
                             ? visit.dispensedMedicines.map((item) => `${item.inventory.itemName} x${item.quantity}`).join(', ')

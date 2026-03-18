@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { parseConsultationDisplay } from '@/lib/complaint';
 
 interface VisitRecord {
   id: string;
@@ -50,49 +51,7 @@ interface ConsultRow {
 type SortKey = 'date' | 'student';
 
 function parseConsultationPayload(raw?: string | null) {
-  const fallback = {
-    complaint: 'General consultation',
-    diagnosis: 'General consultation',
-    treatment: '',
-  };
-
-  if (!raw || !raw.trim()) {
-    return fallback;
-  }
-
-  const text = raw.trim();
-
-  try {
-    const parsed = JSON.parse(text) as {
-      chiefComplaint?: string;
-      diagnosis?: string;
-      treatmentManagement?: string;
-      notes?: string;
-    };
-
-    if (parsed && typeof parsed === 'object') {
-      const complaint = typeof parsed.chiefComplaint === 'string' ? parsed.chiefComplaint.trim() : '';
-      const diagnosis = typeof parsed.diagnosis === 'string' ? parsed.diagnosis.trim() : '';
-      const treatment = typeof parsed.treatmentManagement === 'string' ? parsed.treatmentManagement.trim() : '';
-      const notes = typeof parsed.notes === 'string' ? parsed.notes.trim() : '';
-
-      return {
-        complaint: complaint || diagnosis || notes || fallback.complaint,
-        diagnosis: diagnosis || complaint || notes || fallback.diagnosis,
-        treatment,
-      };
-    }
-  } catch {
-    // Non-JSON legacy visit notes are handled below.
-  }
-
-  const firstPart = text.split('|').map((part) => part.trim()).filter(Boolean)[0];
-  const normalized = firstPart || text;
-  return {
-    complaint: normalized,
-    diagnosis: normalized,
-    treatment: '',
-  };
+  return parseConsultationDisplay(raw);
 }
 
 function mapVisitToRow(visit: VisitRecord): ConsultRow {

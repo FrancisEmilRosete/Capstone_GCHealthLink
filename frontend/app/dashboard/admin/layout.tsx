@@ -12,6 +12,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
 import { SignOutIcon, SettingsIcon, ShieldIcon } from '@/components/icons/NavIcons';
+import ConfirmLogoutModal from '@/components/ui/ConfirmLogoutModal';
 import { ADMIN_NAV_GROUPS } from '@/constants/adminNavigation';
 
 interface AdminLayoutProps {
@@ -43,6 +44,7 @@ function AdminSidebar({
 }) {
   const pathname = usePathname();
   const router   = useRouter();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const adminInitial = (displayName.trim()[0] || 'A').toUpperCase();
 
   useEffect(() => { onClose(); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -146,7 +148,7 @@ function AdminSidebar({
         </div>
 
         <button
-          onClick={() => { authLogout(); router.push('/login'); }}
+          onClick={() => setShowLogoutConfirm(true)}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-700/30 hover:text-white transition-all cursor-pointer"
         >
           <SignOutIcon className="w-[18px] h-[18px] shrink-0" />
@@ -158,6 +160,17 @@ function AdminSidebar({
 
   return (
     <>
+      <ConfirmLogoutModal
+        open={showLogoutConfirm}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          authLogout();
+          setShowLogoutConfirm(false);
+          onClose();
+          router.push('/login');
+        }}
+      />
+
       {/* Desktop */}
       <div className="hidden lg:flex shrink-0 h-screen sticky top-0">
         {panel}
