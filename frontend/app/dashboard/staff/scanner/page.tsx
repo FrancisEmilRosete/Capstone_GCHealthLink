@@ -246,6 +246,26 @@ function AllergyPill({ name }: { name: string }) {
   );
 }
 
+function appendPendingLog(payload: unknown) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const storageKey = 'pendingLogs';
+
+  let existing: unknown[] = [];
+  try {
+    const raw = localStorage.getItem(storageKey);
+    const parsed = raw ? JSON.parse(raw) : [];
+    existing = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    existing = [];
+  }
+
+  existing.push(payload);
+  localStorage.setItem(storageKey, JSON.stringify(existing));
+}
+
 export default function ScannerPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -532,16 +552,30 @@ export default function ScannerPage() {
         .join(' | ') || 'General consultation',
     };
 
+    const requestPayload = {
+      studentProfileId: foundStudent.studentProfileId,
+      visitDate: normalizedVisitDate,
+      visitTime: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+      chiefComplaintEnc: JSON.stringify(structuredComplaint),
+      dispensedMedicines,
+    };
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      appendPendingLog({
+        type: 'CLINIC_VISIT',
+        queuedAt: new Date().toISOString(),
+        payload: requestPayload,
+      });
+
+      alert('You are offline. This consultation was saved to pendingLogs and can be synced when internet is back.');
+      setActionMessage('Offline mode: consultation saved locally (pendingLogs).');
+      return;
+    }
+
     try {
       await api.post(
         '/clinic/visits',
-        {
-          studentProfileId: foundStudent.studentProfileId,
-          visitDate: normalizedVisitDate,
-          visitTime: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-          chiefComplaintEnc: JSON.stringify(structuredComplaint),
-          dispensedMedicines,
-        },
+        requestPayload,
         token,
       );
 
