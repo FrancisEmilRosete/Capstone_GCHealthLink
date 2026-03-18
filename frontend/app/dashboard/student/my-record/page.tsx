@@ -250,7 +250,7 @@ export default function MyRecordPage() {
   async function loadDocuments(studentProfileId: string, token: string) {
     try {
       setDocumentsLoading(true);
-      const response = await api.get<DocumentsResponse>(`/documents/${studentProfileId}`, token);
+      const response = await api.get<DocumentsResponse>(`/documents/${studentProfileId}?limit=200`, token);
       setDocuments(response.data || []);
       setDocumentsError('');
     } catch (err) {

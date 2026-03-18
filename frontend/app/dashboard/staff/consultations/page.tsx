@@ -229,7 +229,7 @@ export default function ConsultationsPage() {
 
     try {
       setError('');
-      const response = await api.get<VisitResponse>('/clinic/visits', token);
+      const response = await api.get<VisitResponse>('/clinic/visits?limit=1000', token);
       setRecords((response.data || []).map(mapVisitToRow));
     } catch (err) {
       if (err instanceof ApiError) {
