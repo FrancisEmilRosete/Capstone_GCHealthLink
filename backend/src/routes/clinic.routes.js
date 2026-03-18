@@ -17,7 +17,7 @@ const { authorize } = require("../middleware/rbac.middleware");
 const { auditLogger } = require("../middleware/auditLogger.middleware");
 
 
-// Backward-compatible emergency SMS paths, both routed to Twilio-backed controller.
+// Backward-compatible emergency SMS paths, both routed to the SMS gateway controller.
 router.post("/emergency-alert", protect, authorize("CLINIC_STAFF", "ADMIN"), sendEmergencySmsToGuardian);
 router.post("/emergency/send-sms", protect, authorize("CLINIC_STAFF", "ADMIN"), sendEmergencySmsToGuardian);
 

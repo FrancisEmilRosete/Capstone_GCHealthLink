@@ -1,5 +1,5 @@
 const { prisma } = require("../lib/prisma");
-const { sendEmergencySms } = require("../utils/sms.service");
+const { sendManualAlert } = require("../utils/sms.service");
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -51,11 +51,17 @@ const sendEmergencySmsToGuardian = async (req, res, next) => {
       });
     }
 
-    const studentName = `${studentProfile.firstName} ${studentProfile.lastName}`.trim();
-    const smsResult = await sendEmergencySms({
-      to: emergencyContactTelNumber,
+    const studentName = (studentProfile.firstName + " " + studentProfile.lastName).trim();
+    const condition =
+      normalizeText(req.body?.condition)
+      || normalizeText(req.body?.chiefComplaintEnc)
+      || "an urgent medical concern";
+
+    const smsResult = await sendManualAlert(
+      emergencyContactTelNumber,
       studentName,
-    });
+      condition,
+    );
 
     await prisma.auditLog.create({
       data: {
@@ -67,8 +73,9 @@ const sendEmergencySmsToGuardian = async (req, res, next) => {
           studentProfileId: studentProfile.id,
           studentName,
           recipientTelNumber: smsResult.to,
-          messageSid: smsResult.sid,
-          twilioStatus: smsResult.status,
+          messageSid: smsResult.referenceId,
+          gatewayProvider: smsResult.provider,
+          gatewayStatus: smsResult.status,
           triggeredByRole: req.user.role,
           method: req.method,
           path: req.originalUrl,
@@ -82,7 +89,8 @@ const sendEmergencySmsToGuardian = async (req, res, next) => {
       data: {
         studentProfileId: studentProfile.id,
         recipientTelNumber: smsResult.to,
-        messageSid: smsResult.sid,
+        messageSid: smsResult.referenceId,
+        provider: smsResult.provider,
         status: smsResult.status,
       },
     });

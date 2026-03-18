@@ -19,6 +19,7 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^6.6.0",
+    "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
@@ -27,8 +28,7 @@
     "multer": "^2.1.1",
     "pdfkit": "^0.17.2",
     "prisma": "^6.6.0",
-    "qrcode": "^1.5.4",
-    "twilio": "^5.13.0"
+    "qrcode": "^1.5.4"
   },
   "prisma": {
     "seed": "npx ts-node -P prisma/tsconfig.seed.json prisma/seed.ts"
