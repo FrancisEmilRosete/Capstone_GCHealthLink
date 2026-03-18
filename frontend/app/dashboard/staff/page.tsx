@@ -116,9 +116,9 @@ export default function StaffCommandCenterPage() {
     try {
       setError('');
       const [queueResponse, inventoryResponse, visitsResponse] = await Promise.all([
-        api.get<QueueResponse>('/appointments/queue', token),
+        api.get<QueueResponse>('/appointments/queue?limit=500', token),
         api.get<InventoryResponse>('/inventory', token),
-        api.get<VisitsResponse>('/clinic/visits', token),
+        api.get<VisitsResponse>('/clinic/visits?limit=1000', token),
       ]);
 
       const now = new Date();

@@ -122,7 +122,7 @@ export default function PhysicalExaminationPage() {
         setLoading(true);
         setError('');
 
-        const response = await api.get<PhysicalExamResponse>('/physical-exams', token);
+        const response = await api.get<PhysicalExamResponse>('/physical-exams?limit=500', token);
         setRecords(response.data || []);
       } catch (err) {
         if (err instanceof ApiError) {

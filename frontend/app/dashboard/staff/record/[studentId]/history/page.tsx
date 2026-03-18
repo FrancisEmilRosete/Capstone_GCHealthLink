@@ -132,11 +132,11 @@ export default function StudentHistoryPage() {
         }
 
         const scan = await api.get<ScanResponse>(`/clinic/scan/${exact.user.id}`, token);
-        const visits = await api.get<VisitResponse>('/clinic/visits', token);
-        const docs = await api.get<DocumentsResponse>(`/documents/${scan.data.id}`, token);
+        const visits = await api.get<VisitResponse>(`/clinic/visits?studentProfileId=${encodeURIComponent(scan.data.id)}&limit=500`, token);
+        const docs = await api.get<DocumentsResponse>(`/documents/${scan.data.id}?limit=200`, token);
 
         setExams(scan.data.physicalExaminations || []);
-        setConsultations((visits.data || []).filter((visit) => visit.studentProfile.id === scan.data.id));
+        setConsultations(visits.data || []);
         setDocuments(docs.data || []);
         setError('');
       } catch (err) {

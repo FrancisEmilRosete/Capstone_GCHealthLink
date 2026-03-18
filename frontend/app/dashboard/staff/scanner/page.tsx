@@ -60,13 +60,14 @@ interface InventoryResponse {
   data: InventoryOption[];
 }
 
-interface EmergencyAlertResponse {
+interface EmergencySmsResponse {
   success: boolean;
   message: string;
   data?: {
-    recipient?: string;
+    studentProfileId?: string;
+    recipientTelNumber?: string;
+    messageSid?: string;
     status?: string;
-    timestamp?: string;
   };
 }
 
@@ -607,22 +608,20 @@ export default function ScannerPage() {
       setSendingEmergency(true);
       setError('');
 
-      const response = await api.post<EmergencyAlertResponse>(
-        '/clinic/emergency-alert',
+      await api.post<EmergencySmsResponse>(
+        '/emergency/send-sms',
         {
           studentProfileId: foundStudent.studentProfileId,
-          incidentDetails: 'Urgent health concern detected during clinic screening.',
         },
         token,
       );
 
-      const recipient = response.data?.recipient || 'the emergency contact';
-      setActionMessage(`Guardian alert sent successfully to ${recipient}.`);
+      setActionMessage('Emergency SMS has been sent to the guardian.');
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('Failed to send guardian emergency alert.');
+        setError('Failed to send emergency SMS.');
       }
     } finally {
       setSendingEmergency(false);
@@ -766,7 +765,7 @@ export default function ScannerPage() {
               disabled={sendingEmergency}
               className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors disabled:opacity-70"
             >
-              {sendingEmergency ? 'Sending Alert...' : 'Alert Guardian'}
+              {sendingEmergency ? 'Sending SMS...' : 'Text Emergency Contact'}
             </button>
 
             <button

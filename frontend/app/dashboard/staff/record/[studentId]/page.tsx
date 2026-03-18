@@ -72,13 +72,14 @@ interface ScanResponse {
   } | null;
 }
 
-interface EmergencyAlertResponse {
+interface EmergencySmsResponse {
   success: boolean;
   message: string;
   data?: {
-    recipient?: string;
+    studentProfileId?: string;
+    recipientTelNumber?: string;
+    messageSid?: string;
     status?: string;
-    timestamp?: string;
   };
 }
 
@@ -181,7 +182,7 @@ export default function StudentRecordPage() {
   async function loadDocuments(studentProfileId: string, token: string) {
     try {
       setDocumentsLoading(true);
-      const response = await api.get<DocumentsResponse>(`/documents/${studentProfileId}`, token);
+      const response = await api.get<DocumentsResponse>(`/documents/${studentProfileId}?limit=200`, token);
       setDocuments(response.data || []);
       setDocumentsError('');
     } catch (err) {
@@ -255,22 +256,20 @@ export default function StudentRecordPage() {
       setSendingEmergency(true);
       setError('');
 
-      const response = await api.post<EmergencyAlertResponse>(
-        '/clinic/emergency-alert',
+      await api.post<EmergencySmsResponse>(
+        '/emergency/send-sms',
         {
           studentProfileId: record.id,
-          incidentDetails: 'Urgent health concern detected during on-site clinic assessment.',
         },
         token,
       );
 
-      const recipient = response.data?.recipient || 'the emergency contact';
-      setEmergencyMessage(`Guardian alert sent successfully to ${recipient}.`);
+      setEmergencyMessage('Emergency SMS has been sent to the guardian.');
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('Failed to send guardian emergency alert.');
+        setError('Failed to send emergency SMS.');
       }
     } finally {
       setSendingEmergency(false);
@@ -405,7 +404,7 @@ export default function StudentRecordPage() {
             disabled={sendingEmergency}
             className="text-xs font-semibold px-3 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white disabled:opacity-70"
           >
-            {sendingEmergency ? 'Sending Alert...' : 'One-Click Guardian Alert'}
+            {sendingEmergency ? 'Sending SMS...' : 'Text Emergency Contact'}
           </button>
         </div>
       </div>

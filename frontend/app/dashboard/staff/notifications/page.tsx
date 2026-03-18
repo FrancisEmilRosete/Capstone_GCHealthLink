@@ -138,7 +138,7 @@ export default function NotificationsPage() {
 
     try {
       const [queueResponse, inventoryResponse, stateResponse] = await Promise.all([
-        api.get<QueueResponse>('/appointments/queue', token),
+        api.get<QueueResponse>('/appointments/queue?limit=500', token),
         api.get<InventoryResponse>('/inventory', token),
         api.get<NotificationStateResponse>('/advisories/state', token),
       ]);
