@@ -26,12 +26,40 @@ interface SearchResponse {
 
 interface PhysicalExam {
   id: string;
+  yearLevel: string | null;
   examDate: string;
+  cr: string | null;
+  rr: string | null;
   bp: string | null;
   temp: string | null;
   weight: string | null;
+  height: string | null;
   bmi: string | null;
+  visualAcuity: string | null;
+  skin: string | null;
+  heent: string | null;
+  chestLungs: string | null;
+  heart: string | null;
+  abdomen: string | null;
+  extremities: string | null;
+  others: string | null;
   examinedBy: string | null;
+}
+
+interface LabResult {
+  id: string;
+  date: string;
+  dateReceived: string | null;
+  hgb: string | null;
+  hct: string | null;
+  wbc: string | null;
+  pltCt: string | null;
+  bloodType: string | null;
+  glucoseSugar: string | null;
+  protein: string | null;
+  xrayResult: 'NORMAL' | 'ABNORMAL' | null;
+  xrayFindingsEnc: string | null;
+  othersEnc: string | null;
 }
 
 interface ScanProfile {
@@ -52,14 +80,30 @@ interface ScanProfile {
   emergencyContactTelNumber: string | null;
   medicalHistory: {
     allergyEnc?: string | null;
+    chickenPoxEnc?: string | null;
     asthmaEnc?: string | null;
     diabetesEnc?: string | null;
+    dysmenorrheaEnc?: string | null;
+    epilepsySeizureEnc?: string | null;
+    heartDisorderEnc?: string | null;
+    hepatitisEnc?: string | null;
     hypertensionEnc?: string | null;
+    measlesEnc?: string | null;
+    mumpsEnc?: string | null;
     anxietyDisorderEnc?: string | null;
+    panicAttackHyperventilationEnc?: string | null;
+    pneumoniaEnc?: string | null;
+    ptbPrimaryComplexEnc?: string | null;
+    typhoidFeverEnc?: string | null;
+    covid19Enc?: string | null;
+    urinaryTractInfectionEnc?: string | null;
+    hasPastOperationEnc?: string | null;
+    operationNatureAndDateEnc?: string | null;
     bloodType?: string | null;
     immunizations?: string[] | null;
   } | null;
   physicalExaminations: PhysicalExam[];
+  labResults: LabResult[];
 }
 
 interface ScanResponse {
@@ -147,17 +191,39 @@ function splitCsv(value?: string | null) {
   return value.split(',').map((part) => part.trim()).filter(Boolean);
 }
 
-function findConditions(history: ScanProfile['medicalHistory']) {
-  if (!history) return [];
-
-  const conditions: string[] = [];
-  if (history.asthmaEnc && !['none', 'no', 'n/a', 'na'].includes(history.asthmaEnc.toLowerCase().trim())) conditions.push('Asthma');
-  if (history.diabetesEnc && !['none', 'no', 'n/a', 'na'].includes(history.diabetesEnc.toLowerCase().trim())) conditions.push('Diabetes');
-  if (history.hypertensionEnc && !['none', 'no', 'n/a', 'na'].includes(history.hypertensionEnc.toLowerCase().trim())) conditions.push('Hypertension');
-  if (history.anxietyDisorderEnc && !['none', 'no', 'n/a', 'na'].includes(history.anxietyDisorderEnc.toLowerCase().trim())) conditions.push('Anxiety Disorder');
-
-  return conditions;
+function parseBooleanText(value?: string | null) {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return ['yes', 'true', '1'].includes(normalized);
 }
+
+function parseYesNoChoice(value?: string | null) {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (['yes', 'true', '1'].includes(normalized)) return 'YES';
+  if (['no', 'false', '0'].includes(normalized)) return 'NO';
+  return null;
+}
+
+const MEDICAL_HISTORY_BOOLEAN_FIELDS: Array<{ key: keyof NonNullable<ScanProfile['medicalHistory']>; label: string }> = [
+  { key: 'asthmaEnc', label: 'Asthma' },
+  { key: 'chickenPoxEnc', label: 'Chicken Pox' },
+  { key: 'diabetesEnc', label: 'Diabetes' },
+  { key: 'dysmenorrheaEnc', label: 'Dysmenorrhea' },
+  { key: 'epilepsySeizureEnc', label: 'Epilepsy/Seizure' },
+  { key: 'heartDisorderEnc', label: 'Heart disorder' },
+  { key: 'hepatitisEnc', label: 'Hepatitis' },
+  { key: 'hypertensionEnc', label: 'Hypertension' },
+  { key: 'measlesEnc', label: 'Measles' },
+  { key: 'mumpsEnc', label: 'Mumps' },
+  { key: 'anxietyDisorderEnc', label: 'Anxiety disorder' },
+  { key: 'panicAttackHyperventilationEnc', label: 'Panic attack/Hyperventilation' },
+  { key: 'pneumoniaEnc', label: 'Pneumonia' },
+  { key: 'ptbPrimaryComplexEnc', label: 'PTB/Primary Complex' },
+  { key: 'typhoidFeverEnc', label: 'Typhoid Fever' },
+  { key: 'covid19Enc', label: 'COVID-19' },
+  { key: 'urinaryTractInfectionEnc', label: 'Urinary Tract Infection' },
+];
 
 export default function StudentRecordPage() {
   const params = useParams();
@@ -178,6 +244,7 @@ export default function StudentRecordPage() {
   const [documentType, setDocumentType] = useState<(typeof DOCUMENT_TYPES)[number]['value']>('PHYSICAL_EXAM');
   const [documentFeedback, setDocumentFeedback] = useState('');
   const [downloadingDocumentId, setDownloadingDocumentId] = useState('');
+  const [activeClinicalTab, setActiveClinicalTab] = useState<'medicalHistory' | 'physicalExam' | 'labResults'>('medicalHistory');
 
   async function loadDocuments(studentProfileId: string, token: string) {
     try {
@@ -240,8 +307,8 @@ export default function StudentRecordPage() {
   }, [studentNumberParam]);
 
   const allergies = useMemo(() => splitCsv(record?.medicalHistory?.allergyEnc), [record]);
-  const conditions = useMemo(() => findConditions(record?.medicalHistory || null), [record]);
   const latestExam = record?.physicalExaminations?.[0] || null;
+  const latestLab = record?.labResults?.[0] || null;
 
   async function handleEmergencyAlert() {
     if (!record) return;
@@ -257,7 +324,7 @@ export default function StudentRecordPage() {
       setError('');
 
       await api.post<EmergencySmsResponse>(
-        '/emergency/send-sms',
+        '/clinic/emergency/send-sms',
         {
           studentProfileId: record.id,
         },
@@ -461,25 +528,186 @@ export default function StudentRecordPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
-        <h2 className="text-sm font-bold text-gray-800">Medical Profile</h2>
-        <p className="text-sm text-gray-700"><span className="font-semibold">Immunizations:</span> {(record.medicalHistory?.immunizations || []).join(', ') || 'None'}</p>
-        <p className="text-sm text-gray-700"><span className="font-semibold">Conditions:</span> {conditions.join(', ') || 'None'}</p>
-      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+        <h2 className="text-sm font-bold text-gray-800">Clinic Record (Paper Form Layout)</h2>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
-        <h2 className="text-sm font-bold text-gray-800">Latest Physical Examination</h2>
-        {latestExam ? (
-          <>
-            <p className="text-sm text-gray-700"><span className="font-semibold">Date:</span> {formatDate(latestExam.examDate)}</p>
-            <p className="text-sm text-gray-700"><span className="font-semibold">Blood Pressure:</span> {toLabel(latestExam.bp)}</p>
-            <p className="text-sm text-gray-700"><span className="font-semibold">Temperature:</span> {toLabel(latestExam.temp)}</p>
-            <p className="text-sm text-gray-700"><span className="font-semibold">Weight:</span> {toLabel(latestExam.weight)}</p>
-            <p className="text-sm text-gray-700"><span className="font-semibold">BMI:</span> {toLabel(latestExam.bmi)}</p>
-            <p className="text-sm text-gray-700"><span className="font-semibold">Examined By:</span> {toLabel(latestExam.examinedBy)}</p>
-          </>
-        ) : (
-          <p className="text-sm text-gray-400">No physical examination records available.</p>
+        <div className="flex flex-wrap gap-2">
+          {([
+            ['medicalHistory', 'Medical History'],
+            ['physicalExam', 'Physical Examination'],
+            ['labResults', 'Lab Results'],
+          ] as const).map(([tabKey, tabLabel]) => (
+            <button
+              key={tabKey}
+              type="button"
+              onClick={() => setActiveClinicalTab(tabKey)}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                activeClinicalTab === tabKey
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-white border border-gray-300 text-gray-600 hover:border-teal-300 hover:text-teal-600'
+              }`}
+            >
+              {tabLabel}
+            </button>
+          ))}
+        </div>
+
+        {activeClinicalTab === 'medicalHistory' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <p className="mb-1 text-xs font-semibold text-gray-600">Allergy</p>
+                <input
+                  value={toLabel(record.medicalHistory?.allergyEnc)}
+                  disabled
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-semibold text-gray-600">Have you had any operation in the past?</p>
+                <div className="flex gap-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700">
+                  <label className="inline-flex items-center gap-2">
+                    <input type="radio" checked={parseYesNoChoice(record.medicalHistory?.hasPastOperationEnc) === 'YES'} disabled />
+                    <span>YES</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input type="radio" checked={parseYesNoChoice(record.medicalHistory?.hasPastOperationEnc) === 'NO'} disabled />
+                    <span>NO</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1 text-xs font-semibold text-gray-600">If yes, state the nature of the operation and date/year</p>
+              <textarea
+                value={toLabel(record.medicalHistory?.operationNatureAndDateEnc)}
+                disabled
+                rows={2}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 resize-none"
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold text-gray-600">Medical Conditions</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                {MEDICAL_HISTORY_BOOLEAN_FIELDS.map((condition) => (
+                  <label key={condition.key} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={parseBooleanText(record.medicalHistory?.[condition.key] as string | null | undefined)}
+                      disabled
+                    />
+                    <span>{condition.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeClinicalTab === 'physicalExam' && (
+          <div className="space-y-4">
+            {!latestExam ? (
+              <p className="text-sm text-gray-400">No physical examination records available.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <p className="mb-1 text-xs font-semibold text-gray-600">Year Level</p>
+                    <input value={toLabel(latestExam.yearLevel)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs font-semibold text-gray-600">Date</p>
+                    <input value={formatDate(latestExam.examDate)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">BP</p><input value={toLabel(latestExam.bp)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">CR</p><input value={toLabel(latestExam.cr)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">RR</p><input value={toLabel(latestExam.rr)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Temp</p><input value={toLabel(latestExam.temp)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Weight</p><input value={toLabel(latestExam.weight)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Height</p><input value={toLabel(latestExam.height)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">BMI</p><input value={toLabel(latestExam.bmi)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Visual Acuity</p><input value={toLabel(latestExam.visualAcuity)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Skin</p><input value={toLabel(latestExam.skin)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">HEENT</p><input value={toLabel(latestExam.heent)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Chest/Lungs</p><input value={toLabel(latestExam.chestLungs)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Heart</p><input value={toLabel(latestExam.heart)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Abdomen</p><input value={toLabel(latestExam.abdomen)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  <div><p className="mb-1 text-xs font-semibold text-gray-600">Extremities</p><input value={toLabel(latestExam.extremities)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs font-semibold text-gray-600">Others (specify)</p>
+                  <textarea value={toLabel(latestExam.others)} disabled rows={2} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 resize-none" />
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs font-semibold text-gray-600">Examined by</p>
+                  <input value={toLabel(latestExam.examinedBy)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" />
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {activeClinicalTab === 'labResults' && (
+          <div className="space-y-4">
+            {!latestLab ? (
+              <p className="text-sm text-gray-400">No lab results available.</p>
+            ) : (
+              <>
+                <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+                  <p className="text-xs font-semibold text-gray-600">CBC</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Date</p><input value={formatDate(latestLab.date)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Hgb</p><input value={toLabel(latestLab.hgb)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Hct</p><input value={toLabel(latestLab.hct)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">WBC</p><input value={toLabel(latestLab.wbc)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Plt. Ct.</p><input value={toLabel(latestLab.pltCt)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Bld. Type</p><input value={toLabel(latestLab.bloodType)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+                  <p className="text-xs font-semibold text-gray-600">U/A</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Date</p><input value={formatDate(latestLab.date)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Glucose/Sugar</p><input value={toLabel(latestLab.glucoseSugar)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Protein</p><input value={toLabel(latestLab.protein)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+                  <p className="text-xs font-semibold text-gray-600">Chest X-ray</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Date</p><input value={formatDate(latestLab.date)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                    <div><p className="mb-1 text-xs font-semibold text-gray-600">Result</p><input value={toLabel(latestLab.xrayResult)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></div>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs font-semibold text-gray-600">Abnormal Findings</p>
+                    <textarea value={toLabel(latestLab.xrayFindingsEnc)} disabled rows={2} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 resize-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs font-semibold text-gray-600">Others</p>
+                  <textarea value={toLabel(latestLab.othersEnc)} disabled rows={2} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 resize-none" />
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs font-semibold text-gray-600">Date Received</p>
+                  <input value={formatDate(latestLab.dateReceived)} disabled className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" />
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
 

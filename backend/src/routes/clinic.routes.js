@@ -7,9 +7,9 @@ const {
   getStudentByQrToken,
   recordVisit,
   searchStudents,
-  sendEmergencyAlert,
   getVisits,
 } = require("../controllers/clinic.controller");
+const { sendEmergencySmsToGuardian } = require("../controllers/emergency.controller");
 
 // Import our security middleware
 const { protect } = require("../middleware/auth.middleware");
@@ -17,7 +17,9 @@ const { authorize } = require("../middleware/rbac.middleware");
 const { auditLogger } = require("../middleware/auditLogger.middleware");
 
 
-router.post("/emergency-alert", protect, authorize("CLINIC_STAFF"), sendEmergencyAlert);
+// Backward-compatible emergency SMS paths, both routed to Twilio-backed controller.
+router.post("/emergency-alert", protect, authorize("CLINIC_STAFF", "ADMIN"), sendEmergencySmsToGuardian);
+router.post("/emergency/send-sms", protect, authorize("CLINIC_STAFF", "ADMIN"), sendEmergencySmsToGuardian);
 
 router.get(
   "/search",
