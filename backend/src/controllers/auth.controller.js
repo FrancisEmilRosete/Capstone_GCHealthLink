@@ -1,6 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+const { generateAccessToken } = require("../lib/jwt");
+const { ROLES } = require("../lib/roles");
 
 const prisma = new PrismaClient();
 
@@ -76,6 +77,10 @@ function isLikelyEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function isKnownRole(role) {
+  return Object.values(ROLES).includes(role);
+}
+
 function getClientIp(req) {
   if (typeof req.ip === "string" && req.ip.trim()) {
     return req.ip.trim();
@@ -141,10 +146,6 @@ const login = async (req, res, next) => {
       });
     }
 
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ success: false, message: "JWT secret is not configured." });
-    }
-
     const identityKey = `${ip}|${normalizedEmail}`;
     const identityState = getIdentityState(identityKey);
     if (identityState?.lockUntil && identityState.lockUntil > now) {
@@ -169,11 +170,17 @@ const login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
+    if (!isKnownRole(user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Account role is invalid. Please contact administrator.",
+      });
+    }
+
     clearIdentityFailures(identityKey);
 
-    const token = jwt.sign(
+    const token = generateAccessToken(
       { userId: user.id, role: user.role },
-      process.env.JWT_SECRET,
       { expiresIn: "12h" }
     );
 

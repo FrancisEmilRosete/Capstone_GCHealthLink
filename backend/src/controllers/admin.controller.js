@@ -20,6 +20,25 @@ function toDate(value) {
   return parsed;
 }
 
+function toLocalDateKey(value) {
+  const date = toDate(value);
+  if (!date) return null;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function resolveVisitDate(visit) {
+  const primary = toDate(visit?.visitDate);
+  if (primary) {
+    return primary;
+  }
+
+  return toDate(visit?.createdAt);
+}
+
 function createMonthlySeries(visits) {
   const now = new Date();
   const buckets = [];
@@ -36,7 +55,7 @@ function createMonthlySeries(visits) {
   const lookup = new Map(buckets.map((bucket) => [bucket.key, bucket]));
 
   for (const visit of visits) {
-    const date = toDate(visit.createdAt || visit.visitDate);
+    const date = resolveVisitDate(visit);
     if (!date) continue;
 
     const key = `${date.getFullYear()}-${date.getMonth()}`;
@@ -55,8 +74,11 @@ function createWeeklySeries(visits) {
 
   for (let index = 6; index >= 0; index -= 1) {
     const dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - index);
+    const dayKey = toLocalDateKey(dayDate);
+    if (!dayKey) continue;
+
     buckets.push({
-      key: dayDate.toISOString().slice(0, 10),
+      key: dayKey,
       day: dayDate.toLocaleDateString("en-US", { weekday: "short" }),
       count: 0,
     });
@@ -65,10 +87,12 @@ function createWeeklySeries(visits) {
   const lookup = new Map(buckets.map((bucket) => [bucket.key, bucket]));
 
   for (const visit of visits) {
-    const date = toDate(visit.createdAt || visit.visitDate);
+    const date = resolveVisitDate(visit);
     if (!date) continue;
 
-    const key = date.toISOString().slice(0, 10);
+    const key = toLocalDateKey(date);
+    if (!key) continue;
+
     const hit = lookup.get(key);
     if (hit) {
       hit.count += 1;
@@ -85,7 +109,7 @@ function createOutbreakWatch(visits) {
   const counter = new Map();
 
   for (const visit of visits) {
-    const date = toDate(visit.createdAt || visit.visitDate);
+    const date = resolveVisitDate(visit);
     if (!date) continue;
 
     const timestamp = date.getTime();
@@ -148,7 +172,7 @@ function extractVisitHour(visit) {
     }
   }
 
-  const date = toDate(visit.createdAt || visit.visitDate);
+  const date = resolveVisitDate(visit);
   if (!date) return null;
   return date.getHours();
 }
@@ -178,7 +202,7 @@ function createResourcePrediction(visits) {
       hourlyCounts[hour] += 1;
     }
 
-    const date = toDate(visit.createdAt || visit.visitDate);
+    const date = resolveVisitDate(visit);
     if (!date) continue;
 
     weekdayCounts[date.getDay()] += 1;

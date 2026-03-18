@@ -2,6 +2,7 @@
   "name": "GC HealthLink",
   "short_name": "GCHealthLink",
   "description": "Clinic Management and Student Health Monitoring System",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -14,11 +14,18 @@ const {
 // Import our security middleware
 const { protect } = require("../middleware/auth.middleware");
 const { authorize } = require("../middleware/rbac.middleware");
+const { auditLogger } = require("../middleware/auditLogger.middleware");
 
 
 router.post("/emergency-alert", protect, authorize("CLINIC_STAFF"), sendEmergencyAlert);
 
-router.get("/search", protect, authorize("CLINIC_STAFF"), searchStudents);
+router.get(
+  "/search",
+  protect,
+  authorize("CLINIC_STAFF"),
+  auditLogger("SEARCHED_STUDENT_DIRECTORY"),
+  searchStudents
+);
 // GET /api/v1/clinic/scan/:studentId
 // Only clinic staff can view detailed records from scanner routes.
 router.get(
@@ -41,6 +48,7 @@ router.get(
   "/visits",
   protect,
   authorize("CLINIC_STAFF"),
+  auditLogger("VIEWED_CLINIC_VISITS"),
   getVisits
 );
 
@@ -48,6 +56,7 @@ router.post(
   "/visits",
   protect,
   authorize("CLINIC_STAFF"),
+  auditLogger("RECORDED_CLINIC_VISIT"),
   recordVisit
 );
 

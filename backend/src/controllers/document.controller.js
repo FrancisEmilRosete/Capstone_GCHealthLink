@@ -44,7 +44,7 @@ async function canAccessStudentDocuments(req, studentProfileId) {
     return !!me && me.id === studentProfileId;
   }
 
-  return req.user.role === "CLINIC_STAFF";
+  return req.user.role === "CLINIC_STAFF" || req.user.role === "ADMIN";
 }
 
 function toDocumentResponse(document) {

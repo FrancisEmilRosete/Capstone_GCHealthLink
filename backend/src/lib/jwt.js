@@ -19,7 +19,9 @@ function generateAccessToken(payload, options = {}) {
 
 function verifyAccessToken(token) {
   const secret = getJwtSecret();
-  return jwt.verify(token, secret);
+  return jwt.verify(token, secret, {
+    algorithms: ["HS256"],
+  });
 }
 
 module.exports = {

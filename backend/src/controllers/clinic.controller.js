@@ -29,7 +29,7 @@ function parseDispensedMedicines(value) {
     return { ok: false, message: "dispensedMedicines cannot contain more than 100 items." };
   }
 
-  const sanitized = [];
+  const aggregated = new Map();
   for (const [index, item] of value.entries()) {
     const inventoryId = normalizeText(item?.inventoryId);
     const quantity = Number(item?.quantity);
@@ -46,10 +46,24 @@ function parseDispensedMedicines(value) {
       return { ok: false, message: `dispensedMedicines[${index}].quantity must be 1000 or less.` };
     }
 
-    sanitized.push({ inventoryId, quantity });
+    aggregated.set(inventoryId, (aggregated.get(inventoryId) || 0) + quantity);
   }
 
-  return { ok: true, medicines: sanitized };
+  const medicines = [...aggregated.entries()].map(([inventoryId, quantity]) => ({
+    inventoryId,
+    quantity,
+  }));
+
+  for (const medicine of medicines) {
+    if (medicine.quantity > 1000) {
+      return {
+        ok: false,
+        message: `Total dispensed quantity for inventoryId ${medicine.inventoryId} must be 1000 or less.`,
+      };
+    }
+  }
+
+  return { ok: true, medicines };
 }
 
 function normalizeBooleanLike(value) {
@@ -457,6 +471,11 @@ const recordVisit = async (req, res, next) => {
     if (error.message && error.message.includes("Insufficient stock")) {
       return res.status(400).json({ success: false, message: error.message });
     }
+
+    if (error.message && error.message.includes("Inventory item not found")) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+
     next(error);
   }
 };

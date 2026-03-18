@@ -58,7 +58,7 @@ function isSameLocalDay(date: Date, reference: Date) {
 }
 
 function resolveVisitTimestamp(visit: { createdAt?: string | null; visitDate?: string | null }) {
-  const raw = visit.createdAt || visit.visitDate;
+  const raw = visit.visitDate || visit.createdAt;
   if (!raw) return null;
 
   const parsed = new Date(raw);

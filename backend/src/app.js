@@ -4,16 +4,42 @@ const cors = require("cors");
 // 1. Initialize the app FIRST
 const app = express();
 
-const allowedCorsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
+function normalizeOrigin(value) {
+  return typeof value === "string"
+    ? value.trim().replace(/\/+$/, "")
+    : "";
+}
+
+const configuredCorsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const allowAnyCorsOrigin = configuredCorsOrigins.includes("*");
+const allowedCorsOrigins = new Set(
+  configuredCorsOrigins
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean)
+);
+
+function isAllowedCorsOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowAnyCorsOrigin) {
+    return true;
+  }
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  return allowedCorsOrigins.has(normalizedOrigin);
+}
 
 // 2. Set up Middleware (CORS and JSON parsing)
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedCorsOrigins.includes(origin)) {
+      if (isAllowedCorsOrigin(origin)) {
         return callback(null, true);
       }
 
@@ -27,11 +53,12 @@ app.use(
 
 app.use(express.json({ limit: "1mb" }));
 
-// ADD THIS TRACKER BLOCK:
-app.use((req, res, next) => {
-  console.log(`🚨 INCOMING REQUEST: ${req.method} ${req.url}`);
-  next();
-});
+if (process.env.LOG_REQUESTS === "true") {
+  app.use((req, res, next) => {
+    console.log(`INCOMING REQUEST: ${req.method} ${req.url}`);
+    next();
+  });
+}
 
 // 3. Import Routes
 const authRoutes = require("./routes/auth.routes");
