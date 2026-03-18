@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { normalizeComplaintDisplay } from '@/lib/complaint';
 
 interface ClinicVisit {
   id: string;
@@ -63,31 +64,6 @@ function formatDate(value: string) {
     day: 'numeric',
     year: 'numeric',
   });
-}
-
-function normalizeComplaint(raw?: string | null) {
-  if (!raw || !raw.trim()) return 'General Consultation';
-
-  const text = raw.trim();
-  try {
-    const parsed = JSON.parse(text) as {
-      chiefComplaint?: string;
-      diagnosis?: string;
-      notes?: string;
-    };
-
-    if (parsed && typeof parsed === 'object') {
-      const diagnosis = typeof parsed.diagnosis === 'string' ? parsed.diagnosis.trim() : '';
-      const complaint = typeof parsed.chiefComplaint === 'string' ? parsed.chiefComplaint.trim() : '';
-      const notes = typeof parsed.notes === 'string' ? parsed.notes.trim() : '';
-      return diagnosis || complaint || notes || 'General Consultation';
-    }
-  } catch {
-    // Legacy delimited payload.
-  }
-
-  const parts = text.split('|').map((part) => part.trim()).filter(Boolean);
-  return parts[0] || text;
 }
 
 function hasCompletedRegistration(profile: StudentProfile | null) {
@@ -328,7 +304,7 @@ export default function StudentDashboard() {
                 <div key={visit.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-gray-800 truncate">
-                      {normalizeComplaint(visit.chiefComplaintEnc)}
+                      {normalizeComplaintDisplay(visit.chiefComplaintEnc, 'General Consultation')}
                     </p>
                     <span className="text-xs text-gray-400 whitespace-nowrap">{formatDate(visit.visitDate)}</span>
                   </div>

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "seed:demo": "npx ts-node -P prisma/tsconfig.seed.json prisma/seed.ts",
     "phasee:integration": "node scripts/integration.phasee.js",
     "phasee:smoke": "node scripts/smoke.phasee.js",
     "phasee:verify": "npm run phasee:integration && npm run phasee:smoke",
@@ -29,7 +30,7 @@
     "qrcode": "^1.5.4"
   },
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "npx ts-node -P prisma/tsconfig.seed.json prisma/seed.ts"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

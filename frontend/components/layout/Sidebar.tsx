@@ -24,10 +24,11 @@
 
 import Link            from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect }   from 'react';
+import { useEffect, useState }   from 'react';
 import { authLogout }  from '@/lib/auth';
 
 import { SignOutIcon, StethoscopeIcon } from '@/components/icons/NavIcons';
+import ConfirmLogoutModal from '@/components/ui/ConfirmLogoutModal';
 import { STAFF_NAV_GROUPS }         from '@/constants/staffNavigation';
 
 interface SidebarProps {
@@ -47,6 +48,7 @@ export default function Sidebar({
 }: SidebarProps) {
 
   const pathname = usePathname();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Close the mobile drawer whenever the user navigates to a new page
   useEffect(() => {
@@ -163,7 +165,7 @@ export default function Sidebar({
         <div className="border-t border-slate-700/50 mb-3" />
 
         <button
-          onClick={() => { authLogout(); window.location.href = '/login'; }}
+          onClick={() => setShowLogoutConfirm(true)}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
             text-sm font-medium text-slate-400
             hover:bg-slate-700/30 hover:text-white
@@ -179,6 +181,16 @@ export default function Sidebar({
 
   return (
     <>
+      <ConfirmLogoutModal
+        open={showLogoutConfirm}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          authLogout();
+          setShowLogoutConfirm(false);
+          window.location.href = '/login';
+        }}
+      />
+
       {/* Desktop: always-visible static column (lg and up) */}
       {/* h-screen + sticky top-0 keeps the sidebar exactly viewport-tall   */}
       {/* so the bottom buttons never scroll off screen.                      */}

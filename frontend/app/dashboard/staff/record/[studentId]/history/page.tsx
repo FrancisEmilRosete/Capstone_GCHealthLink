@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { normalizeComplaintDisplay } from '@/lib/complaint';
 
 interface SearchStudent {
   studentNumber: string;
@@ -96,31 +97,6 @@ function formatDocumentType(value: string) {
     default:
       return 'Other';
   }
-}
-
-function normalizeComplaint(value?: string | null) {
-  if (!value || !value.trim()) return 'General consultation';
-
-  const text = value.trim();
-  try {
-    const parsed = JSON.parse(text) as {
-      chiefComplaint?: string;
-      diagnosis?: string;
-      notes?: string;
-    };
-
-    if (parsed && typeof parsed === 'object') {
-      const diagnosis = typeof parsed.diagnosis === 'string' ? parsed.diagnosis.trim() : '';
-      const complaint = typeof parsed.chiefComplaint === 'string' ? parsed.chiefComplaint.trim() : '';
-      const notes = typeof parsed.notes === 'string' ? parsed.notes.trim() : '';
-      return diagnosis || complaint || notes || 'General consultation';
-    }
-  } catch {
-    // Legacy delimited complaint fallback.
-  }
-
-  const parts = text.split('|').map((part) => part.trim()).filter(Boolean);
-  return parts[0] || text;
 }
 
 export default function StudentHistoryPage() {
@@ -331,7 +307,7 @@ export default function StudentHistoryPage() {
                         <span className="font-semibold text-gray-700">{formatDate(visit.visitDate)}</span>
                         <span className="text-gray-400">{visit.handledBy?.email || 'Clinic Staff'}</span>
                       </div>
-                      <p className="text-sm text-gray-600">{normalizeComplaint(visit.chiefComplaintEnc)}</p>
+                      <p className="text-sm text-gray-600">{normalizeComplaintDisplay(visit.chiefComplaintEnc)}</p>
                     </div>
                   ))}
                 </div>

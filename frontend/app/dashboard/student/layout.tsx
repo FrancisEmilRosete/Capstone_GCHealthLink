@@ -11,6 +11,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ApiError, api } from '@/lib/api';
 import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
+import ConfirmLogoutModal from '@/components/ui/ConfirmLogoutModal';
 
 interface StudentProfileSummary {
   firstName: string;
@@ -116,6 +117,7 @@ function StudentSidebar({
 }) {
   const pathname = usePathname();
   const router   = useRouter();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const navItems = showRegistration
     ? NAV
     : NAV.filter((item) => item.href !== REGISTRATION_ROUTE);
@@ -213,10 +215,7 @@ function StudentSidebar({
 
           {/* Sign Out */}
           <button
-            onClick={() => {
-              authLogout();
-              router.push('/login');
-            }}
+            onClick={() => setShowLogoutConfirm(true)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,6 +226,17 @@ function StudentSidebar({
           </button>
         </div>
       </aside>
+
+      <ConfirmLogoutModal
+        open={showLogoutConfirm}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          authLogout();
+          setShowLogoutConfirm(false);
+          onClose();
+          router.push('/login');
+        }}
+      />
     </>
   );
 }
