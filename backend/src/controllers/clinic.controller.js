@@ -1,10 +1,10 @@
-const { PrismaClient } = require("@prisma/client");
 const {
   encryptStringSafe,
   decryptStringSafe,
 } = require("../utils/encryption.util");
 const { deriveConcernTag } = require("../utils/concernTag.util");
-const prisma = new PrismaClient();
+const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
+const { prisma, runDbTransaction } = require("../lib/prisma");
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -167,36 +167,50 @@ function mapStudentScanPayload(student) {
 // ==========================================
 const getVisits = async (req, res, next) => {
   try {
-    const visitsRaw = await prisma.clinicVisit.findMany({
-      orderBy: [{ visitDate: "desc" }, { createdAt: "desc" }],
-      include: {
-        studentProfile: {
-          select: {
-            id: true,
-            studentNumber: true,
-            firstName: true,
-            lastName: true,
-            courseDept: true,
+    const studentProfileId = normalizeText(req.query?.studentProfileId);
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 500,
+      maxLimit: 1000,
+    });
+
+    const whereClause = studentProfileId ? { studentProfileId } : undefined;
+
+    const [visitsRaw, total] = await prisma.$transaction([
+      prisma.clinicVisit.findMany({
+        where: whereClause,
+        orderBy: [{ visitDate: "desc" }, { createdAt: "desc" }],
+        skip,
+        take: limit,
+        include: {
+          studentProfile: {
+            select: {
+              id: true,
+              studentNumber: true,
+              firstName: true,
+              lastName: true,
+              courseDept: true,
+            },
           },
-        },
-        handledBy: {
-          select: {
-            id: true,
-            email: true,
+          handledBy: {
+            select: {
+              id: true,
+              email: true,
+            },
           },
-        },
-        dispensedMedicines: {
-          include: {
-            inventory: {
-              select: {
-                itemName: true,
-                unit: true,
+          dispensedMedicines: {
+            include: {
+              inventory: {
+                select: {
+                  itemName: true,
+                  unit: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      }),
+      prisma.clinicVisit.count({ where: whereClause }),
+    ]);
 
     const visits = visitsRaw.map((visit) => ({
       ...visit,
@@ -207,6 +221,7 @@ const getVisits = async (req, res, next) => {
       success: true,
       message: "Clinic visits retrieved successfully",
       data: visits,
+      pagination: buildPaginationMeta({ page, limit, total }),
     });
   } catch (error) {
     next(error);
@@ -390,7 +405,7 @@ const recordVisit = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Student profile not found." });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await runDbTransaction(async (tx) => {
       const newVisit = await tx.clinicVisit.create({
         data: {
           studentProfileId: normalizedStudentProfileId,
@@ -474,6 +489,13 @@ const recordVisit = async (req, res, next) => {
 
     if (error.message && error.message.includes("Inventory item not found")) {
       return res.status(404).json({ success: false, message: error.message });
+    }
+
+    if (error.code === "P2028" || error.code === "P2024") {
+      return res.status(503).json({
+        success: false,
+        message: "Clinic service is temporarily busy. Please retry in a few seconds.",
+      });
     }
 
     next(error);

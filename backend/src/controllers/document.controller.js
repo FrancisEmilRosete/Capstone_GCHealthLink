@@ -4,6 +4,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 
 const uploadDir = path.join(__dirname, "../../uploads");
 const MAX_UPLOAD_SIZE_BYTES = Number(process.env.MAX_MEDICAL_DOC_SIZE_BYTES || 5 * 1024 * 1024);
@@ -193,6 +194,10 @@ const uploadDocument = async (req, res, next) => {
 const getStudentDocuments = async (req, res, next) => {
   try {
     const studentId = typeof req.params.studentId === "string" ? req.params.studentId.trim() : "";
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 100,
+      maxLimit: 200,
+    });
 
     if (!studentId) {
       return res.status(400).json({ success: false, message: "studentId is required." });
@@ -206,10 +211,17 @@ const getStudentDocuments = async (req, res, next) => {
       });
     }
 
-    const documents = await prisma.medicalDocument.findMany({
-      where: { studentProfileId: studentId },
-      orderBy: { uploadedAt: "desc" },
-    });
+    const [documents, total] = await prisma.$transaction([
+      prisma.medicalDocument.findMany({
+        where: { studentProfileId: studentId },
+        orderBy: { uploadedAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.medicalDocument.count({
+        where: { studentProfileId: studentId },
+      }),
+    ]);
 
     await prisma.auditLog.create({
       data: {
@@ -220,6 +232,9 @@ const getStudentDocuments = async (req, res, next) => {
         metadata: {
           ...buildDocumentAccessMetadata(req, {
             count: documents.length,
+            page,
+            limit,
+            total,
           }),
         },
       },
@@ -229,6 +244,7 @@ const getStudentDocuments = async (req, res, next) => {
       success: true,
       message: "Medical documents retrieved successfully.",
       data: documents.map(toDocumentResponse),
+      pagination: buildPaginationMeta({ page, limit, total }),
     });
   } catch (error) {
     next(error);
