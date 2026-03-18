@@ -1,4 +1,9 @@
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:5000/api/v1';
+const DEMO_PASSWORD = process.env.PHASEE_DEMO_PASSWORD || 'password123';
+const SEEDED_STUDENT_EMAIL = process.env.PHASEE_STUDENT_EMAIL || 'juan.delacruz.2026@gordoncollege.edu.ph';
+const SEEDED_STUDENT_NUMBER = process.env.PHASEE_STUDENT_NUMBER || '2026-0001';
+const STAFF_EMAIL = process.env.PHASEE_STAFF_EMAIL || 'nurse@gordoncollege.edu.ph';
+const ADMIN_EMAIL = process.env.PHASEE_ADMIN_EMAIL || 'admin@gordoncollege.edu.ph';
 
 function assert(condition, message) {
   if (!condition) {
@@ -44,7 +49,7 @@ async function request(path, options = {}) {
   };
 }
 
-async function login(email, password = 'password123') {
+async function login(email, password = DEMO_PASSWORD) {
   const response = await request('/auth/login', {
     method: 'POST',
     body: { email, password },
@@ -58,13 +63,13 @@ async function login(email, password = 'password123') {
 async function run() {
   console.log('PHASEE_INTEGRATION_START');
 
-  const adminToken = await login('admin@gordoncollege.edu.ph');
-  const staffToken = await login('nurse@gordoncollege.edu.ph');
-  const seededStudentToken = await login('student@gordoncollege.edu.ph');
+  const adminToken = await login(ADMIN_EMAIL);
+  const staffToken = await login(STAFF_EMAIL);
+  const seededStudentToken = await login(SEEDED_STUDENT_EMAIL);
 
   const invalidEmailLogin = await request('/auth/login', {
     method: 'POST',
-    body: { email: 'not-an-email', password: 'password123' },
+    body: { email: 'not-an-email', password: DEMO_PASSWORD },
   });
   assert(invalidEmailLogin.status === 400, `Expected 400 for invalid email login, got ${invalidEmailLogin.status}`);
 
@@ -128,7 +133,7 @@ async function run() {
   });
   assert(invalidAppointment.status === 400, `Expected 400 for invalid appointment date, got ${invalidAppointment.status}`);
 
-  const searchSeededStudent = await request('/clinic/search?q=2024-0001', { token: staffToken });
+  const searchSeededStudent = await request(`/clinic/search?q=${encodeURIComponent(SEEDED_STUDENT_NUMBER)}`, { token: staffToken });
   assert(searchSeededStudent.status === 200, `Search failed: ${searchSeededStudent.status}`);
   const seededStudentProfileId = searchSeededStudent.data?.data?.[0]?.id;
   assert(seededStudentProfileId, 'Seeded student profile id not found');

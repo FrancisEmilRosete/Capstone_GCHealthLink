@@ -1,4 +1,9 @@
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:5000/api/v1';
+const DEMO_PASSWORD = process.env.PHASEE_DEMO_PASSWORD || 'password123';
+const STUDENT_EMAIL = process.env.PHASEE_STUDENT_EMAIL || 'juan.delacruz.2026@gordoncollege.edu.ph';
+const STUDENT_NUMBER = process.env.PHASEE_STUDENT_NUMBER || '2026-0001';
+const STAFF_EMAIL = process.env.PHASEE_STAFF_EMAIL || 'nurse@gordoncollege.edu.ph';
+const ADMIN_EMAIL = process.env.PHASEE_ADMIN_EMAIL || 'admin@gordoncollege.edu.ph';
 
 function assert(condition, message) {
   if (!condition) {
@@ -42,12 +47,12 @@ async function request(path, options = {}) {
   };
 }
 
-async function login(email) {
+async function login(email, password = DEMO_PASSWORD) {
   const result = await request('/auth/login', {
     method: 'POST',
     body: {
       email,
-      password: 'password123',
+      password,
     },
   });
 
@@ -59,9 +64,9 @@ async function login(email) {
 async function run() {
   console.log('PHASEE_SMOKE_START');
 
-  const studentToken = await login('student@gordoncollege.edu.ph');
-  const staffToken = await login('nurse@gordoncollege.edu.ph');
-  const adminToken = await login('admin@gordoncollege.edu.ph');
+  const studentToken = await login(STUDENT_EMAIL);
+  const staffToken = await login(STAFF_EMAIL);
+  const adminToken = await login(ADMIN_EMAIL);
 
   // Student journey
   const myProfile = await request('/students/me', { token: studentToken });
@@ -93,7 +98,7 @@ async function run() {
   const queue = await request('/appointments/queue', { token: staffToken });
   assert(queue.status === 200, `Staff queue failed: ${queue.status}`);
 
-  const searchStudent = await request('/clinic/search?q=2024-0001', { token: staffToken });
+  const searchStudent = await request(`/clinic/search?q=${encodeURIComponent(STUDENT_NUMBER)}`, { token: staffToken });
   assert(searchStudent.status === 200, `Staff student search failed: ${searchStudent.status}`);
   const targetStudentProfileId = searchStudent.data?.data?.[0]?.id;
   assert(targetStudentProfileId, 'Target student profile id not found in search');
@@ -120,7 +125,7 @@ async function run() {
     method: 'POST',
     token: staffToken,
     body: {
-      studentId: '2024-0001',
+      studentId: STUDENT_NUMBER,
       dateIso: new Date().toISOString().slice(0, 10),
       reason: 'Illness (Fever)',
       remarks: 'Phase E smoke',

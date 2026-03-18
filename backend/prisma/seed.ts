@@ -1,3 +1,4 @@
+const nodeCrypto = require("crypto");
 const { PrismaClient, UserRole } = require("@prisma/client");
 
 const prisma = new PrismaClient();
@@ -312,6 +313,10 @@ function daysAgo(days: number, hour = 10): Date {
   return date;
 }
 
+function makeSeedId(prefix: string): string {
+  return `${prefix}_${nodeCrypto.randomUUID().replace(/-/g, "")}`;
+}
+
 async function safePurge(): Promise<void> {
   console.log("\n1) Running safe purge...");
 
@@ -493,78 +498,70 @@ async function seedOutbreakTrigger(
     throw new Error("Paracetamol inventory row not found after seeding.");
   }
 
-  let totalParacetamolDispensed = 0;
+  const outbreakVisits = outbreakHoursOffsets.map((offset, index) => {
+    const student = ccsStudents[index];
+    const visitDate = hoursAgo(offset);
 
-  await prisma.$transaction(async (tx) => {
-    const outbreakVisits = [] as Array<{ id: string }>;
+    return {
+      id: makeSeedId("visit"),
+      studentProfileId: student.profileId,
+      handledById,
+      visitDate,
+      createdAt: visitDate,
+      visitTime: toVisitTime(visitDate),
+      concernTag: "Fever",
+      chiefComplaintEnc: MOCK_ENCRYPTED_FEVER_COMPLAINT,
+    };
+  });
 
-    for (let index = 0; index < outbreakHoursOffsets.length; index += 1) {
-      const student = ccsStudents[index];
-      const visitDate = hoursAgo(outbreakHoursOffsets[index]);
+  const nonOutbreakTemplates = [
+    { student: students[10], concernTag: "Headache", complaint: "enc::intermittent-headache", date: daysAgo(4, 9) },
+    { student: students[11], concernTag: "Stomach Pain", complaint: "enc::epigastric-pain-after-meal", date: daysAgo(7, 11) },
+    { student: students[12], concernTag: "Dental Concern", complaint: "enc::toothache-right-molar", date: daysAgo(10, 14) },
+    { student: students[13], concernTag: "Injury", complaint: "enc::minor-ankle-sprain", date: daysAgo(14, 15) },
+    { student: students[14], concernTag: "Flu-like Illness", complaint: "enc::cough-and-colds", date: daysAgo(18, 10) },
+    { student: students[8], concernTag: "Dizziness", complaint: "enc::transient-dizziness", date: daysAgo(22, 13) },
+    { student: students[9], concernTag: "Cough", complaint: "enc::dry-cough-no-fever", date: daysAgo(27, 8) },
+  ];
 
-      const visit = await tx.clinicVisit.create({
-        data: {
-          studentProfileId: student.profileId,
-          handledById,
-          visitDate,
-          createdAt: visitDate,
-          visitTime: toVisitTime(visitDate),
-          concernTag: "Fever",
-          chiefComplaintEnc: MOCK_ENCRYPTED_FEVER_COMPLAINT,
-        },
-        select: { id: true },
-      });
+  const nonOutbreakVisits = nonOutbreakTemplates.map((template) => ({
+    id: makeSeedId("visit"),
+    studentProfileId: template.student.profileId,
+    handledById,
+    visitDate: template.date,
+    createdAt: template.date,
+    visitTime: toVisitTime(template.date),
+    concernTag: template.concernTag,
+    chiefComplaintEnc: template.complaint,
+  }));
 
-      outbreakVisits.push(visit);
-    }
+  const visitMedicineRows = outbreakVisits.slice(0, 6).map((visit) => ({
+    visitId: visit.id,
+    inventoryId: paracetamol.id,
+    quantity: 2,
+  }));
 
-    const nonOutbreakTemplates = [
-      { student: students[10], concernTag: "Headache", complaint: "enc::intermittent-headache", date: daysAgo(4, 9) },
-      { student: students[11], concernTag: "Stomach Pain", complaint: "enc::epigastric-pain-after-meal", date: daysAgo(7, 11) },
-      { student: students[12], concernTag: "Dental Concern", complaint: "enc::toothache-right-molar", date: daysAgo(10, 14) },
-      { student: students[13], concernTag: "Injury", complaint: "enc::minor-ankle-sprain", date: daysAgo(14, 15) },
-      { student: students[14], concernTag: "Flu-like Illness", complaint: "enc::cough-and-colds", date: daysAgo(18, 10) },
-      { student: students[8], concernTag: "Dizziness", complaint: "enc::transient-dizziness", date: daysAgo(22, 13) },
-      { student: students[9], concernTag: "Cough", complaint: "enc::dry-cough-no-fever", date: daysAgo(27, 8) },
-    ];
+  const totalParacetamolDispensed = visitMedicineRows.reduce((total, item) => total + item.quantity, 0);
 
-    for (const template of nonOutbreakTemplates) {
-      await tx.clinicVisit.create({
-        data: {
-          studentProfileId: template.student.profileId,
-          handledById,
-          visitDate: template.date,
-          createdAt: template.date,
-          visitTime: toVisitTime(template.date),
-          concernTag: template.concernTag,
-          chiefComplaintEnc: template.complaint,
-        },
-      });
-    }
-
-    for (let index = 0; index < 6; index += 1) {
-      const quantity = 2;
-      await tx.visitMedicine.create({
-        data: {
-          visitId: outbreakVisits[index].id,
-          inventoryId: paracetamol.id,
-          quantity,
-        },
-      });
-      totalParacetamolDispensed += quantity;
-    }
-
-    if (totalParacetamolDispensed > 0) {
-      await tx.inventory.update({
+  if (totalParacetamolDispensed > 0) {
+    await prisma.$transaction([
+      prisma.clinicVisit.createMany({ data: [...outbreakVisits, ...nonOutbreakVisits] }),
+      prisma.visitMedicine.createMany({ data: visitMedicineRows }),
+      prisma.inventory.update({
         where: { id: paracetamol.id },
         data: {
           currentStock: {
             decrement: totalParacetamolDispensed,
           },
         },
-      });
-    }
-  });
+      }),
+    ]);
+  } else {
+    await prisma.$transaction([
+      prisma.clinicVisit.createMany({ data: [...outbreakVisits, ...nonOutbreakVisits] }),
+      prisma.visitMedicine.createMany({ data: visitMedicineRows }),
+    ]);
+  }
 
   console.log("   Created 15 clinic visit records total.");
   console.log("   Outbreak trigger: exactly 8 CCS Fever visits in last 48 hours.");

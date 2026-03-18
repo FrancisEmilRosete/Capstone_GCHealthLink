@@ -1,5 +1,6 @@
 const { PrismaClient, XrayResult, YearLevel } = require("@prisma/client");
 const { encryptStringSafe } = require("../utils/encryption.util");
+const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 
 const prisma = new PrismaClient();
 
@@ -81,38 +82,72 @@ function toExamRow(exam) {
 
 const listPhysicalExams = async (req, res, next) => {
   try {
-    const query = normalizeText(req.query.q).toLowerCase();
-
-    const exams = await prisma.physicalExamination.findMany({
-      orderBy: [{ examDate: "desc" }, { createdAt: "desc" }],
-      include: {
-        studentProfile: {
-          select: {
-            id: true,
-            studentNumber: true,
-            firstName: true,
-            lastName: true,
-            courseDept: true,
-          },
-        },
-      },
+    const query = normalizeText(req.query.q);
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 300,
+      maxLimit: 500,
     });
 
-    const rows = exams
-      .map(toExamRow)
-      .filter((row) => {
-        if (!query) return true;
-        return (
-          row.studentName.toLowerCase().includes(query) ||
-          row.studentNumber.toLowerCase().includes(query) ||
-          row.courseDept.toLowerCase().includes(query)
-        );
+    let whereClause;
+    if (query) {
+      const matchingProfiles = await prisma.studentProfile.findMany({
+        where: {
+          OR: [
+            { firstName: { contains: query, mode: "insensitive" } },
+            { lastName: { contains: query, mode: "insensitive" } },
+            { studentNumber: { contains: query, mode: "insensitive" } },
+            { courseDept: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+        take: 5000,
       });
+
+      const profileIds = matchingProfiles.map((profile) => profile.id);
+      if (profileIds.length === 0) {
+        return res.json({
+          success: true,
+          message: "Physical examinations retrieved successfully.",
+          data: [],
+          pagination: buildPaginationMeta({ page, limit, total: 0 }),
+        });
+      }
+
+      whereClause = {
+        studentProfileId: {
+          in: profileIds,
+        },
+      };
+    }
+
+    const [exams, total] = await prisma.$transaction([
+      prisma.physicalExamination.findMany({
+        where: whereClause,
+        orderBy: [{ examDate: "desc" }, { createdAt: "desc" }],
+        skip,
+        take: limit,
+        include: {
+          studentProfile: {
+            select: {
+              id: true,
+              studentNumber: true,
+              firstName: true,
+              lastName: true,
+              courseDept: true,
+            },
+          },
+        },
+      }),
+      prisma.physicalExamination.count({ where: whereClause }),
+    ]);
+
+    const rows = exams.map(toExamRow);
 
     return res.json({
       success: true,
       message: "Physical examinations retrieved successfully.",
       data: rows,
+      pagination: buildPaginationMeta({ page, limit, total }),
     });
   } catch (error) {
     return next(error);

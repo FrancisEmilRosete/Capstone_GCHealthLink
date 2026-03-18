@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const { decryptStringSafe } = require("../utils/encryption.util");
+const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 const prisma = new PrismaClient();
 const ALLOWED_APPOINTMENT_STATUSES = new Set(["WAITING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
 
@@ -94,26 +95,37 @@ const getLiveQueue = async (req, res, next) => {
     // Fetch all appointments that are currently "WAITING" for today
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 200,
+      maxLimit: 500,
+    });
 
-    const queue = await prisma.appointment.findMany({
-      where: {
-        status: "WAITING",
-        preferredDate: { gte: startOfDay }
-      },
-      orderBy: { createdAt: 'asc' }, // Oldest requests first (First in, first out)
-      include: {
-        studentProfile: {
-          select: {
-            id: true,
-            studentNumber: true,
-            firstName: true,
-            lastName: true,
-            courseDept: true,
-            medicalHistory: true // Instantly pull history so nurse can see risks
+    const whereClause = {
+      status: "WAITING",
+      preferredDate: { gte: startOfDay },
+    };
+
+    const [queue, total] = await prisma.$transaction([
+      prisma.appointment.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'asc' }, // Oldest requests first (First in, first out)
+        skip,
+        take: limit,
+        include: {
+          studentProfile: {
+            select: {
+              id: true,
+              studentNumber: true,
+              firstName: true,
+              lastName: true,
+              courseDept: true,
+              medicalHistory: true // Instantly pull history so nurse can see risks
+            }
           }
         }
-      }
-    });
+      }),
+      prisma.appointment.count({ where: whereClause }),
+    ]);
 
     const queueWithSafeHistory = queue.map((entry) => ({
       ...entry,
@@ -126,7 +138,8 @@ const getLiveQueue = async (req, res, next) => {
     res.json({
       success: true,
       message: "Live patient queue retrieved",
-      data: queueWithSafeHistory
+      data: queueWithSafeHistory,
+      pagination: buildPaginationMeta({ page, limit, total }),
     });
   } catch (error) {
     next(error);
