@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
-import PhysicalExamModal from '@/components/modals/PhysicalExamModal';
+import PhysicalExamModal, { type PhysicalExamRecordFormData } from '@/components/modals/PhysicalExamModal';
 import ConsultationModal, { type InventoryOption } from '@/components/modals/ConsultationModal';
 
 const QrCameraScanner = dynamic(() => import('@/components/scanner/QrCameraScanner'), {
@@ -83,35 +83,6 @@ interface UiStudent {
   sex: string;
   allergies: string[];
   bloodType: string;
-}
-
-interface PhysicalExamFormData {
-  yearLevel: string;
-  dateOfExam: string;
-  examinedBy: string;
-  bp: string;
-  heartRate: string;
-  respRate: string;
-  temperature: string;
-  weight: string;
-  height: string;
-  visualAcuity: string;
-  skin: string;
-  heent: string;
-  chestLungs: string;
-  heart: string;
-  abdomen: string;
-  extremities: string;
-  remarks: string;
-  hgb: string;
-  hct: string;
-  wbc: string;
-  cbcBldType: string;
-  urineGlucose: string;
-  urineProtein: string;
-  chestXray: 'normal' | 'abnormal' | '';
-  chestXrayFindings: string;
-  labOthers: string;
 }
 
 type SearchStatus = 'idle' | 'found' | 'not-found';
@@ -609,7 +580,7 @@ export default function ScannerPage() {
       setError('');
 
       await api.post<EmergencySmsResponse>(
-        '/emergency/send-sms',
+        '/clinic/emergency/send-sms',
         {
           studentProfileId: foundStudent.studentProfileId,
         },
@@ -628,7 +599,7 @@ export default function ScannerPage() {
     }
   }
 
-  async function handlePhysicalExamSave(form: PhysicalExamFormData) {
+  async function handlePhysicalExamSave(form: PhysicalExamRecordFormData) {
     if (!foundStudent) return;
 
     const token = getToken();
@@ -686,7 +657,7 @@ export default function ScannerPage() {
           studentName={`${foundStudent.firstName} ${foundStudent.lastName}`}
           onClose={() => setShowExamModal(false)}
           onSave={(form) => {
-            void handlePhysicalExamSave(form as PhysicalExamFormData);
+            void handlePhysicalExamSave(form);
             setShowExamModal(false);
           }}
         />

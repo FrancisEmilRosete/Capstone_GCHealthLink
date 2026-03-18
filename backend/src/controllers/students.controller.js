@@ -14,10 +14,9 @@ const {
 const prisma = new PrismaClient();
 
 const REGISTRATION_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const parsedQrTtlMinutes = Number(process.env.QR_TOKEN_TTL_MINUTES || 15);
-const QR_TOKEN_TTL_MINUTES = Number.isFinite(parsedQrTtlMinutes) && parsedQrTtlMinutes > 0
-  ? parsedQrTtlMinutes
-  : 15;
+const QR_TOKEN_SECRET = normalizeText(process.env.QR_TOKEN_SECRET)
+  || normalizeText(process.env.JWT_SECRET)
+  || "gc-healthlink-static-qr";
 
 const CONDITION_TO_FIELD = {
   allergy: "allergyEnc",
@@ -186,11 +185,14 @@ function extractOperationSummary(rawNotes) {
   };
 }
 
-function generateQrToken() {
-  if (typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID().replace(/-/g, "");
-  }
-  return crypto.randomBytes(20).toString("hex");
+function generateStaticQrToken(studentProfileId) {
+  const profileId = normalizeText(studentProfileId);
+  const nonce = crypto.randomBytes(16).toString("hex");
+
+  return crypto
+    .createHmac("sha256", QR_TOKEN_SECRET)
+    .update(`${profileId}:${nonce}`)
+    .digest("hex");
 }
 
 function decryptMedicalHistory(history) {
@@ -261,7 +263,7 @@ const getMyProfile = async (req, res, next) => {
   }
 };
 
-// GENERATE QR CODE: Stays the same, but kept here for the full file copy-paste
+// GENERATE/FETCH STATIC QR CODE TOKEN FOR THE LOGGED-IN STUDENT
 const generateMyQRCode = async (req, res, next) => {
   try {
     const student = await prisma.user.findUnique({
@@ -273,38 +275,26 @@ const generateMyQRCode = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Profile not found" });
     }
 
-    const now = new Date();
-    const existingToken = normalizeText(student.qrToken);
-    const hasActiveToken = !!existingToken
-      && !!student.qrTokenExpiresAt
-      && student.qrTokenExpiresAt.getTime() > now.getTime();
+    let qrToken = normalizeText(student.qrToken);
 
-    let qrToken = existingToken;
-    let expiresAt = student.qrTokenExpiresAt;
-
-    if (!hasActiveToken) {
-      const issuedAt = now;
-      expiresAt = new Date(issuedAt.getTime() + (QR_TOKEN_TTL_MINUTES * 60 * 1000));
-      qrToken = generateQrToken();
+    if (!qrToken) {
+      qrToken = generateStaticQrToken(student.studentProfile.id);
 
       await prisma.user.update({
         where: { id: student.id },
         data: {
           qrToken,
-          qrTokenIssuedAt: issuedAt,
-          qrTokenExpiresAt: expiresAt,
         },
       });
     }
 
-    if (!qrToken || !expiresAt) {
+    if (!qrToken) {
       return res.status(500).json({ success: false, message: "Unable to generate QR token." });
     }
 
     const qrData = JSON.stringify({
       qrToken,
       studentNumber: student.studentProfile.studentNumber,
-      expiresAt: expiresAt.toISOString(),
     });
 
     const qrCodeImage = await QRCode.toDataURL(qrData);
@@ -313,8 +303,8 @@ const generateMyQRCode = async (req, res, next) => {
       success: true,
       data: {
         studentNumber: student.studentProfile.studentNumber,
+        qrToken,
         qrCodeImage,
-        qrTokenExpiresAt: expiresAt.toISOString(),
       }
     });
   } catch (error) {

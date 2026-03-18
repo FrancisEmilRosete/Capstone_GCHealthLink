@@ -29,12 +29,60 @@ interface StudentQrResponse {
   success: boolean;
   data: {
     studentNumber: string;
+    qrToken: string;
     qrCodeImage: string;
   };
 }
 
 const REGISTRATION_ROUTE = '/dashboard/student/registration';
 const DEFAULT_PROFILE_NAME = 'Student';
+const STUDENT_QR_CACHE_KEY = 'gchl:student:static-qr';
+
+interface CachedQrPayload {
+  studentNumber: string;
+  qrToken: string;
+  qrCodeImage: string;
+}
+
+function readCachedQrPayload(): CachedQrPayload | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(STUDENT_QR_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<CachedQrPayload>;
+    if (
+      typeof parsed?.studentNumber !== 'string'
+      || typeof parsed?.qrToken !== 'string'
+      || typeof parsed?.qrCodeImage !== 'string'
+    ) {
+      return null;
+    }
+
+    if (!parsed.qrToken.trim() || !parsed.qrCodeImage.trim()) {
+      return null;
+    }
+
+    return {
+      studentNumber: parsed.studentNumber,
+      qrToken: parsed.qrToken,
+      qrCodeImage: parsed.qrCodeImage,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedQrPayload(payload: CachedQrPayload) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(STUDENT_QR_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore cache write failures.
+  }
+}
 
 // ── Nav items ─────────────────────────────────────────────────
 
@@ -471,6 +519,14 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     let mounted = true;
     async function loadStudentSession() {
       try {
+        const cachedQr = readCachedQrPayload();
+        if (cachedQr?.qrCodeImage) {
+          setQrImage(cachedQr.qrCodeImage);
+          if (cachedQr.studentNumber) {
+            setStudentNumber(cachedQr.studentNumber);
+          }
+        }
+
         const [profileResponse, qrResponse] = await Promise.allSettled([
           api.get<StudentProfileResponse>('/students/me', authToken),
           api.get<StudentQrResponse>('/students/qr', authToken),
@@ -501,17 +557,25 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         }
 
         if (qrResponse.status === 'fulfilled') {
-          setQrImage(qrResponse.value.data?.qrCodeImage || '');
-          setStudentNumber(qrResponse.value.data?.studentNumber || profile?.studentNumber || '');
+          const qrPayload = qrResponse.value.data;
+          setQrImage(qrPayload?.qrCodeImage || cachedQr?.qrCodeImage || '');
+          setStudentNumber(qrPayload?.studentNumber || profile?.studentNumber || cachedQr?.studentNumber || '');
+
+          if (qrPayload?.qrToken && qrPayload?.qrCodeImage) {
+            writeCachedQrPayload({
+              studentNumber: qrPayload.studentNumber || profile?.studentNumber || '',
+              qrToken: qrPayload.qrToken,
+              qrCodeImage: qrPayload.qrCodeImage,
+            });
+          }
         } else {
-          setQrImage('');
+          setQrImage(cachedQr?.qrCodeImage || '');
         }
       } catch {
         if (!mounted) return;
 
         setProfileName(DEFAULT_PROFILE_NAME);
         setHasCompletedProfile(false);
-        setQrImage('');
       }
     }
 

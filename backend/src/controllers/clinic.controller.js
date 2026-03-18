@@ -89,21 +89,56 @@ function extractOperationSummary(rawNotes) {
   };
 }
 
+const MEDICAL_HISTORY_ENCRYPTED_FIELDS = [
+  "allergyEnc",
+  "asthmaEnc",
+  "chickenPoxEnc",
+  "diabetesEnc",
+  "dysmenorrheaEnc",
+  "epilepsySeizureEnc",
+  "heartDisorderEnc",
+  "hepatitisEnc",
+  "hypertensionEnc",
+  "measlesEnc",
+  "mumpsEnc",
+  "anxietyDisorderEnc",
+  "panicAttackHyperventilationEnc",
+  "pneumoniaEnc",
+  "ptbPrimaryComplexEnc",
+  "typhoidFeverEnc",
+  "covid19Enc",
+  "urinaryTractInfectionEnc",
+  "hasPastOperationEnc",
+  "operationNatureAndDateEnc",
+];
+
 function decryptMedicalHistory(history) {
   if (!history) return history;
 
   const operationSummary = extractOperationSummary(history.operationNatureAndDateEnc);
 
+  const decryptedFields = {};
+  for (const field of MEDICAL_HISTORY_ENCRYPTED_FIELDS) {
+    decryptedFields[field] = decryptStringSafe(history[field]);
+  }
+
   return {
     ...history,
-    allergyEnc: decryptStringSafe(history.allergyEnc),
-    asthmaEnc: decryptStringSafe(history.asthmaEnc),
-    diabetesEnc: decryptStringSafe(history.diabetesEnc),
-    hypertensionEnc: decryptStringSafe(history.hypertensionEnc),
-    anxietyDisorderEnc: decryptStringSafe(history.anxietyDisorderEnc),
-    operationNatureAndDateEnc: operationSummary.notes,
+    ...decryptedFields,
+    operationNatureAndDateEnc:
+      decryptedFields.operationNatureAndDateEnc || operationSummary.notes,
     bloodType: operationSummary.bloodType,
     immunizations: operationSummary.immunizations,
+  };
+}
+
+function decryptLabResult(labResult) {
+  if (!labResult) return labResult;
+
+  return {
+    ...labResult,
+    xrayFindingsEnc: decryptStringSafe(labResult.xrayFindingsEnc),
+    othersEnc: decryptStringSafe(labResult.othersEnc),
   };
 }
 
@@ -154,6 +189,7 @@ function mapStudentScanPayload(student) {
   const profile = {
     ...student.studentProfile,
     medicalHistory: decryptMedicalHistory(student.studentProfile?.medicalHistory || null),
+    labResults: (student.studentProfile?.labResults || []).map((labResult) => decryptLabResult(labResult)),
   };
 
   return {
@@ -248,6 +284,9 @@ const getStudentByQR = async (req, res, next) => {
             physicalExaminations: {
               orderBy: { examDate: "desc" },
             },
+            labResults: {
+              orderBy: { date: "desc" },
+            },
           }
         },
       },
@@ -267,6 +306,9 @@ const getStudentByQR = async (req, res, next) => {
           medicalHistory: true,
           physicalExaminations: {
             orderBy: { examDate: "desc" },
+          },
+          labResults: {
+            orderBy: { date: "desc" },
           },
         },
       });
@@ -320,6 +362,9 @@ const getStudentByQrToken = async (req, res, next) => {
             physicalExaminations: {
               orderBy: { examDate: "desc" },
             },
+            labResults: {
+              orderBy: { date: "desc" },
+            },
           },
         },
       },
@@ -329,13 +374,9 @@ const getStudentByQrToken = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "QR code is invalid." });
     }
 
-    if (!student.qrTokenExpiresAt || student.qrTokenExpiresAt.getTime() < Date.now()) {
-      return res.status(410).json({ success: false, message: "QR code expired. Please generate a new code." });
-    }
-
     const { profile, emergencyAlert } = mapStudentScanPayload(student);
 
-    await writeScanAuditLog(req, student.id, "Dynamic QR Token Scan");
+    await writeScanAuditLog(req, student.id, "Static QR Token Scan");
 
     return res.json({
       success: true,

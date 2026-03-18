@@ -5,18 +5,61 @@ const { parsePaginationParams, buildPaginationMeta } = require("../utils/paginat
 const prisma = new PrismaClient();
 
 const YEAR_LEVEL_MAP = {
+  "yr. 1": YearLevel.YR_1,
+  "yr 1": YearLevel.YR_1,
+  "yr.1": YearLevel.YR_1,
+  "yr1": YearLevel.YR_1,
+  "1": YearLevel.YR_1,
   "1st year": YearLevel.YR_1,
+  "yr. 2": YearLevel.YR_2,
+  "yr 2": YearLevel.YR_2,
+  "yr.2": YearLevel.YR_2,
+  "yr2": YearLevel.YR_2,
+  "2": YearLevel.YR_2,
   "2nd year": YearLevel.YR_2,
+  "yr. 3": YearLevel.YR_3,
+  "yr 3": YearLevel.YR_3,
+  "yr.3": YearLevel.YR_3,
+  "yr3": YearLevel.YR_3,
+  "3": YearLevel.YR_3,
   "3rd year": YearLevel.YR_3,
+  "yr. 4": YearLevel.YR_4,
+  "yr 4": YearLevel.YR_4,
+  "yr.4": YearLevel.YR_4,
+  "yr4": YearLevel.YR_4,
+  "4": YearLevel.YR_4,
   "4th year": YearLevel.YR_4,
 };
 
 const YEAR_LEVEL_LABEL = {
-  [YearLevel.YR_1]: "1st Year",
-  [YearLevel.YR_2]: "2nd Year",
-  [YearLevel.YR_3]: "3rd Year",
-  [YearLevel.YR_4]: "4th Year",
+  [YearLevel.YR_1]: "Yr. 1",
+  [YearLevel.YR_2]: "Yr. 2",
+  [YearLevel.YR_3]: "Yr. 3",
+  [YearLevel.YR_4]: "Yr. 4",
 };
+
+const MEDICAL_HISTORY_BOOLEAN_FIELDS = [
+  { inputKeys: ["asthma"], dbField: "asthmaEnc" },
+  { inputKeys: ["chickenPox", "chickenpox"], dbField: "chickenPoxEnc" },
+  { inputKeys: ["diabetes"], dbField: "diabetesEnc" },
+  { inputKeys: ["dysmenorrhea"], dbField: "dysmenorrheaEnc" },
+  { inputKeys: ["epilepsySeizure", "epilepsy"], dbField: "epilepsySeizureEnc" },
+  { inputKeys: ["heartDisorder"], dbField: "heartDisorderEnc" },
+  { inputKeys: ["hepatitis"], dbField: "hepatitisEnc" },
+  { inputKeys: ["hypertension"], dbField: "hypertensionEnc" },
+  { inputKeys: ["measles"], dbField: "measlesEnc" },
+  { inputKeys: ["mumps"], dbField: "mumpsEnc" },
+  { inputKeys: ["anxietyDisorder"], dbField: "anxietyDisorderEnc" },
+  {
+    inputKeys: ["panicAttackHyperventilation", "panicAttack"],
+    dbField: "panicAttackHyperventilationEnc",
+  },
+  { inputKeys: ["pneumonia"], dbField: "pneumoniaEnc" },
+  { inputKeys: ["ptbPrimaryComplex", "ptb"], dbField: "ptbPrimaryComplexEnc" },
+  { inputKeys: ["typhoidFever"], dbField: "typhoidFeverEnc" },
+  { inputKeys: ["covid19", "covid"], dbField: "covid19Enc" },
+  { inputKeys: ["urinaryTractInfection", "uti"], dbField: "urinaryTractInfectionEnc" },
+];
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -34,6 +77,87 @@ function parseDate(value) {
 function parseYearLevel(value) {
   const normalized = normalizeText(value).toLowerCase();
   return YEAR_LEVEL_MAP[normalized] || null;
+}
+
+function hasOwn(body, key) {
+  return Object.prototype.hasOwnProperty.call(body || {}, key);
+}
+
+function resolveFieldValue(body, keys) {
+  for (const key of keys) {
+    if (hasOwn(body, key)) {
+      return body[key];
+    }
+  }
+
+  return undefined;
+}
+
+function parseBooleanInput(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (["true", "yes", "y", "1", "on"].includes(normalized)) {
+    return true;
+  }
+
+  if (["false", "no", "n", "0", "off"].includes(normalized)) {
+    return false;
+  }
+
+  return null;
+}
+
+function encryptYesNo(value) {
+  const parsed = parseBooleanInput(value);
+  if (parsed === null) {
+    return null;
+  }
+
+  return encryptStringSafe(parsed ? "yes" : "no");
+}
+
+function buildMedicalHistoryPayload(body) {
+  const payload = {};
+  let hasAnyField = false;
+
+  const allergyValue = resolveFieldValue(body, ["allergy"]);
+  if (allergyValue !== undefined) {
+    hasAnyField = true;
+    const normalizedAllergy = normalizeText(allergyValue);
+    payload.allergyEnc = normalizedAllergy ? encryptStringSafe(normalizedAllergy) : null;
+  }
+
+  for (const fieldMap of MEDICAL_HISTORY_BOOLEAN_FIELDS) {
+    const rawValue = resolveFieldValue(body, fieldMap.inputKeys);
+    if (rawValue === undefined) {
+      continue;
+    }
+
+    hasAnyField = true;
+    payload[fieldMap.dbField] = encryptYesNo(rawValue);
+  }
+
+  const pastOperationValue = resolveFieldValue(body, ["hasPastOperation"]);
+  if (pastOperationValue !== undefined) {
+    hasAnyField = true;
+    payload.hasPastOperationEnc = encryptYesNo(pastOperationValue);
+  }
+
+  const operationDetails = resolveFieldValue(body, ["operationNatureAndDate"]);
+  if (operationDetails !== undefined) {
+    hasAnyField = true;
+    const normalizedDetails = normalizeText(operationDetails);
+    payload.operationNatureAndDateEnc = normalizedDetails ? encryptStringSafe(normalizedDetails) : null;
+  }
+
+  return hasAnyField ? payload : null;
 }
 
 function parseNumber(value) {
@@ -158,7 +282,7 @@ const createPhysicalExam = async (req, res, next) => {
   try {
     const studentProfileId = normalizeText(req.body?.studentProfileId);
     const yearLevel = parseYearLevel(req.body?.yearLevel);
-    const examDate = parseDate(req.body?.dateOfExam || req.body?.examDate);
+    const examDate = parseDate(req.body?.examDate || req.body?.dateOfExam);
 
     if (!studentProfileId) {
       return res.status(400).json({ success: false, message: "studentProfileId is required." });
@@ -184,6 +308,18 @@ const createPhysicalExam = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Student profile not found." });
     }
 
+    const medicalHistoryPayload = buildMedicalHistoryPayload(req.body);
+    if (medicalHistoryPayload) {
+      await prisma.medicalHistory.upsert({
+        where: { studentProfileId },
+        update: medicalHistoryPayload,
+        create: {
+          studentProfileId,
+          ...medicalHistoryPayload,
+        },
+      });
+    }
+
     const computedBmi = calculateBmi(req.body?.weight, req.body?.height);
 
     const exam = await prisma.physicalExamination.create({
@@ -192,9 +328,9 @@ const createPhysicalExam = async (req, res, next) => {
         yearLevel,
         examDate,
         bp: normalizeText(req.body?.bp) || null,
-        cr: normalizeText(req.body?.heartRate || req.body?.pulseRate) || null,
-        rr: normalizeText(req.body?.respRate) || null,
-        temp: normalizeText(req.body?.temperature) || null,
+        cr: normalizeText(req.body?.cr || req.body?.heartRate || req.body?.pulseRate) || null,
+        rr: normalizeText(req.body?.rr || req.body?.respRate) || null,
+        temp: normalizeText(req.body?.temp || req.body?.temperature) || null,
         weight: normalizeText(req.body?.weight) || null,
         height: normalizeText(req.body?.height) || null,
         bmi: normalizeText(req.body?.bmi) || computedBmi || null,
@@ -205,7 +341,7 @@ const createPhysicalExam = async (req, res, next) => {
         heart: normalizeText(req.body?.heart) || null,
         abdomen: normalizeText(req.body?.abdomen) || null,
         extremities: normalizeText(req.body?.extremities) || null,
-        others: normalizeText(req.body?.remarks) || null,
+        others: normalizeText(req.body?.others || req.body?.remarks) || null,
         examinedBy: normalizeText(req.body?.examinedBy) || null,
       },
       include: {
@@ -221,33 +357,61 @@ const createPhysicalExam = async (req, res, next) => {
       },
     });
 
+    const cbcDate = parseDate(req.body?.cbcDate);
+    const uaDate = parseDate(req.body?.uaDate);
+    const chestXrayDate = parseDate(req.body?.chestXrayDate);
+    const explicitLabDate = parseDate(req.body?.labDate || req.body?.date);
+    const dateReceived = parseDate(req.body?.dateReceived);
+    const resolvedLabDate = cbcDate || uaDate || chestXrayDate || explicitLabDate || examDate;
+
+    const normalizedAbnormalFindings = normalizeText(req.body?.abnormalFindings || req.body?.chestXrayFindings);
+    const normalizedLabOthers = normalizeText(req.body?.labOthers || req.body?.others);
+
     const hasLabData = [
+      cbcDate,
+      uaDate,
+      chestXrayDate,
+      explicitLabDate,
+      dateReceived,
       req.body?.hgb,
       req.body?.hct,
       req.body?.wbc,
+      req.body?.pltCt,
+      req.body?.bloodType,
       req.body?.cbcBldType,
+      req.body?.glucoseSugar,
       req.body?.urineGlucose,
+      req.body?.protein,
       req.body?.urineProtein,
+      req.body?.xrayResult,
       req.body?.chestXray,
-      req.body?.chestXrayFindings,
-      req.body?.labOthers,
-    ].some((value) => normalizeText(value));
+      normalizedAbnormalFindings,
+      normalizedLabOthers,
+    ].some((value) => {
+      if (value instanceof Date) {
+        return true;
+      }
+
+      return normalizeText(value);
+    });
 
     let labResult = null;
     if (hasLabData) {
       labResult = await prisma.labResult.create({
         data: {
           studentProfileId,
-          date: examDate,
+          date: resolvedLabDate,
+          dateReceived: dateReceived || null,
           hgb: normalizeText(req.body?.hgb) || null,
           hct: normalizeText(req.body?.hct) || null,
           wbc: normalizeText(req.body?.wbc) || null,
-          bloodType: normalizeText(req.body?.cbcBldType) || null,
-          glucoseSugar: normalizeText(req.body?.urineGlucose) || null,
-          protein: normalizeText(req.body?.urineProtein) || null,
-          xrayResult: mapXrayResult(req.body?.chestXray),
-          xrayFindingsEnc: encryptStringSafe(normalizeText(req.body?.chestXrayFindings)) || null,
-          othersEnc: encryptStringSafe(normalizeText(req.body?.labOthers)) || null,
+          pltCt: normalizeText(req.body?.pltCt) || null,
+          bloodType: normalizeText(req.body?.bloodType || req.body?.cbcBldType) || null,
+          glucoseSugar: normalizeText(req.body?.glucoseSugar || req.body?.urineGlucose) || null,
+          protein: normalizeText(req.body?.protein || req.body?.urineProtein) || null,
+          xrayResult: mapXrayResult(req.body?.xrayResult || req.body?.chestXray),
+          xrayFindingsEnc: normalizedAbnormalFindings ? encryptStringSafe(normalizedAbnormalFindings) : null,
+          othersEnc: normalizedLabOthers ? encryptStringSafe(normalizedLabOthers) : null,
         },
       });
     }
@@ -261,6 +425,7 @@ const createPhysicalExam = async (req, res, next) => {
         metadata: {
           examId: exam.id,
           studentNumber: studentProfile.studentNumber,
+          hasMedicalHistoryUpdate: !!medicalHistoryPayload,
           hasLabData: !!labResult,
         },
       },

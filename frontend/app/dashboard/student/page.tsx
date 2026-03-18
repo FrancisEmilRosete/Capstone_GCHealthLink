@@ -44,12 +44,18 @@ interface QrResponse {
   success: boolean;
   data: {
     studentNumber: string;
+    qrToken: string;
     qrCodeImage: string;
-    qrTokenExpiresAt?: string;
   };
 }
 
-const QR_REFRESH_INTERVAL_MS = 30_000;
+const STUDENT_QR_CACHE_KEY = 'gchl:student:static-qr';
+
+interface CachedQrPayload {
+  studentNumber: string;
+  qrToken: string;
+  qrCodeImage: string;
+}
 
 function parseAllergyCount(raw?: string | null): number {
   if (!raw) return 0;
@@ -70,18 +76,56 @@ function hasCompletedRegistration(profile: StudentProfile | null) {
   return Boolean(profile?.studentNumber?.trim());
 }
 
+function readCachedQrPayload(): CachedQrPayload | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(STUDENT_QR_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<CachedQrPayload>;
+    if (
+      typeof parsed?.studentNumber !== 'string'
+      || typeof parsed?.qrToken !== 'string'
+      || typeof parsed?.qrCodeImage !== 'string'
+    ) {
+      return null;
+    }
+
+    if (!parsed.qrToken.trim() || !parsed.qrCodeImage.trim()) {
+      return null;
+    }
+
+    return {
+      studentNumber: parsed.studentNumber,
+      qrToken: parsed.qrToken,
+      qrCodeImage: parsed.qrCodeImage,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedQrPayload(payload: CachedQrPayload) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(STUDENT_QR_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore cache write failures (private mode, storage full, etc.).
+  }
+}
+
 function QrCard({
   loading,
   qrImage,
   profile,
-  qrRefreshing,
   className = '',
   prominent = false,
 }: {
   loading: boolean;
   qrImage: string;
   profile: StudentProfile | null;
-  qrRefreshing: boolean;
   className?: string;
   prominent?: boolean;
 }) {
@@ -103,7 +147,7 @@ function QrCard({
 
       <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-xs text-teal-700">
         <svg
-          className={`w-3.5 h-3.5 ${qrRefreshing ? 'animate-spin' : ''}`}
+          className="w-3.5 h-3.5"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -113,10 +157,10 @@ function QrCard({
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M4 4v5h5M20 20v-5h-5M20 9A8 8 0 006.34 5.34L4 8M4 15a8 8 0 0013.66 3.66L20 16"
+            d="M5 13l4 4L19 7"
           />
         </svg>
-        <span>Updates in 30s</span>
+        <span>Static QR cached for offline use</span>
       </div>
 
       <p className="text-xs text-gray-500 mt-3 text-center">
@@ -130,30 +174,15 @@ function QrCard({
 export default function StudentDashboard() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [qrImage, setQrImage] = useState<string>('');
-  const [qrRefreshing, setQrRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function loadQrCode(token: string, isBackgroundRefresh = false) {
-    if (isBackgroundRefresh) {
-      setQrRefreshing(true);
-    }
-
-    try {
-      const response = await api.get<QrResponse>('/students/qr', token);
-      setQrImage(response.data.qrCodeImage || '');
-    } catch {
-      if (!isBackgroundRefresh) {
-        setQrImage('');
-      }
-    } finally {
-      if (isBackgroundRefresh) {
-        setQrRefreshing(false);
-      }
-    }
-  }
-
   async function loadStudentData() {
+    const cachedQr = readCachedQrPayload();
+    if (cachedQr?.qrCodeImage) {
+      setQrImage(cachedQr.qrCodeImage);
+    }
+
     const token = getToken();
     if (!token) {
       setError('You are not logged in. Please sign in again.');
@@ -175,9 +204,18 @@ export default function StudentDashboard() {
       setProfile(profileResponse.value.data);
 
       if (qrResponse.status === 'fulfilled') {
-        setQrImage(qrResponse.value.data.qrCodeImage || '');
+        const qrPayload = qrResponse.value.data;
+        setQrImage(qrPayload.qrCodeImage || cachedQr?.qrCodeImage || '');
+
+        if (qrPayload.qrToken && qrPayload.qrCodeImage) {
+          writeCachedQrPayload({
+            studentNumber: qrPayload.studentNumber || profileResponse.value.data.studentNumber || '',
+            qrToken: qrPayload.qrToken,
+            qrCodeImage: qrPayload.qrCodeImage,
+          });
+        }
       } else {
-        setQrImage('');
+        setQrImage(cachedQr?.qrCodeImage || '');
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -192,19 +230,6 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     void loadStudentData();
-  }, []);
-
-  useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-
-    const refreshHandle = window.setInterval(() => {
-      void loadQrCode(token, true);
-    }, QR_REFRESH_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(refreshHandle);
-    };
   }, []);
 
   const recentVisits = useMemo(() => {
@@ -263,7 +288,6 @@ export default function StudentDashboard() {
         loading={loading}
         qrImage={qrImage}
         profile={profile}
-        qrRefreshing={qrRefreshing}
         prominent
         className="lg:hidden mx-auto w-full max-w-sm"
       />
@@ -324,7 +348,6 @@ export default function StudentDashboard() {
           loading={loading}
           qrImage={qrImage}
           profile={profile}
-          qrRefreshing={qrRefreshing}
           className="hidden lg:flex"
         />
       </div>
