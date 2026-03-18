@@ -13,8 +13,24 @@
  * can catch and display the backend's error message.
  */
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 export const API_PREFIX = '/api/v1';
+
+function normalizeBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
+const configuredBase = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000');
+const effectiveBase = configuredBase || 'http://localhost:5000';
+const alreadyIncludesPrefix = effectiveBase.toLowerCase().endsWith(API_PREFIX);
+
+export const API_BASE = alreadyIncludesPrefix
+  ? effectiveBase.slice(0, -API_PREFIX.length)
+  : effectiveBase;
+
+function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE}${API_PREFIX}${normalizedPath}`;
+}
 
 // ── Error class ─────────────────────────────────────────────────
 
@@ -37,9 +53,8 @@ async function request<T = unknown>(
 ): Promise<T> {
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
-  const res = await fetch(`${API_BASE}${API_PREFIX}${normalizedPath}`, {
+  const res = await fetch(buildApiUrl(path), {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -68,9 +83,8 @@ async function requestForm<T = unknown>(
 ): Promise<T> {
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
-  const res = await fetch(`${API_BASE}${API_PREFIX}${normalizedPath}`, {
+  const res = await fetch(buildApiUrl(path), {
     method,
     headers,
     body: formData,
@@ -116,9 +130,8 @@ async function requestBlob(
 ): Promise<{ blob: Blob; fileName: string | null }> {
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
-  const res = await fetch(`${API_BASE}${API_PREFIX}${normalizedPath}`, {
+  const res = await fetch(buildApiUrl(path), {
     method: 'GET',
     headers,
   });

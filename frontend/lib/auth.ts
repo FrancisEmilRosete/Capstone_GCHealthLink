@@ -25,9 +25,45 @@ interface LoginResponse {
   user: AuthUser;
 }
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+
+  try {
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, '=');
+    const decoded = atob(padded);
+    const parsed = JSON.parse(decoded);
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  const payload = decodeJwtPayload(token);
+  const exp = Number(payload?.exp);
+
+  if (!Number.isFinite(exp) || exp <= 0) {
+    return false;
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  return exp <= nowSeconds;
+}
+
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY);
+
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return null;
+
+  if (isTokenExpired(token)) {
+    clearSession();
+    return null;
+  }
+
+  return token;
 }
 
 export function getUserRole(): string | null {

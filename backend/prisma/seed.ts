@@ -488,78 +488,83 @@ async function seedOutbreakTrigger(
   }
 
   const outbreakHoursOffsets = [2, 5, 8, 12, 18, 24, 34, 44];
-  const outbreakVisits = [] as Array<{ id: string }>;
-
-  for (let index = 0; index < outbreakHoursOffsets.length; index += 1) {
-    const student = ccsStudents[index];
-    const visitDate = hoursAgo(outbreakHoursOffsets[index]);
-
-    const visit = await prisma.clinicVisit.create({
-      data: {
-        studentProfileId: student.profileId,
-        handledById,
-        visitDate,
-        visitTime: toVisitTime(visitDate),
-        concernTag: "Fever",
-        chiefComplaintEnc: MOCK_ENCRYPTED_FEVER_COMPLAINT,
-      },
-      select: { id: true },
-    });
-
-    outbreakVisits.push(visit);
-  }
-
-  const nonOutbreakTemplates = [
-    { student: students[10], concernTag: "Headache", complaint: "enc::intermittent-headache", date: daysAgo(4, 9) },
-    { student: students[11], concernTag: "Stomach Pain", complaint: "enc::epigastric-pain-after-meal", date: daysAgo(7, 11) },
-    { student: students[12], concernTag: "Dental Concern", complaint: "enc::toothache-right-molar", date: daysAgo(10, 14) },
-    { student: students[13], concernTag: "Injury", complaint: "enc::minor-ankle-sprain", date: daysAgo(14, 15) },
-    { student: students[14], concernTag: "Flu-like Illness", complaint: "enc::cough-and-colds", date: daysAgo(18, 10) },
-    { student: students[8], concernTag: "Dizziness", complaint: "enc::transient-dizziness", date: daysAgo(22, 13) },
-    { student: students[9], concernTag: "Cough", complaint: "enc::dry-cough-no-fever", date: daysAgo(27, 8) },
-  ];
-
-  for (const template of nonOutbreakTemplates) {
-    await prisma.clinicVisit.create({
-      data: {
-        studentProfileId: template.student.profileId,
-        handledById,
-        visitDate: template.date,
-        visitTime: toVisitTime(template.date),
-        concernTag: template.concernTag,
-        chiefComplaintEnc: template.complaint,
-      },
-    });
-  }
-
   const paracetamol = inventoryMap["Paracetamol 500mg"];
   if (!paracetamol) {
     throw new Error("Paracetamol inventory row not found after seeding.");
   }
 
   let totalParacetamolDispensed = 0;
-  for (let index = 0; index < 6; index += 1) {
-    const quantity = 2;
-    await prisma.visitMedicine.create({
-      data: {
-        visitId: outbreakVisits[index].id,
-        inventoryId: paracetamol.id,
-        quantity,
-      },
-    });
-    totalParacetamolDispensed += quantity;
-  }
 
-  if (totalParacetamolDispensed > 0) {
-    await prisma.inventory.update({
-      where: { id: paracetamol.id },
-      data: {
-        currentStock: {
-          decrement: totalParacetamolDispensed,
+  await prisma.$transaction(async (tx) => {
+    const outbreakVisits = [] as Array<{ id: string }>;
+
+    for (let index = 0; index < outbreakHoursOffsets.length; index += 1) {
+      const student = ccsStudents[index];
+      const visitDate = hoursAgo(outbreakHoursOffsets[index]);
+
+      const visit = await tx.clinicVisit.create({
+        data: {
+          studentProfileId: student.profileId,
+          handledById,
+          visitDate,
+          createdAt: visitDate,
+          visitTime: toVisitTime(visitDate),
+          concernTag: "Fever",
+          chiefComplaintEnc: MOCK_ENCRYPTED_FEVER_COMPLAINT,
         },
-      },
-    });
-  }
+        select: { id: true },
+      });
+
+      outbreakVisits.push(visit);
+    }
+
+    const nonOutbreakTemplates = [
+      { student: students[10], concernTag: "Headache", complaint: "enc::intermittent-headache", date: daysAgo(4, 9) },
+      { student: students[11], concernTag: "Stomach Pain", complaint: "enc::epigastric-pain-after-meal", date: daysAgo(7, 11) },
+      { student: students[12], concernTag: "Dental Concern", complaint: "enc::toothache-right-molar", date: daysAgo(10, 14) },
+      { student: students[13], concernTag: "Injury", complaint: "enc::minor-ankle-sprain", date: daysAgo(14, 15) },
+      { student: students[14], concernTag: "Flu-like Illness", complaint: "enc::cough-and-colds", date: daysAgo(18, 10) },
+      { student: students[8], concernTag: "Dizziness", complaint: "enc::transient-dizziness", date: daysAgo(22, 13) },
+      { student: students[9], concernTag: "Cough", complaint: "enc::dry-cough-no-fever", date: daysAgo(27, 8) },
+    ];
+
+    for (const template of nonOutbreakTemplates) {
+      await tx.clinicVisit.create({
+        data: {
+          studentProfileId: template.student.profileId,
+          handledById,
+          visitDate: template.date,
+          createdAt: template.date,
+          visitTime: toVisitTime(template.date),
+          concernTag: template.concernTag,
+          chiefComplaintEnc: template.complaint,
+        },
+      });
+    }
+
+    for (let index = 0; index < 6; index += 1) {
+      const quantity = 2;
+      await tx.visitMedicine.create({
+        data: {
+          visitId: outbreakVisits[index].id,
+          inventoryId: paracetamol.id,
+          quantity,
+        },
+      });
+      totalParacetamolDispensed += quantity;
+    }
+
+    if (totalParacetamolDispensed > 0) {
+      await tx.inventory.update({
+        where: { id: paracetamol.id },
+        data: {
+          currentStock: {
+            decrement: totalParacetamolDispensed,
+          },
+        },
+      });
+    }
+  });
 
   console.log("   Created 15 clinic visit records total.");
   console.log("   Outbreak trigger: exactly 8 CCS Fever visits in last 48 hours.");

@@ -4,6 +4,7 @@ const { getHealthAnalytics, getAdminSessionProfile } = require("../controllers/a
 const { exportMonthlyReportPdf } = require("../controllers/report.controller");
 const { protect } = require("../middleware/auth.middleware");
 const { authorize } = require("../middleware/rbac.middleware");
+const { auditLogger } = require("../middleware/auditLogger.middleware");
 
 const ALLOWED_ADMIN_AGGREGATED_PATHS = new Set([
   "/me",
@@ -26,17 +27,20 @@ router.use(protect, authorize("ADMIN"), enforceAggregatedAdminScope);
 
 router.get(
   "/me",
+  auditLogger("VIEWED_ADMIN_PROFILE"),
   getAdminSessionProfile
 );
 
 // GET /api/v1/admin/analytics
 router.get(
   "/analytics",
+  auditLogger("VIEWED_HEALTH_ANALYTICS"),
   getHealthAnalytics
 );
 
 router.get(
   "/reports/monthly-pdf",
+  auditLogger("EXPORTED_MONTHLY_REPORT_PDF"),
   exportMonthlyReportPdf
 );
 
