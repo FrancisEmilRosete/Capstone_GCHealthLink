@@ -2,33 +2,29 @@
 
 import { useMemo, useState } from 'react';
 import {
+  Bar,
+  BarChart,
+  Cell,
   CartesianGrid,
   ResponsiveContainer,
-  Scatter,
-  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
-  ZAxis,
 } from 'recharts';
 
 export interface HeatMapPoint {
   id: string;
-  label: string;
-  x: number;
-  y: number;
-  intensity: number;
-  cases?: number;
+  department: string;
+  activeCases: number;
+  riskScore: number;
+  riskLevel: 'Low' | 'Medium' | 'High';
+  recommendedAction?: string;
 }
 
 interface PredictiveHeatMapProps {
   title?: string;
   subtitle?: string;
   data: HeatMapPoint[];
-  xLabel?: string;
-  yLabel?: string;
-  xDomain?: [number, number];
-  yDomain?: [number, number];
   className?: string;
 }
 
@@ -47,42 +43,29 @@ function getHeatColor(value: number) {
 
 export default function PredictiveHeatMap({
   title = 'Predictive Heat Map',
-  subtitle = 'Spatial distribution of projected health events',
+  subtitle = 'Department-level risk score based on recent clinic activity',
   data,
-  xLabel = 'Zone X',
-  yLabel = 'Zone Y',
-  xDomain,
-  yDomain,
   className,
 }: PredictiveHeatMapProps) {
   const [selectedLevel, setSelectedLevel] = useState<(typeof INTENSITY_LEVELS)[number]['key']>('all');
-  const [activePointId, setActivePointId] = useState<string>('');
 
   const filteredData = useMemo(() => {
     const selected = INTENSITY_LEVELS.find((item) => item.key === selectedLevel);
     if (!selected || selected.key === 'all') {
-      return data;
+      return data.slice().sort((a, b) => b.riskScore - a.riskScore);
     }
 
     const nextLevel = INTENSITY_LEVELS[INTENSITY_LEVELS.findIndex((item) => item.key === selectedLevel) + 1];
     const upper = nextLevel ? nextLevel.min : Number.POSITIVE_INFINITY;
 
-    return data.filter((point) => point.intensity >= selected.min && point.intensity < upper);
+    return data
+      .filter((point) => point.riskScore >= selected.min && point.riskScore < upper)
+      .sort((a, b) => b.riskScore - a.riskScore);
   }, [data, selectedLevel]);
 
-  const computedXDomain = useMemo<[number, number]>(() => {
-    if (xDomain) return xDomain;
-    const xValues = filteredData.map((point) => point.x);
-    if (xValues.length === 0) return [0, 10];
-    return [Math.min(...xValues) - 1, Math.max(...xValues) + 1];
-  }, [filteredData, xDomain]);
+  const highestRiskDepartment = filteredData[0];
 
-  const computedYDomain = useMemo<[number, number]>(() => {
-    if (yDomain) return yDomain;
-    const yValues = filteredData.map((point) => point.y);
-    if (yValues.length === 0) return [0, 10];
-    return [Math.min(...yValues) - 1, Math.max(...yValues) + 1];
-  }, [filteredData, yDomain]);
+  const highRiskCount = filteredData.filter((item) => item.riskLevel === 'High').length;
 
   return (
     <section className={`rounded-2xl border border-gray-100 bg-white p-5 shadow-sm ${className ?? ''}`.trim()}>
@@ -110,50 +93,47 @@ export default function PredictiveHeatMap({
         </div>
       </header>
 
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-gray-500">Highest Risk Department</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">
+            {highestRiskDepartment?.department || 'No data yet'}
+          </p>
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-gray-500">Departments In High Risk</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{highRiskCount}</p>
+        </div>
+      </div>
+
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis type="number" dataKey="x" domain={computedXDomain} tick={{ fontSize: 11 }}>
-              <></>
-            </XAxis>
-            <YAxis type="number" dataKey="y" domain={computedYDomain} tick={{ fontSize: 11 }}>
-              <></>
-            </YAxis>
-            <ZAxis type="number" dataKey="intensity" range={[80, 420]} />
+          <BarChart data={filteredData} layout="vertical" margin={{ top: 8, right: 12, bottom: 8, left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+            <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
+            <YAxis type="category" dataKey="department" tick={{ fontSize: 11 }} width={170} />
 
             <Tooltip
-              cursor={{ strokeDasharray: '4 4' }}
-              formatter={(value: number, key: string) => [value, key === 'intensity' ? 'Intensity' : key]}
               contentStyle={{ borderRadius: 12, borderColor: '#e5e7eb' }}
+              formatter={(value: number, key: string) => {
+                if (key === 'riskScore') return [value, 'Outbreak Risk Score'];
+                if (key === 'activeCases') return [value, 'Recent Cases (48h)'];
+                return [value, key];
+              }}
               labelFormatter={(_, payload) => {
                 const point = payload?.[0]?.payload as HeatMapPoint | undefined;
-                return point?.label || 'Location';
+                if (!point) return 'Department';
+
+                return `${point.department} • ${point.riskLevel} Risk`;
               }}
             />
 
-            <Scatter
-              data={filteredData}
-              shape={(shapeProps) => {
-                const point = shapeProps.payload as HeatMapPoint;
-                const isActive = point.id === activePointId;
-
-                return (
-                  <circle
-                    cx={shapeProps.cx}
-                    cy={shapeProps.cy}
-                    r={isActive ? 13 : 10}
-                    fill={getHeatColor(point.intensity)}
-                    fillOpacity={isActive ? 0.95 : 0.8}
-                    stroke={isActive ? '#111827' : '#ffffff'}
-                    strokeWidth={isActive ? 2 : 1}
-                    onMouseEnter={() => setActivePointId(point.id)}
-                    onMouseLeave={() => setActivePointId('')}
-                  />
-                );
-              }}
-            />
-          </ScatterChart>
+            <Bar dataKey="riskScore" name="Risk Score" radius={[0, 8, 8, 0]}>
+              {filteredData.map((row) => (
+                <Cell key={row.id} fill={getHeatColor(row.riskScore)} />
+              ))}
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       </div>
 
@@ -162,7 +142,9 @@ export default function PredictiveHeatMap({
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-teal-600" /> Low</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-orange-500" /> Medium</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-700" /> High</span>
-        <span className="ml-auto text-gray-500">{xLabel} / {yLabel}</span>
+        {highestRiskDepartment?.recommendedAction && (
+          <span className="ml-auto text-gray-500">Priority Action: {highestRiskDepartment.recommendedAction}</span>
+        )}
       </footer>
     </section>
   );

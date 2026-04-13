@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { DEPARTMENT_COURSE_MAP, normalizeDepartmentCode } from '@/constants/departments';
+import { MOCK_ADMIN_HEAT_MAP_POINTS, MOCK_ADMIN_OUTBREAK_FORECAST } from '@/lib/mock/adminPredictiveAnalytics';
 import AdminPredictiveAnalyticsSection from '@/components/dashboard/admin/AdminPredictiveAnalyticsSection';
 import type { HeatMapPoint } from '@/components/dashboard/admin/PredictiveHeatMap';
 import type { OutbreakForecastPoint } from '@/components/dashboard/admin/OutbreakForecastChart';
@@ -55,26 +57,88 @@ interface AnalyticsResponse {
 
 function mapTopConcernTags(items: TopConcern[]) {
   return items.map((item) => ({
-    tag: item.tag?.trim() || 'General Consultation',
+    tag: toDisplayConcernTag(item.tag),
     count: item.count,
   }));
 }
 
-function mapDepartmentHeatMapToSpatialPoints(departmentHeatmap: Record<string, number>): HeatMapPoint[] {
-  const rows = Object.entries(departmentHeatmap)
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count);
+const DEPARTMENT_NAME_BY_CODE = DEPARTMENT_COURSE_MAP.reduce<Record<string, string>>((accumulator, entry) => {
+  accumulator[entry.code] = entry.name;
+  return accumulator;
+}, {});
 
-  const columns = 4;
+function toDisplayConcernTag(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return 'General Consultation';
+  }
 
-  return rows.map((row, index) => ({
-    id: row.label,
-    label: row.label,
-    x: (index % columns) + 1,
-    y: Math.floor(index / columns) + 1,
-    intensity: row.count,
-    cases: row.count,
-  }));
+  const normalized = value
+    .trim()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+  return normalized
+    .split(' ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function toDisplayDepartment(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return 'Unspecified Department';
+  }
+
+  const cleaned = value.trim();
+  const code = normalizeDepartmentCode(cleaned);
+  return DEPARTMENT_NAME_BY_CODE[code] || cleaned;
+}
+
+function riskLevelFromScore(score: number): HeatMapPoint['riskLevel'] {
+  if (score >= 70) return 'High';
+  if (score >= 40) return 'Medium';
+  return 'Low';
+}
+
+function riskAction(level: HeatMapPoint['riskLevel'], concern: string) {
+  if (level === 'High') {
+    return `Activate outbreak watch protocol for ${concern} and assign standby staff.`;
+  }
+
+  if (level === 'Medium') {
+    return `Issue prevention advisory for ${concern} and monitor attendance trends.`;
+  }
+
+  return `Continue routine monitoring and weekly reminders for ${concern}.`;
+}
+
+function mapDepartmentHeatMapToOperationalRows(
+  departmentHeatmap: Record<string, number>,
+  topConcerns: TopConcern[],
+): HeatMapPoint[] {
+  const entries = Object.entries(departmentHeatmap);
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const maxCount = Math.max(...entries.map(([, count]) => count), 1);
+  const primaryConcern = toDisplayConcernTag(topConcerns[0]?.tag);
+
+  return entries
+    .map(([department, count]) => {
+      const riskScore = Math.max(5, Math.round((count / maxCount) * 100));
+      const riskLevel = riskLevelFromScore(riskScore);
+
+      return {
+        id: `${department}-${count}`,
+        department: toDisplayDepartment(department),
+        activeCases: count,
+        riskScore,
+        riskLevel,
+        recommendedAction: riskAction(riskLevel, primaryConcern),
+      };
+    })
+    .sort((a, b) => b.riskScore - a.riskScore);
 }
 
 function mapMonthlyVisitsToForecast(monthlyVisits: Array<{ month: string; count: number }>): OutbreakForecastPoint[] {
@@ -93,6 +157,12 @@ function mapMonthlyVisitsToForecast(monthlyVisits: Array<{ month: string; count:
       predictedCases: next,
       lowerBound: Math.max(0, next - confidenceSpread),
       upperBound: next + confidenceSpread,
+      staffingRecommendation: next >= 35 ? '4 clinic staff per shift' : next >= 20 ? '3 clinic staff per shift' : '2 clinic staff per shift',
+      actionNote: next >= 35
+        ? 'Prepare extra triage desk and emergency medication packs.'
+        : next >= 20
+          ? 'Keep overflow consultation slots open during peak hours.'
+          : 'Maintain standard staffing and continue prevention reminders.',
     };
   });
 }
@@ -168,12 +238,18 @@ export default function AdminDashboard() {
   const maxDepartmentCount = Math.max(...departmentRows.map(([, count]) => count), 1);
 
   const predictiveHeatMapData = useMemo(
-    () => mapDepartmentHeatMapToSpatialPoints(data?.departmentHeatmap || {}),
-    [data?.departmentHeatmap],
+    () => {
+      const rows = mapDepartmentHeatMapToOperationalRows(data?.departmentHeatmap || {}, data?.topConcerns || []);
+      return rows.length > 0 ? rows : MOCK_ADMIN_HEAT_MAP_POINTS;
+    },
+    [data?.departmentHeatmap, data?.topConcerns],
   );
 
   const outbreakForecastData = useMemo(
-    () => mapMonthlyVisitsToForecast(data?.monthlyVisits || []),
+    () => {
+      const rows = mapMonthlyVisitsToForecast(data?.monthlyVisits || []);
+      return rows.length > 0 ? rows : MOCK_ADMIN_OUTBREAK_FORECAST;
+    },
     [data?.monthlyVisits],
   );
 

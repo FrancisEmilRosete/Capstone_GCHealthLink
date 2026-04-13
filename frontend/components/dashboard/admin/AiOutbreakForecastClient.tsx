@@ -45,10 +45,24 @@ function mapAiForecastToChartData(rows: AiForecastRow[]): OutbreakForecastPoint[
   return rows
     .slice()
     .sort((a, b) => a.month.localeCompare(b.month))
-    .map((row) => ({
-      period: formatPeriod(row.month),
-      predictedCases: row.total_predicted_cases,
-    }));
+    .map((row) => {
+      const predicted = row.total_predicted_cases;
+
+      return {
+        period: formatPeriod(row.month),
+        predictedCases: predicted,
+        staffingRecommendation: predicted >= 35
+          ? '4 clinic staff per shift'
+          : predicted >= 20
+            ? '3 clinic staff per shift'
+            : '2 clinic staff per shift',
+        actionNote: predicted >= 35
+          ? 'Prepare outbreak response supplies for high-volume week.'
+          : predicted >= 20
+            ? 'Coordinate class advisories and monitor nurse queue.'
+            : 'Continue routine monitoring and wellness announcements.',
+      };
+    });
 }
 
 export default function AiOutbreakForecastClient() {
