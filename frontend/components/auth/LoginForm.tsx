@@ -19,6 +19,8 @@
  *   onSubmit          → called when Sign In button is clicked
  */
 
+import { useState } from 'react';
+
 interface LoginFormProps {
   email: string;
   password: string;
@@ -45,6 +47,7 @@ export default function LoginForm({
   const emailInputId = 'login-email';
   const passwordInputId = 'login-password';
   const rememberInputId = 'login-remember-me';
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <>
@@ -71,17 +74,40 @@ export default function LoginForm({
         <label htmlFor={passwordInputId} className="block text-sm font-medium text-gray-700 mb-1.5">
           Password
         </label>
-        <input
-          id={passwordInputId}
-          type="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => onPasswordChange(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-gray-200
+        <div className="relative">
+          <input
+            id={passwordInputId}
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => onPasswordChange(e.target.value)}
+            className="w-full px-4 py-2.5 pr-12 rounded-xl border border-gray-200
             text-sm text-gray-900 placeholder-gray-400
             focus:outline-none focus:ring-2 focus:ring-teal-500
             focus:border-transparent transition-all"
-        />
+          />
+
+          <button
+            type="button"
+            onClick={() => setShowPassword((previous) => !previous)}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-teal-600"
+          >
+            {showPassword ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                <path d="M3 3l18 18" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M9.88 5.09A9.77 9.77 0 0112 5c5 0 9 4 10 7a11.8 11.8 0 01-4.29 5.19" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M6.61 6.61A11.76 11.76 0 002 12c1 3 5 7 10 7a9.77 9.77 0 003.42-.61" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ── Remember Me + Forgot Password ── */}

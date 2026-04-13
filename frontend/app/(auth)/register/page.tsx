@@ -76,6 +76,40 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
+function PasswordInput(props: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="relative">
+      <Input
+        {...props}
+        type={visible ? 'text' : 'password'}
+        className={`pr-11 ${props.className ?? ''}`.trim()}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((previous) => !previous)}
+        aria-label={visible ? 'Hide password' : 'Show password'}
+        className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-teal-600"
+      >
+        {visible ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+            <path d="M3 3l18 18" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9.88 5.09A9.77 9.77 0 0112 5c5 0 9 4 10 7a11.8 11.8 0 01-4.29 5.19" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M6.61 6.61A11.76 11.76 0 002 12c1 3 5 7 10 7a9.77 9.77 0 003.42-.61" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
+}
+
 function Select({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { children: React.ReactNode }) {
   return (
     <select
@@ -259,8 +293,7 @@ function Step1({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <Label required>Password</Label>
-          <Input
-            type="password"
+          <PasswordInput
             placeholder="Minimum 8 characters"
             value={data.password ?? ''}
             onChange={e => set('password', e.target.value)}
@@ -268,8 +301,7 @@ function Step1({
         </div>
         <div>
           <Label required>Confirm Password</Label>
-          <Input
-            type="password"
+          <PasswordInput
             placeholder="Re-enter password"
             value={data.confirmPassword ?? ''}
             onChange={e => set('confirmPassword', e.target.value)}

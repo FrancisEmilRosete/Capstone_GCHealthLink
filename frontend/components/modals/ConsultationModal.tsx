@@ -122,6 +122,8 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
   const [newMedicineId, setNewMedicineId] = useState('');
   const [newQty, setNewQty] = useState('1');
   const [validationError, setValidationError] = useState('');
+  const [customConcernTags, setCustomConcernTags] = useState<string[]>([]);
+  const [newConcernTag, setNewConcernTag] = useState('');
 
   const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -224,6 +226,29 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
     setMedicines((current) => current.filter((item) => item.id !== id));
   }
 
+  function clearMedicines() {
+    setMedicines([]);
+  }
+
+  const allConcernTags = [...CONCERN_TAG_OPTIONS, ...customConcernTags];
+
+  function addCustomConcernTag() {
+    const normalized = newConcernTag.trim();
+    if (!normalized) {
+      return;
+    }
+
+    const alreadyExists = allConcernTags.some((tag) => tag.toLowerCase() === normalized.toLowerCase());
+    if (alreadyExists) {
+      setNewConcernTag('');
+      return;
+    }
+
+    setCustomConcernTags((current) => [...current, normalized]);
+    setForm((current) => ({ ...current, concernTag: normalized }));
+    setNewConcernTag('');
+  }
+
   function handleSave() {
     if (!form.visitDate) {
       setValidationError('Date is required.');
@@ -299,10 +324,26 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
                 onChange={(event) => set('concernTag')(event.target.value)}
                 className={INPUT_CLASS}
               >
-                {CONCERN_TAG_OPTIONS.map((tag) => (
+                {allConcernTags.map((tag) => (
                   <option key={tag} value={tag}>{tag}</option>
                 ))}
               </select>
+
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  value={newConcernTag}
+                  onChange={(event) => setNewConcernTag(event.target.value)}
+                  placeholder="Add custom category (e.g., First Aid)"
+                  className={INPUT_CLASS}
+                />
+                <button
+                  type="button"
+                  onClick={addCustomConcernTag}
+                  className="rounded border border-teal-300 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50"
+                >
+                  Add Tag
+                </button>
+              </div>
             </div>
           </div>
 
@@ -349,7 +390,18 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
           />
 
           <div>
-            <p className="mb-1 block text-xs font-semibold text-gray-600">Medicine Dispensed</p>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="block text-xs font-semibold text-gray-600">Medicine Dispensed</p>
+              {medicines.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearMedicines}
+                  className="text-[11px] font-semibold text-red-600 hover:text-red-700"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
 
             {medicines.length > 0 && (
               <div className="mb-3 space-y-2">
@@ -361,12 +413,10 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
                       <button
                         type="button"
                         onClick={() => removeMedicine(item.id)}
-                        className="rounded p-1 text-gray-400 hover:bg-white hover:text-red-500 transition-colors"
+                        className="rounded border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
                         aria-label="Remove dispensed medicine"
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        Remove
                       </button>
                     </div>
                   </div>

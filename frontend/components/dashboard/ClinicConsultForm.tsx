@@ -34,7 +34,7 @@ export interface ClinicConsultSubmitPayload {
   studentProfileId: string;
   visitDate: string;
   visitTime: string;
-  concernTag: ClinicConcernTag;
+  concernTag: string;
   chiefComplaintEnc: string;
   dispensedMedicines: Array<{
     inventoryId: string;
@@ -99,10 +99,12 @@ export default function ClinicConsultForm({
 }: ClinicConsultFormProps) {
   const [visitDate, setVisitDate] = useState(getLocalDateInputValue);
   const [visitTime, setVisitTime] = useState(getLocalTimeInputValue);
-  const [concernTag, setConcernTag] = useState<ClinicConcernTag>('General Consultation');
+  const [concernTag, setConcernTag] = useState<string>('General Consultation');
   const [chiefComplaintEnc, setChiefComplaintEnc] = useState('');
   const [medicineRows, setMedicineRows] = useState<MedicineRowState[]>([createMedicineRow(1)]);
   const [formError, setFormError] = useState('');
+  const [customConcernTags, setCustomConcernTags] = useState<string[]>([]);
+  const [newConcernTag, setNewConcernTag] = useState('');
 
   const nextRowIdRef = useRef(2);
 
@@ -110,6 +112,28 @@ export default function ClinicConsultForm({
     () => new Map(inventoryItems.map((item) => [item.id, item])),
     [inventoryItems],
   );
+
+  const allConcernTags = useMemo(
+    () => [...CLINIC_CONCERN_TAG_OPTIONS, ...customConcernTags],
+    [customConcernTags],
+  );
+
+  function addCustomConcernTag() {
+    const normalized = newConcernTag.trim();
+    if (!normalized) {
+      return;
+    }
+
+    const alreadyExists = allConcernTags.some((tag) => tag.toLowerCase() === normalized.toLowerCase());
+    if (alreadyExists) {
+      setNewConcernTag('');
+      return;
+    }
+
+    setCustomConcernTags((current) => [...current, normalized]);
+    setConcernTag(normalized);
+    setNewConcernTag('');
+  }
 
   function addMedicineRow() {
     setMedicineRows((current) => [...current, createMedicineRow(nextRowIdRef.current++)]);
@@ -312,15 +336,31 @@ export default function ClinicConsultForm({
               <select
                 id="clinic-concern-tag"
                 value={concernTag}
-                onChange={(event) => setConcernTag(event.target.value as ClinicConcernTag)}
+                onChange={(event) => setConcernTag(event.target.value)}
                 className={INPUT_CLASS}
               >
-                {CLINIC_CONCERN_TAG_OPTIONS.map((tag) => (
+                {allConcernTags.map((tag) => (
                   <option key={tag} value={tag}>
                     {tag}
                   </option>
                 ))}
               </select>
+
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  value={newConcernTag}
+                  onChange={(event) => setNewConcernTag(event.target.value)}
+                  placeholder="Add custom category (e.g., First Aid)"
+                  className={INPUT_CLASS}
+                />
+                <button
+                  type="button"
+                  onClick={addCustomConcernTag}
+                  className="rounded-lg border border-teal-300 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50"
+                >
+                  Add Tag
+                </button>
+              </div>
             </div>
           </div>
 

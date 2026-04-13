@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
+import MedicalTrackingTimeline, { type MedicalTrackingEvent } from '@/components/dashboard/staff/MedicalTrackingTimeline';
 
 interface SearchStudent {
   studentNumber: string;
@@ -165,6 +166,40 @@ export default function StudentHistoryPage() {
     return Array.from(new Set([...examYears, ...consultYears, ...documentYears])).sort((a, b) => b - a);
   }, [consultations, documents, exams]);
 
+  const trackingEvents = useMemo<MedicalTrackingEvent[]>(() => {
+    const examEvents = exams.map((exam) => ({
+      id: `exam-${exam.id}`,
+      dateIso: exam.examDate,
+      title: 'Physical Examination Recorded',
+      description: `BP ${exam.bp || 'N/A'} | Temp ${exam.temp || 'N/A'} | BMI ${exam.bmi || 'N/A'}`,
+      type: 'intervention' as const,
+      status: 'completed' as const,
+      actor: exam.examinedBy || undefined,
+    }));
+
+    const consultationEvents = consultations.map((visit) => ({
+      id: `consult-${visit.id}`,
+      dateIso: visit.visitDate,
+      title: 'Consultation Logged',
+      description: normalizeComplaintDisplay(visit.chiefComplaintEnc),
+      type: 'treatment' as const,
+      status: 'completed' as const,
+      actor: visit.handledBy?.email || undefined,
+    }));
+
+    const documentEvents = documents.map((document) => ({
+      id: `doc-${document.id}`,
+      dateIso: document.uploadedAt,
+      title: `Medical Document Uploaded (${formatDocumentType(document.documentType)})`,
+      description: document.fileName,
+      type: 'follow-up' as const,
+      status: 'scheduled' as const,
+    }));
+
+    return [...examEvents, ...consultationEvents, ...documentEvents]
+      .sort((a, b) => new Date(b.dateIso).getTime() - new Date(a.dateIso).getTime());
+  }, [consultations, documents, exams]);
+
   async function handleDownloadDocument(document: MedicalDocument) {
     const token = getToken();
     if (!token) {
@@ -240,6 +275,8 @@ export default function StudentHistoryPage() {
           </button>
         ))}
       </div>
+
+      <MedicalTrackingTimeline events={trackingEvents} />
 
       {years.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-gray-400 text-sm">

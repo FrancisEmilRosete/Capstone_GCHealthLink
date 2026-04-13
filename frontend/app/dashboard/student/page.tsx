@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
+import PersonalWellnessTrendsCard from '@/components/dashboard/student/PersonalWellnessTrendsCard';
 
 interface ClinicVisit {
   id: string;
@@ -70,6 +71,32 @@ function formatDate(value: string) {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+function buildMonthlyTrendFromVisits(visits: ClinicVisit[]) {
+  const now = new Date();
+  const buckets: Array<{ label: string; visits: number; key: string }> = [];
+
+  for (let index = 5; index >= 0; index -= 1) {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    buckets.push({
+      key: `${monthDate.getFullYear()}-${monthDate.getMonth()}`,
+      label: monthDate.toLocaleDateString('en-US', { month: 'short' }),
+      visits: 0,
+    });
+  }
+
+  const lookup = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+  for (const visit of visits) {
+    const date = new Date(visit.visitDate);
+    const key = `${date.getFullYear()}-${date.getMonth()}`;
+    const hit = lookup.get(key);
+    if (hit) {
+      hit.visits += 1;
+    }
+  }
+
+  return buckets.map(({ label, visits }) => ({ label, visits }));
 }
 
 function hasCompletedRegistration(profile: StudentProfile | null) {
@@ -240,6 +267,10 @@ export default function StudentDashboard() {
   const totalVisits = profile?.clinicVisits?.length || 0;
   const lastVisitDate = profile?.clinicVisits?.[0]?.visitDate;
   const registrationCompleted = hasCompletedRegistration(profile);
+  const personalTrendData = useMemo(
+    () => buildMonthlyTrendFromVisits(profile?.clinicVisits || []),
+    [profile?.clinicVisits],
+  );
 
   return (
     <div className="p-5 space-y-5 max-w-4xl mx-auto">
@@ -273,6 +304,9 @@ export default function StudentDashboard() {
             </Link>
             <Link href="/dashboard/student/notifications" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
               Advisories
+            </Link>
+            <Link href="/dashboard/student/certificates" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
+              Medical Certificate
             </Link>
           </div>
         </div>
@@ -351,6 +385,8 @@ export default function StudentDashboard() {
           className="hidden lg:flex"
         />
       </div>
+
+      <PersonalWellnessTrendsCard data={personalTrendData} />
     </div>
   );
 }

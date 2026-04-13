@@ -132,6 +132,17 @@ const NAV = [
     ),
   },
   {
+    href: '/dashboard/student/certificates',
+    label: 'Medical Certificate',
+    exact: false,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8m-6-6v6h6" />
+      </svg>
+    ),
+  },
+  {
     href: '/dashboard/student/notifications',
     label: 'Notifications',
     exact: false,

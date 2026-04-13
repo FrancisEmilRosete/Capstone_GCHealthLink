@@ -6,29 +6,26 @@ function normalizeText(value) {
 
 function normalizePhoneNumber(value) {
   const raw = normalizeText(value);
-  if (!raw) {
-    return "";
-  }
-
-  const hasPlusPrefix = raw.startsWith("+");
   const digitsOnly = raw.replace(/\D/g, "");
   if (!digitsOnly) {
     return "";
   }
 
-  if (hasPlusPrefix) {
-    return "+" + digitsOnly;
-  }
-
-  if (digitsOnly.startsWith("63")) {
-    return "+" + digitsOnly;
-  }
+  let localNumber = "";
 
   if (digitsOnly.startsWith("0")) {
-    return "+63" + digitsOnly.slice(1);
+    localNumber = digitsOnly;
+  } else if (digitsOnly.startsWith("63")) {
+    localNumber = "0" + digitsOnly.slice(2);
+  } else if (digitsOnly.startsWith("9") && digitsOnly.length === 10) {
+    localNumber = "0" + digitsOnly;
   }
 
-  return "+" + digitsOnly;
+  if (!/^09\d{9}$/.test(localNumber)) {
+    return "";
+  }
+
+  return "+63" + localNumber.slice(1);
 }
 
 function buildServiceError(status, message) {
@@ -43,11 +40,6 @@ function buildManualAlertMessage(studentName, condition) {
     + " is currently at the Gordon College Clinic for "
     + condition
     + ". Please contact the clinic for more details.";
-}
-
-function resolveAuthField() {
-  const configuredField = normalizeText(process.env.IPROG_AUTH_FIELD).toLowerCase();
-  return configuredField === "token" ? "token" : "api_key";
 }
 
 function getIprogSmsConfig() {
@@ -65,7 +57,7 @@ function getIprogSmsConfig() {
     );
   }
 
-  return { endpoint, apiKey, authField: resolveAuthField() };
+  return { endpoint, apiKey };
 }
 
 async function sendManualAlert(phoneNumber, studentName, condition) {
@@ -77,15 +69,18 @@ async function sendManualAlert(phoneNumber, studentName, condition) {
   const normalizedCondition = normalizeText(condition) || "an urgent medical concern";
   const normalizedTo = normalizePhoneNumber(phoneNumber);
   if (!normalizedTo) {
-    throw buildServiceError(400, "A valid emergency contact phone number is required.");
+    throw buildServiceError(
+      400,
+      "A valid emergency contact phone number is required (PH mobile format: 09XXXXXXXXX)."
+    );
   }
 
-  const { endpoint, apiKey, authField } = getIprogSmsConfig();
+  const { endpoint, apiKey } = getIprogSmsConfig();
   const message = buildManualAlertMessage(normalizedStudentName, normalizedCondition);
   const payload = {
-    phone_number: normalizedTo, // <-- CHANGED from "number" to "phone_number"
+    phone_number: normalizedTo,
     message: message,
-    api_token: apiKey,          // <-- Hardcoded to "api_token" based on their docs
+    api_token: apiKey,
   };
 
   let response;
@@ -111,9 +106,21 @@ async function sendManualAlert(phoneNumber, studentName, condition) {
     throw buildServiceError(500, error.message || "Failed to send SMS via iProgSMS gateway.");
   }
 
+  const providerStatus = normalizeText(response.data?.status) || "submitted";
+  const providerMessage = normalizeText(response.data?.message);
+  if (
+    ["failed", "error", "rejected", "invalid"].includes(providerStatus.toLowerCase())
+    || (providerMessage && /fail|error|invalid|reject/i.test(providerMessage))
+  ) {
+    throw buildServiceError(
+      502,
+      providerMessage || "iProgSMS returned an unsuccessful response."
+    );
+  }
+
   return {
     provider: "iProgSMS",
-    status: normalizeText(response.data?.status) || "submitted",
+    status: providerStatus,
     to: normalizedTo,
     message,
     referenceId:

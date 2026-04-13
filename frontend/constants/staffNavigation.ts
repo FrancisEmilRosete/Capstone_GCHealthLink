@@ -25,6 +25,7 @@ import {
   ConsultationsIcon,
   ScannerIcon,
   InventoryIcon,
+  CertificatesIcon,
   NotificationsIcon,
 } from '@/components/icons/NavIcons';
 
@@ -91,6 +92,12 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
         label: 'Medicine Inventory',
         href:  '/dashboard/staff/inventory',
         icon:  InventoryIcon,
+      },
+      {
+        id:    'certificates',
+        label: 'Certificates',
+        href:  '/dashboard/staff/certificates',
+        icon:  CertificatesIcon,
       },
     ],
   },
