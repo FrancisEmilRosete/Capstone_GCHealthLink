@@ -25,6 +25,11 @@ interface AddInventoryResponse {
   message?: string;
 }
 
+interface RemoveInventoryResponse {
+  success: boolean;
+  message?: string;
+}
+
 type SortKey = 'itemName' | 'currentStock' | 'reorderThreshold';
 
 function getStatus(item: InventoryItem): 'In Stock' | 'Low Stock' | 'Out of Stock' {
@@ -214,6 +219,7 @@ export default function InventoryPage() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [removingItemId, setRemovingItemId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('itemName');
@@ -274,6 +280,37 @@ export default function InventoryPage() {
       }
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function handleRemove(item: InventoryItem) {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove ${item.itemName} from inventory? This cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRemovingItemId(item.id);
+      setError('');
+      await api.del<RemoveInventoryResponse>(`/inventory/${item.id}`, token);
+      setItems((prev) => prev.filter((existing) => existing.id !== item.id));
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to remove inventory item.');
+      }
+    } finally {
+      setRemovingItemId(null);
     }
   }
 
@@ -418,16 +455,17 @@ export default function InventoryPage() {
                 </th>
                 <th className="text-left px-4 py-3 font-semibold">Unit</th>
                 <th className="text-left px-4 py-3 font-semibold">Status</th>
+                <th className="text-right px-4 py-3 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-gray-400">Loading inventory...</td>
+                  <td colSpan={6} className="px-4 py-10 text-center text-gray-400">Loading inventory...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-gray-300">No inventory items found.</td>
+                  <td colSpan={6} className="px-4 py-10 text-center text-gray-300">No inventory items found.</td>
                 </tr>
               ) : (
                 filtered.map((item) => (
@@ -450,6 +488,16 @@ export default function InventoryPage() {
                       <span className={`text-[11px] font-semibold border px-2.5 py-0.5 rounded-full ${STATUS_STYLE[item.status]}`}>
                         {item.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => { void handleRemove(item); }}
+                        disabled={removingItemId === item.id}
+                        className="text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-70"
+                      >
+                        {removingItemId === item.id ? 'Removing...' : 'Remove'}
+                      </button>
                     </td>
                   </tr>
                 ))

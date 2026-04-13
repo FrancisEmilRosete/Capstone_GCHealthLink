@@ -99,4 +99,50 @@ const addInventoryItem = async (req, res, next) => {
   }
 };
 
-module.exports = { getInventory, addInventoryItem };
+// 3. Remove an item from inventory (Admin / Clinic Staff)
+const removeInventoryItem = async (req, res, next) => {
+  try {
+    const inventoryId = normalizeText(req.params?.id);
+
+    if (!inventoryId) {
+      return res.status(400).json({
+        success: false,
+        message: "Inventory item id is required.",
+      });
+    }
+
+    const existing = await prisma.inventory.findUnique({
+      where: { id: inventoryId },
+      select: { id: true, itemName: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: "Inventory item not found.",
+      });
+    }
+
+    const linkedDispenseCount = await prisma.visitMedicine.count({
+      where: { inventoryId },
+    });
+
+    if (linkedDispenseCount > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "This medicine cannot be removed because it is linked to consultation records.",
+      });
+    }
+
+    await prisma.inventory.delete({ where: { id: inventoryId } });
+
+    return res.json({
+      success: true,
+      message: `${existing.itemName} was removed from inventory.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getInventory, addInventoryItem, removeInventoryItem };

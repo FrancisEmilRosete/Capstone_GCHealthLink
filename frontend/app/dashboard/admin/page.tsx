@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import AdminPredictiveAnalyticsSection from '@/components/dashboard/admin/AdminPredictiveAnalyticsSection';
+import type { HeatMapPoint } from '@/components/dashboard/admin/PredictiveHeatMap';
+import type { OutbreakForecastPoint } from '@/components/dashboard/admin/OutbreakForecastChart';
+import ResourcePredictionPanel, { type ProjectedSupplyRisk } from '@/components/dashboard/admin/ResourcePredictionPanel';
+import WellnessTrendsWidget from '@/components/dashboard/admin/WellnessTrendsWidget';
+import AiOutbreakForecastClient from '@/components/dashboard/admin/AiOutbreakForecastClient';
 
 interface TopConcern {
   tag: string;
@@ -21,6 +27,24 @@ interface AnalyticsData {
   topConcerns: TopConcern[];
   departmentHeatmap: Record<string, number>;
   outbreakWatch: OutbreakAlert[] | string;
+  monthlyVisits?: Array<{ month: string; count: number }>;
+  weeklyVisits?: Array<{ day: string; count: number }>;
+  resourcePrediction?: {
+    busiestHour?: { hour: string; count: number };
+    busiestDay?: { day: string; count: number };
+    recentTrend?: { direction: string; percentChange: number };
+    expectedVisitsNext7Days?: number;
+    recommendedStaffing?: string;
+    projectedStockouts?: Array<{
+      id?: string;
+      itemName: string;
+      currentStock: number;
+      projectedDaysRemaining: number;
+      projectedDailyUsage?: number;
+      suggestedRestockQty?: number;
+      status?: 'critical' | 'warning';
+    }>;
+  };
 }
 
 interface AnalyticsResponse {
@@ -33,6 +57,59 @@ function mapTopConcernTags(items: TopConcern[]) {
   return items.map((item) => ({
     tag: item.tag?.trim() || 'General Consultation',
     count: item.count,
+  }));
+}
+
+function mapDepartmentHeatMapToSpatialPoints(departmentHeatmap: Record<string, number>): HeatMapPoint[] {
+  const rows = Object.entries(departmentHeatmap)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const columns = 4;
+
+  return rows.map((row, index) => ({
+    id: row.label,
+    label: row.label,
+    x: (index % columns) + 1,
+    y: Math.floor(index / columns) + 1,
+    intensity: row.count,
+    cases: row.count,
+  }));
+}
+
+function mapMonthlyVisitsToForecast(monthlyVisits: Array<{ month: string; count: number }>): OutbreakForecastPoint[] {
+  if (monthlyVisits.length === 0) {
+    return [];
+  }
+
+  return monthlyVisits.map((entry, index) => {
+    const previous = index > 0 ? monthlyVisits[index - 1].count : entry.count;
+    const next = Math.round((entry.count * 0.6) + (previous * 0.4));
+    const confidenceSpread = Math.max(1, Math.round(next * 0.2));
+
+    return {
+      period: entry.month,
+      observedCases: entry.count,
+      predictedCases: next,
+      lowerBound: Math.max(0, next - confidenceSpread),
+      upperBound: next + confidenceSpread,
+    };
+  });
+}
+
+function mapProjectedStockouts(items: NonNullable<AnalyticsData['resourcePrediction']>['projectedStockouts']): ProjectedSupplyRisk[] {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item, index) => ({
+    id: item.id || `${item.itemName}-${index}`,
+    itemName: item.itemName,
+    currentStock: item.currentStock,
+    projectedDaysRemaining: item.projectedDaysRemaining,
+    projectedDailyUsage: item.projectedDailyUsage,
+    suggestedRestockQty: item.suggestedRestockQty,
+    status: item.status,
   }));
 }
 
@@ -89,6 +166,31 @@ export default function AdminDashboard() {
   );
 
   const maxDepartmentCount = Math.max(...departmentRows.map(([, count]) => count), 1);
+
+  const predictiveHeatMapData = useMemo(
+    () => mapDepartmentHeatMapToSpatialPoints(data?.departmentHeatmap || {}),
+    [data?.departmentHeatmap],
+  );
+
+  const outbreakForecastData = useMemo(
+    () => mapMonthlyVisitsToForecast(data?.monthlyVisits || []),
+    [data?.monthlyVisits],
+  );
+
+  const wellnessMonthlyData = useMemo(
+    () => (data?.monthlyVisits || []).map((row) => ({ label: row.month, visits: row.count })),
+    [data?.monthlyVisits],
+  );
+
+  const wellnessWeeklyData = useMemo(
+    () => (data?.weeklyVisits || []).map((row) => ({ label: row.day, visits: row.count })),
+    [data?.weeklyVisits],
+  );
+
+  const projectedSupplyRisks = useMemo(
+    () => mapProjectedStockouts(data?.resourcePrediction?.projectedStockouts),
+    [data?.resourcePrediction?.projectedStockouts],
+  );
 
   const topConcern = topConcerns[0]?.tag || '-';
   const outbreakCount = Array.isArray(data?.outbreakWatch) ? data?.outbreakWatch.length : 0;
@@ -182,6 +284,26 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      <AdminPredictiveAnalyticsSection
+        heatMapData={predictiveHeatMapData}
+        forecastData={outbreakForecastData}
+        heatMapTitle="Campus Risk Heat Map"
+        forecastTitle="Seasonal Outbreak Projection"
+      />
+
+      <AiOutbreakForecastClient />
+
+      <WellnessTrendsWidget
+        totalVisits={data?.totalVisits ?? 0}
+        monthly={wellnessMonthlyData}
+        weekly={wellnessWeeklyData}
+        concerns={topConcerns}
+      />
+
+      <ResourcePredictionPanel
+        items={projectedSupplyRisks}
+      />
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h2 className="text-sm font-semibold text-gray-800 mb-4">Outbreak Watch</h2>

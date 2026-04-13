@@ -71,6 +71,11 @@ interface EmergencySmsResponse {
   };
 }
 
+interface StatusToast {
+  type: 'success' | 'error';
+  message: string;
+}
+
 interface UiStudent {
   userId: string;
   studentProfileId: string;
@@ -255,6 +260,7 @@ export default function ScannerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [statusToast, setStatusToast] = useState<StatusToast | null>(null);
   const [sendingEmergency, setSendingEmergency] = useState(false);
 
   const [toastType, setToastType] = useState<'found' | 'not-found' | null>(null);
@@ -272,6 +278,18 @@ export default function ScannerPage() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [toastType]);
+
+  useEffect(() => {
+    if (!statusToast) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setStatusToast(null);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [statusToast]);
 
   function replaceStudentIdParam(nextStudentId: string | null) {
     const params = new URLSearchParams(searchParams.toString());
@@ -579,7 +597,7 @@ export default function ScannerPage() {
       setSendingEmergency(true);
       setError('');
 
-      await api.post<EmergencySmsResponse>(
+      const response = await api.post<EmergencySmsResponse>(
         '/clinic/emergency/send-sms',
         {
           studentProfileId: foundStudent.studentProfileId,
@@ -587,12 +605,24 @@ export default function ScannerPage() {
         token,
       );
 
-      setActionMessage('Emergency SMS has been sent to the guardian.');
+      setActionMessage('');
+      setStatusToast({
+        type: 'success',
+        message: response.message || 'Emergency SMS has been sent to the guardian.',
+      });
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        setError('');
+        setStatusToast({
+          type: 'error',
+          message: err.message,
+        });
       } else {
-        setError('Failed to send emergency SMS.');
+        setError('');
+        setStatusToast({
+          type: 'error',
+          message: 'Failed to send emergency SMS.',
+        });
       }
     } finally {
       setSendingEmergency(false);
@@ -672,6 +702,17 @@ export default function ScannerPage() {
         } ${toastType ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
       >
         {toastType === 'found' ? 'Student Found' : 'Student Not Found'}
+      </div>
+
+      <div
+        aria-live="polite"
+        className={`fixed top-20 right-4 z-50 text-sm font-semibold px-4 py-3 rounded-xl shadow-lg transition-all duration-300 ${
+          statusToast?.type === 'success'
+            ? 'bg-white border border-teal-200 text-teal-700 shadow-teal-100'
+            : 'bg-red-500 text-white shadow-red-200'
+        } ${statusToast ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+      >
+        {statusToast?.message ?? ''}
       </div>
 
       <div className="text-center mb-6">

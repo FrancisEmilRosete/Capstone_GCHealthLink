@@ -80,6 +80,7 @@ const physicalExamRoutes = require("./routes/physicalExam.routes");
 const certificateRoutes = require("./routes/certificate.routes");
 const settingsRoutes = require("./routes/settings.routes");
 const emergencyRoutes = require("./routes/emergency.routes");
+const aiRoutes = require("./routes/ai.routes");
 
 // 5. Base Route
 app.get("/", (req, res) => {
@@ -100,6 +101,7 @@ app.use("/api/v1/physical-exams", physicalExamRoutes);
 app.use("/api/v1/certificates", certificateRoutes);
 app.use("/api/v1/settings", settingsRoutes);
 app.use("/api/v1/emergency", emergencyRoutes);
+app.use("/api/v1/ai", aiRoutes);
 
 // 7. Error Handling Middleware
 app.use(notFound);

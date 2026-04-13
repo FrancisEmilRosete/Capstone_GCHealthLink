@@ -27,6 +27,35 @@ import HeartbeatIcon              from '@/components/icons/HeartbeatIcon';
 import RoleSelector               from '@/components/auth/RoleSelector';
 import LoginForm                  from '@/components/auth/LoginForm';
 
+function mapLoginErrorMessage(error: ApiError): string {
+  const message = (error.message || '').trim();
+  const lowered = message.toLowerCase();
+
+  if (error.status === 401) {
+    return 'Invalid email or password.';
+  }
+
+  if (error.status === 429) {
+    return message || 'Too many login attempts. Please wait and try again.';
+  }
+
+  if (
+    error.status === 503 ||
+    lowered.includes('database') ||
+    lowered.includes('dbhandler') ||
+    lowered.includes('connector') ||
+    lowered.includes('temporarily unavailable')
+  ) {
+    return 'Login is temporarily unavailable because the database is offline. Please try again in a few minutes.';
+  }
+
+  if (error.status >= 500) {
+    return 'Server error during sign in. Please try again shortly.';
+  }
+
+  return message || 'Unable to sign in. Please review your credentials and try again.';
+}
+
 export default function LoginPage() {
 
   const router = useRouter();
@@ -80,7 +109,7 @@ export default function LoginPage() {
       router.push(dashboardRoute);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        setError(mapLoginErrorMessage(err));
       } else {
         setError('Could not connect to the server. Is the backend running?');
       }
