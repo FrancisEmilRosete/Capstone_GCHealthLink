@@ -1,7 +1,7 @@
 /**
  * ROLE SELECTOR COMPONENT
  * ──────────────────────────────────────────────────────────────
- * Displays three role buttons: Staff, Student, Faculty.
+ * Displays role buttons: Staff, Doctor, Dental, Student, Admin.
  * The selected role gets a teal border and background.
  *
  * Props:
@@ -16,7 +16,7 @@
 
 import { UserRole } from '@/types/auth';
 import { ROLES } from '@/constants/roles';
-import { StaffIcon, StudentIcon, AdminIcon } from '@/components/icons/RoleIcons';
+import { StaffIcon, DoctorIcon, DentalIcon, StudentIcon, AdminIcon } from '@/components/icons/RoleIcons';
 
 interface RoleSelectorProps {
   selectedRole: UserRole;
@@ -28,7 +28,7 @@ export default function RoleSelector({ selectedRole, onSelect }: RoleSelectorPro
     <div className="mb-5">
       <p className="text-sm font-semibold text-gray-700 mb-2">Select Role</p>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {ROLES.map(({ id, label }) => {
           const isActive = selectedRole === id;
 
@@ -47,6 +47,8 @@ export default function RoleSelector({ selectedRole, onSelect }: RoleSelectorPro
             >
               {/* Render the matching icon for each role */}
               {id === 'staff'   && <StaffIcon   active={isActive} />}
+              {id === 'doctor'  && <DoctorIcon  active={isActive} />}
+              {id === 'dental'  && <DentalIcon  active={isActive} />}
               {id === 'student' && <StudentIcon active={isActive} />}
               {id === 'admin'   && <AdminIcon   active={isActive} />}
 

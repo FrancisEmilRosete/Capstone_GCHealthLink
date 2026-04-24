@@ -38,7 +38,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const role = getNormalizedUserRole();
 
   const hasDedicatedRoleLayout = (
-    pathname?.startsWith('/dashboard/student') || pathname?.startsWith('/dashboard/admin')
+    pathname?.startsWith('/dashboard/student') ||
+    pathname?.startsWith('/dashboard/admin') ||
+    pathname?.startsWith('/dashboard/doctor') ||
+    pathname?.startsWith('/dashboard/dental')
   );
 
   useEffect(() => {

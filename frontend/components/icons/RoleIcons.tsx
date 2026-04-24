@@ -9,8 +9,10 @@
  *
  * Usage:
  *   <StaffIcon   active={true}  />
+ *   <DoctorIcon  active={false} />
+ *   <DentalIcon  active={false} />
  *   <StudentIcon active={false} />
- *   <FacultyIcon active={false} />
+ *   <AdminIcon   active={false} />
  */
 
 interface RoleIconProps {
@@ -41,6 +43,45 @@ export function StaffIcon({ active }: RoleIconProps) {
       <line x1="12" y1="13" x2="12" y2="17" />
       {/* Chest piece / diaphragm */}
       <circle cx="12" cy="20" r="2.5" />
+    </svg>
+  );
+}
+
+/** Doctor icon — user with medical cross */
+export function DoctorIcon({ active }: RoleIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`w-6 h-6 ${active ? 'text-teal-600' : 'text-gray-400'}`}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="7" r="3.2" />
+      <path d="M5 20c1.6-3.8 11.4-3.8 14 0" />
+      <path d="M18 12v4" />
+      <path d="M16 14h4" />
+    </svg>
+  );
+}
+
+/** Dental icon — tooth */
+export function DentalIcon({ active }: RoleIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`w-6 h-6 ${active ? 'text-teal-600' : 'text-gray-400'}`}
+      aria-hidden="true"
+    >
+      <path d="M7 3c1.8-1 4.2-1 5 0 0.8-1 3.2-1 5 0 2.2 1.3 2.5 4.2 1.2 6.6l-1.8 6.7c-.4 1.4-2.3 1.6-3 0l-1.4-3.1-1.4 3.1c-.7 1.6-2.6 1.4-3 0L5.8 9.6C4.5 7.2 4.8 4.3 7 3z" />
     </svg>
   );
 }

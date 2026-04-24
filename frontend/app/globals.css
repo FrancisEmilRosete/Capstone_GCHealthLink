@@ -24,7 +24,6 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* QR scanner line animation used in /dashboard/staff/scanner */
 @keyframes scan {
   0%   { top: 10%; }
   50%  { top: 85%; }
@@ -34,3 +33,32 @@ body {
   position: absolute;
   animation: scan 2s ease-in-out infinite;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInFromBottom {
+  from { transform: translateY(1rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-in {
+  animation-duration: 500ms;
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fadeIn;
+}
+
+.slide-in-from-bottom-4 {
+  animation-name: slideInFromBottom;
+}
+
+.delay-75 { animation-delay: 75ms; }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }

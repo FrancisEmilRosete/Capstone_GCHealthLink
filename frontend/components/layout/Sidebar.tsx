@@ -1,7 +1,8 @@
 /**
- * STAFF SIDEBAR COMPONENT
+ * ROLE SIDEBAR COMPONENT
  * ─────────────────────────────────────────────────────────────
- * The dark left sidebar shown on all staff dashboard pages.
+ * The dark left sidebar shown on dashboard pages that use
+ * the shared sidebar layout (staff, doctor, dental).
  *
  * RESPONSIVE BEHAVIOUR:
  *   Mobile  (<lg)  - hidden off-screen; slides in as a drawer
@@ -13,8 +14,8 @@
  *   isOpen     -> controlled by the parent layout (drawer open?)
  *   onClose    -> called when user taps overlay or the X button
  *   userName   -> full name of the logged-in user
- *   userRole   -> role label (e.g. "staff")
- *   userAvatar -> optional photo URL
+ *   userRole   -> role label (e.g. "staff", "doctor")
+  *   userAvatar -> optional photo URL
  *
  * To add a nav item or section: edit constants/staffNavigation.ts
  * This component will automatically pick up the changes.
@@ -22,6 +23,7 @@
 
 'use client';
 
+import type React from 'react';
 import Link            from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState }   from 'react';
@@ -31,24 +33,42 @@ import { SignOutIcon, StethoscopeIcon } from '@/components/icons/NavIcons';
 import ConfirmLogoutModal from '@/components/ui/ConfirmLogoutModal';
 import { STAFF_NAV_GROUPS }         from '@/constants/staffNavigation';
 
+interface SidebarNavItem {
+  id: string;
+  label: string;
+  href: string;
+  badge?: number;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+interface SidebarNavGroup {
+  groupLabel?: string;
+  items: SidebarNavItem[];
+}
+
 interface SidebarProps {
-  isOpen?:     boolean;
-  onClose?:    () => void;
-  userName?:   string;
-  userRole?:   string;
-  userAvatar?: string;
+  isOpen?:        boolean;
+  onClose?:       () => void;
+  userName?:      string;
+  userRole?:      string;
+  userAvatar?:    string;
+  brandSubtitle?: string;
+  navGroups?:     SidebarNavGroup[];
 }
 
 export default function Sidebar({
-  isOpen    = false,
-  onClose   = () => {},
-  userName  = 'Clinic Staff',
-  userRole  = 'clinic staff',
+  isOpen        = false,
+  onClose       = () => {},
+  userName      = 'Clinic Staff',
+  userRole      = 'clinic staff',
   userAvatar,
+  brandSubtitle = 'Clinic System',
+  navGroups     = STAFF_NAV_GROUPS,
 }: SidebarProps) {
 
   const pathname = usePathname();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const normalizedPath = pathname?.replace(/\/+$/, '') || '';
 
   // Close the mobile drawer whenever the user navigates to a new page
   useEffect(() => {
@@ -62,11 +82,23 @@ export default function Sidebar({
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
 
+  function isBaseDashboardRoute(href: string): boolean {
+    return /^\/dashboard\/[^/]+$/.test(href.replace(/\/+$/, ''));
+  }
+
   // Returns true when this nav item matches the current URL
   function isActive(href: string): boolean {
-    return href === '/dashboard/staff'
-      ? pathname === href
-      : pathname.startsWith(href);
+    const normalizedHref = href.replace(/\/+$/, '');
+
+    if (normalizedPath === normalizedHref) {
+      return true;
+    }
+
+    if (isBaseDashboardRoute(normalizedHref)) {
+      return false;
+    }
+
+    return normalizedPath.startsWith(normalizedHref);
   }
 
   // e.g. "Dr. Maria Santos" -> "MS"
@@ -90,7 +122,7 @@ export default function Sidebar({
           </div>
           <div className="leading-tight">
             <p className="text-sm font-bold tracking-tight">GC HealthLink</p>
-            <p className="text-[10px] text-slate-400">Clinic System</p>
+            <p className="text-[10px] text-slate-400">{brandSubtitle}</p>
           </div>
         </div>
 
@@ -109,7 +141,7 @@ export default function Sidebar({
 
       {/* Navigation groups — scrollable if content overflows */}
       <nav className="flex flex-col gap-5 px-3 flex-1 overflow-y-auto">
-        {STAFF_NAV_GROUPS.map(({ groupLabel, items }) => (
+        {navGroups.map(({ groupLabel, items }) => (
           <div key={groupLabel ?? 'unlabeled'}>
 
             {/* Section label e.g. "Main", "Inventory & Reports" */}
