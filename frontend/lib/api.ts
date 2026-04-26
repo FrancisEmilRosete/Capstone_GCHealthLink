@@ -19,7 +19,11 @@ function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
 }
 
-const configuredBase = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000');
+const configuredBase = normalizeBaseUrl(
+  process.env.NEXT_PUBLIC_BACKEND_URL
+  ?? process.env.NEXT_PUBLIC_API_URL
+  ?? 'http://localhost:5000'
+);
 const effectiveBase = configuredBase || 'http://localhost:5000';
 const alreadyIncludesPrefix = effectiveBase.toLowerCase().endsWith(API_PREFIX);
 

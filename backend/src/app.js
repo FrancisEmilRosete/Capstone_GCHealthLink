@@ -17,7 +17,7 @@ function normalizeOrigin(value) {
 
 const configuredCorsOrigins = (
   process.env.CORS_ORIGIN
-  || "https://capstone-gchealthlink-git-main-francisemilrosetes-projects.vercel.app,https://capstone-gchealthlink.vercel.app,http://localhost:3000"
+  || "https://capstone-gchealthlink.vercel.app,https://capstone-gchealthlink-git-main-francisemilrosetes-projects.vercel.app,http://localhost:3000"
 )
   .split(",")
   .map((origin) => origin.trim())
