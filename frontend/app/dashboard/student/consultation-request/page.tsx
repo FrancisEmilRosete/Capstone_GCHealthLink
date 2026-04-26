@@ -12,6 +12,7 @@ interface AppointmentResponse {
     id: string;
     preferredDate: string;
     preferredTime: string;
+    serviceType: string;
     symptoms: string;
     status: string;
     createdAt: string;
@@ -57,7 +58,8 @@ export default function ConsultationRequestPage() {
       const payload = {
         preferredDate,
         preferredTime,
-        symptoms: `[${serviceType}] ${symptoms.trim()}`,
+        serviceType,
+        symptoms: symptoms.trim(),
       };
 
       const response = await api.post<AppointmentResponse>('/appointments/book', payload, token);

@@ -3,11 +3,35 @@ const { decryptStringSafe } = require("../utils/encryption.util");
 const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 const prisma = new PrismaClient();
 const ALLOWED_APPOINTMENT_STATUSES = new Set(["WAITING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
+const SERVICE_TYPE_OPTIONS = [
+  "Medical Consultation",
+  "Dental Check-up",
+  "Medical Clearance",
+];
 
 function parseValidDate(value) {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizeServiceType(value) {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  return SERVICE_TYPE_OPTIONS.find((option) => option.toLowerCase() === normalized) || null;
+}
+
+function parseServiceTypeFromSymptoms(symptoms) {
+  if (!symptoms) return null;
+  const match = symptoms.trim().match(/^\[([^\]]+)\]\s*/);
+  if (!match) return null;
+  return normalizeServiceType(match[1]);
+}
+
+function stripServicePrefix(symptoms, serviceType) {
+  if (!symptoms || !serviceType) return symptoms || "";
+  const escaped = serviceType.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return symptoms.replace(new RegExp(`^\\[${escaped}\\]\\s*`, "i"), "").trim();
 }
 
 function decryptMedicalHistory(history) {
@@ -26,11 +50,14 @@ function decryptMedicalHistory(history) {
 // ==========================================
 const bookAppointment = async (req, res, next) => {
   try {
-    const { preferredDate, preferredTime, symptoms } = req.body;
+    const { preferredDate, preferredTime, symptoms, serviceType } = req.body;
     const userId = req.user.userId; // From the auth token
     const parsedPreferredDate = parseValidDate(preferredDate);
     const normalizedPreferredTime = typeof preferredTime === "string" ? preferredTime.trim() : "";
     const normalizedSymptoms = typeof symptoms === "string" ? symptoms.trim() : "";
+    const providedServiceType = typeof serviceType === "string" ? serviceType.trim() : "";
+    const normalizedProvidedServiceType = normalizeServiceType(providedServiceType);
+    const parsedServiceType = parseServiceTypeFromSymptoms(normalizedSymptoms);
 
     if (!parsedPreferredDate) {
       return res.status(400).json({ success: false, message: "preferredDate must be a valid date." });
@@ -49,11 +76,28 @@ const bookAppointment = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "preferredTime is required." });
     }
 
-    if (!normalizedSymptoms) {
+    if (providedServiceType && !normalizedProvidedServiceType) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid serviceType. Allowed values: Medical Consultation, Dental Check-up, Medical Clearance.",
+      });
+    }
+
+    if (normalizedProvidedServiceType && parsedServiceType && normalizedProvidedServiceType !== parsedServiceType) {
+      return res.status(400).json({
+        success: false,
+        message: "serviceType does not match the type inferred from symptoms.",
+      });
+    }
+
+    const resolvedServiceType = normalizedProvidedServiceType || parsedServiceType || "Medical Consultation";
+    const cleanedSymptoms = stripServicePrefix(normalizedSymptoms, parsedServiceType || resolvedServiceType);
+
+    if (!cleanedSymptoms) {
       return res.status(400).json({ success: false, message: "symptoms are required." });
     }
 
-    if (normalizedSymptoms.length > 1000) {
+    if (cleanedSymptoms.length > 1000) {
       return res.status(400).json({ success: false, message: "symptoms must be 1000 characters or fewer." });
     }
 
@@ -73,7 +117,8 @@ const bookAppointment = async (req, res, next) => {
         studentProfileId: student.studentProfile.id,
         preferredDate: parsedPreferredDate,
         preferredTime: normalizedPreferredTime,
-        symptoms: normalizedSymptoms,
+        serviceType: resolvedServiceType,
+        symptoms: cleanedSymptoms,
       },
     });
 
@@ -99,11 +144,31 @@ const getLiveQueue = async (req, res, next) => {
       defaultLimit: 200,
       maxLimit: 500,
     });
+    const rawServiceType = typeof req.query?.serviceType === "string" ? req.query.serviceType.trim() : "";
+    const normalizedServiceType = normalizeServiceType(rawServiceType);
+
+    if (rawServiceType && !normalizedServiceType) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid serviceType filter. Allowed values: Medical Consultation, Dental Check-up, Medical Clearance.",
+      });
+    }
 
     const whereClause = {
       status: "WAITING",
       preferredDate: { gte: startOfDay },
     };
+
+    if (normalizedServiceType) {
+      whereClause.AND = [
+        {
+          OR: [
+            { serviceType: normalizedServiceType },
+            { symptoms: { startsWith: `[${normalizedServiceType}]`, mode: "insensitive" } },
+          ],
+        },
+      ];
+    }
 
     const [queue, total] = await prisma.$transaction([
       prisma.appointment.findMany({
@@ -127,19 +192,30 @@ const getLiveQueue = async (req, res, next) => {
       prisma.appointment.count({ where: whereClause }),
     ]);
 
-    const queueWithSafeHistory = queue.map((entry) => ({
-      ...entry,
-      studentProfile: {
-        ...entry.studentProfile,
-        medicalHistory: decryptMedicalHistory(entry.studentProfile?.medicalHistory || null),
-      },
-    }));
+    const queueWithSafeHistory = queue.map((entry) => {
+      const parsedService = parseServiceTypeFromSymptoms(entry.symptoms);
+      const resolvedService = normalizeServiceType(entry.serviceType) || parsedService || "Medical Consultation";
+
+      return {
+        ...entry,
+        serviceType: resolvedService,
+        symptoms: stripServicePrefix(entry.symptoms, parsedService || resolvedService),
+        studentProfile: {
+          ...entry.studentProfile,
+          medicalHistory: decryptMedicalHistory(entry.studentProfile?.medicalHistory || null),
+        },
+      };
+    });
+
+    const filteredQueue = normalizedServiceType
+      ? queueWithSafeHistory.filter((entry) => entry.serviceType === normalizedServiceType)
+      : queueWithSafeHistory;
 
     res.json({
       success: true,
       message: "Live patient queue retrieved",
-      data: queueWithSafeHistory,
-      pagination: buildPaginationMeta({ page, limit, total }),
+      data: filteredQueue,
+      pagination: buildPaginationMeta({ page, limit, total: normalizedServiceType ? filteredQueue.length : total }),
     });
   } catch (error) {
     next(error);

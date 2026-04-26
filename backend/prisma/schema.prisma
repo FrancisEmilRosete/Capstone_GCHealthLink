@@ -210,6 +210,7 @@ model Appointment {
   studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
   preferredDate    DateTime
   preferredTime    String
+  serviceType      String         @default("Medical Consultation")
   symptoms         String
   status           String         @default("WAITING") // Statuses: WAITING, IN_PROGRESS, COMPLETED, CANCELLED
   createdAt        DateTime       @default(now())

@@ -16,6 +16,8 @@ export interface RoleOption {
 
 export const ROLES: RoleOption[] = [
   { id: 'staff',   label: 'Staff'   },
+  { id: 'doctor',  label: 'Doctor'  },
+  { id: 'dental',  label: 'Dental'  },
   { id: 'student', label: 'Student' },
   { id: 'admin',   label: 'Admin'   },
 ];

@@ -27,6 +27,15 @@ import HeartbeatIcon              from '@/components/icons/HeartbeatIcon';
 import RoleSelector               from '@/components/auth/RoleSelector';
 import LoginForm                  from '@/components/auth/LoginForm';
 
+function getAccountRoleLabel(role: string): string {
+  const normalized = role.trim().toUpperCase();
+  if (normalized === 'ADMIN') return 'admin';
+  if (normalized === 'CLINIC_STAFF') return 'clinic staff';
+  return 'student';
+}
+
+const CLINIC_STAFF_ROLES: UserRole[] = ['staff', 'doctor', 'dental'];
+
 function mapLoginErrorMessage(error: ApiError): string {
   const message = (error.message || '').trim();
   const lowered = message.toLowerCase();
@@ -88,23 +97,28 @@ export default function LoginPage() {
         password,
       });
 
-      const actualRole: UserRole = user.role === 'ADMIN'
-        ? 'admin'
-        : user.role === 'CLINIC_STAFF'
-          ? 'staff'
-          : 'student';
+      const backendRole = (user.role || '').trim().toUpperCase();
+      const allowedRoles: UserRole[] = backendRole === 'ADMIN'
+        ? ['admin']
+        : backendRole === 'CLINIC_STAFF'
+          ? CLINIC_STAFF_ROLES
+          : ['student'];
 
-      if (selectedRole !== actualRole) {
+      if (!allowedRoles.includes(selectedRole)) {
         authLogout();
-        setError(`Role mismatch. This account is registered as ${actualRole}.`);
+        setError(`Role mismatch. This account is registered as ${getAccountRoleLabel(backendRole)}.`);
         return;
       }
 
-      const dashboardRoute = actualRole === 'admin'
+      const dashboardRoute = selectedRole === 'admin'
         ? '/dashboard/admin'
-        : actualRole === 'staff'
-          ? '/dashboard/staff'
-          : '/dashboard/student';
+        : selectedRole === 'doctor'
+          ? '/dashboard/doctor'
+          : selectedRole === 'dental'
+            ? '/dashboard/dental'
+            : selectedRole === 'staff'
+              ? '/dashboard/staff'
+              : '/dashboard/student';
 
       router.push(dashboardRoute);
     } catch (err) {

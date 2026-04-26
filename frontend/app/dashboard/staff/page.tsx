@@ -10,6 +10,7 @@ interface QueueItem {
   id: string;
   preferredDate: string;
   preferredTime: string;
+  serviceType: string;
   symptoms: string;
   status: string;
   studentProfile: {
@@ -96,11 +97,16 @@ function EmptyQueueState() {
   );
 }
 
+const SERVICE_OPTIONS = ['Medical Consultation', 'Dental Check-up', 'Medical Clearance'] as const;
+const FILTER_OPTIONS = ['All', ...SERVICE_OPTIONS] as const;
+type ServiceFilter = (typeof FILTER_OPTIONS)[number];
+
 export default function StaffCommandCenterPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState('');
   const [error, setError] = useState('');
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [serviceFilter, setServiceFilter] = useState<ServiceFilter>('All');
 
   const [todayVisits, setTodayVisits] = useState(0);
   const [lowStockAlerts, setLowStockAlerts] = useState(0);
@@ -114,9 +120,13 @@ export default function StaffCommandCenterPage() {
     }
 
     try {
+      setLoading(true);
       setError('');
+      const queueUrl = serviceFilter === 'All'
+        ? '/appointments/queue?limit=500'
+        : `/appointments/queue?limit=500&serviceType=${encodeURIComponent(serviceFilter)}`;
       const [queueResponse, inventoryResponse, visitsResponse] = await Promise.all([
-        api.get<QueueResponse>('/appointments/queue?limit=500', token),
+        api.get<QueueResponse>(queueUrl, token),
         api.get<InventoryResponse>('/inventory', token),
         api.get<VisitsResponse>('/clinic/visits?limit=1000', token),
       ]);
@@ -146,7 +156,7 @@ export default function StaffCommandCenterPage() {
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [serviceFilter]);
 
   async function updateStatus(appointmentId: string, status: 'IN_PROGRESS' | 'COMPLETED') {
     const token = getToken();
@@ -185,7 +195,22 @@ export default function StaffCommandCenterPage() {
           <h1 className="text-xl font-bold text-gray-900">Clinic Command Center</h1>
           <p className="text-sm text-gray-500 mt-1">Live queue, risk flags, and clinic operations snapshot.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Link href="/dashboard/doctor" className="px-3 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold">
+            Doctor Dashboard
+          </Link>
+          <Link href="/dashboard/dental" className="px-3 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-xs font-semibold">
+            Dental Queue
+          </Link>
+          <Link href="/dashboard/staff/medical-tracking" className="px-3 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold">
+            Medical Tracking
+          </Link>
+          <Link href="/dashboard/staff/medical-flagging" className="px-3 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-semibold">
+            Risk Flagging
+          </Link>
+          <Link href="/dashboard/staff/conditions-checklist" className="px-3 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white text-xs font-semibold">
+            Conditions Monitor
+          </Link>
           <Link href="/dashboard/staff/scanner" className="px-3 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-semibold">
             QR Check-in
           </Link>
@@ -224,8 +249,20 @@ export default function StaffCommandCenterPage() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100">
+        <div className="px-4 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h2 className="text-sm font-bold text-gray-800">Live Patient Queue</h2>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-gray-500">Service Type</label>
+            <select
+              value={serviceFilter}
+              onChange={(event) => setServiceFilter(event.target.value as ServiceFilter)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-teal-300"
+            >
+              {FILTER_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {loading ? (
@@ -262,7 +299,10 @@ export default function StaffCommandCenterPage() {
                       <td className="px-4 py-3 text-left text-gray-600">
                         {formatDate(entry.preferredDate)} at {entry.preferredTime}
                       </td>
-                      <td className="px-4 py-3 text-left text-gray-700 max-w-[260px] truncate">{entry.symptoms}</td>
+                      <td className="px-4 py-3 text-left max-w-[260px]">
+                        <p className="text-xs font-semibold text-teal-600">{entry.serviceType}</p>
+                        <p className="text-gray-700 truncate">{entry.symptoms}</p>
+                      </td>
                       <td className="px-4 py-3 text-left">
                         {hasRisk ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">

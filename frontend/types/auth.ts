@@ -5,8 +5,8 @@
  * When you add a new role or form field, update this file first.
  */
 
-/** The three user roles in the GC HealthLink system */
-export type UserRole = 'staff' | 'student' | 'admin';
+/** The supported user roles in the GC HealthLink system */
+export type UserRole = 'staff' | 'doctor' | 'dental' | 'student' | 'admin';
 
 /** Shape of the login form data */
 export interface LoginFormData {
