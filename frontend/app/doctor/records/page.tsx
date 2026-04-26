@@ -19,6 +19,14 @@ interface RecordEntry {
   remarks: string;
 }
 
+interface MedicineEntry {
+  id: string;
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+}
+
 const DoctorRecordsPage = () => {
   // Mock Patient Data
   const [patient] = useState({
@@ -70,7 +78,15 @@ const DoctorRecordsPage = () => {
   });
 
   const [historyRecords, setHistoryRecords] = useState<RecordEntry[]>([]);
-  const [prescription, setPrescription] = useState('');
+  const [medicines, setMedicines] = useState<MedicineEntry[]>([
+    {
+      id: Math.random().toString(36).slice(2, 11),
+      name: '',
+      dosage: '',
+      frequency: '',
+      duration: '',
+    },
+  ]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Handlers
@@ -109,6 +125,26 @@ const DoctorRecordsPage = () => {
     setHistoryRecords(prev => prev.filter(r => r.id !== id));
   };
 
+  const addMedicine = () => {
+    const newMedicine: MedicineEntry = {
+      id: Math.random().toString(36).slice(2, 11),
+      name: '',
+      dosage: '',
+      frequency: '',
+      duration: '',
+    };
+
+    setMedicines((prev) => [...prev, newMedicine]);
+  };
+
+  const updateMedicine = (id: string, field: keyof MedicineEntry, value: string) => {
+    setMedicines((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+  };
+
+  const deleteMedicine = (id: string) => {
+    setMedicines((prev) => prev.filter((item) => item.id !== id));
+  };
+
   const handleSave = () => {
     setIsSaving(true);
     // Simulate API call
@@ -124,7 +160,15 @@ const DoctorRecordsPage = () => {
       setPhysicalExam({ bp: '', pr: '', rr: '', temperature: '', height: '', weight: '', bmi: '', visualAcuity: '', isNormal: true, abnormalFindings: '' });
       setDiagnostics({ chestXray: '', laboratoryTest: '', others: '' });
       setSystemNotes({ heent: '', chestLungs: '', abdomen: '', extremities: '', others: '' });
-      setPrescription('');
+      setMedicines([
+        {
+          id: Math.random().toString(36).slice(2, 11),
+          name: '',
+          dosage: '',
+          frequency: '',
+          duration: '',
+        },
+      ]);
       setHistoryRecords([]);
     }
   };
@@ -198,8 +242,10 @@ const DoctorRecordsPage = () => {
               age: patient.age,
               date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
             }}
-            content={prescription}
-            onChange={setPrescription}
+            medicines={medicines}
+            onAddMedicine={addMedicine}
+            onUpdateMedicine={updateMedicine}
+            onDeleteMedicine={deleteMedicine}
             onPrint={() => window.print()}
             onDownload={() => alert('Downloading PDF...')}
             onSave={() => alert('Prescription saved!')}

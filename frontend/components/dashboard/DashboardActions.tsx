@@ -17,12 +17,9 @@ import Link from 'next/link';
 import ConsultationModal, { ConsultationPatient } from '@/components/modals/ConsultationModal';
 
 const EMPTY_PATIENT: ConsultationPatient = {
-  studentId:  '',
   name:       '',
-  age:        '',
   department: '',
   course:     '',
-  sex:        '',
 };
 
 export default function DashboardActions() {
@@ -34,6 +31,7 @@ export default function DashboardActions() {
       {showConsult && (
         <ConsultationModal
           patient={EMPTY_PATIENT}
+          inventoryOptions={[]}
           onClose={() => setShowConsult(false)}
           onSave={(data, medicines) => {
             // TODO: POST /api/consultations

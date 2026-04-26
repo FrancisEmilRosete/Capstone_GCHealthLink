@@ -147,12 +147,15 @@ export default function OutbreakForecastChart({
               <Tooltip
                 contentStyle={{ borderRadius: 12, borderColor: '#e5e7eb' }}
                 labelStyle={{ fontWeight: 600 }}
-                formatter={(value: number, key: string) => {
-                  if (key === 'predictedCases') return [value, 'Expected Cases'];
-                  if (key === 'observedCases') return [value, 'Actual Cases'];
-                  if (key === 'upperBound') return [value, 'Upper Estimate'];
-                  if (key === 'lowerBound') return [value, 'Lower Estimate'];
-                  return [value, key];
+                formatter={(value, key) => {
+                  const safeValue = value ?? '-';
+                  const safeKey = String(key ?? 'value');
+
+                  if (safeKey === 'predictedCases') return [safeValue, 'Expected Cases'];
+                  if (safeKey === 'observedCases') return [safeValue, 'Actual Cases'];
+                  if (safeKey === 'upperBound') return [safeValue, 'Upper Estimate'];
+                  if (safeKey === 'lowerBound') return [safeValue, 'Lower Estimate'];
+                  return [safeValue, safeKey];
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />

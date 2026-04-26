@@ -115,10 +115,13 @@ export default function PredictiveHeatMap({
 
             <Tooltip
               contentStyle={{ borderRadius: 12, borderColor: '#e5e7eb' }}
-              formatter={(value: number, key: string) => {
-                if (key === 'riskScore') return [value, 'Outbreak Risk Score'];
-                if (key === 'activeCases') return [value, 'Recent Cases (48h)'];
-                return [value, key];
+              formatter={(value, key) => {
+                const safeValue = value ?? '-';
+                const safeKey = String(key ?? 'value');
+
+                if (safeKey === 'riskScore') return [safeValue, 'Outbreak Risk Score'];
+                if (safeKey === 'activeCases') return [safeValue, 'Recent Cases (48h)'];
+                return [safeValue, safeKey];
               }}
               labelFormatter={(_, payload) => {
                 const point = payload?.[0]?.payload as HeatMapPoint | undefined;
