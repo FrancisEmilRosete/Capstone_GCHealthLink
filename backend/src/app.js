@@ -15,7 +15,10 @@ function normalizeOrigin(value) {
     : "";
 }
 
-const configuredCorsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
+const configuredCorsOrigins = (
+  process.env.CORS_ORIGIN
+  || "https://capstone-gchealthlink-git-main-francisemilrosetes-projects.vercel.app"
+)
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);

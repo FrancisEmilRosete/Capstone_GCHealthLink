@@ -14,9 +14,15 @@ from sklearn.linear_model import LinearRegression
 
 
 def parse_allowed_origins() -> List[str]:
-    raw = os.getenv("AI_ALLOWED_ORIGINS", "http://localhost:5000,http://127.0.0.1:5000")
+    raw = os.getenv(
+        "AI_ALLOWED_ORIGINS",
+        "https://capstone-gchealthlink-git-main-francisemilrosetes-projects.vercel.app,https://gc-healthlink-backend.onrender.com",
+    )
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
-    return origins or ["http://localhost:5000"]
+    return origins or [
+        "https://capstone-gchealthlink-git-main-francisemilrosetes-projects.vercel.app",
+        "https://gc-healthlink-backend.onrender.com",
+    ]
 
 
 app = FastAPI(
