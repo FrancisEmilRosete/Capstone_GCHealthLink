@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { CertificatesIcon, DashboardIcon, NotificationsIcon, ToothIcon } from '@/components/icons/NavIcons';
+import { CertificatesIcon, DashboardIcon, NotificationsIcon, ScannerIcon, ToothIcon } from '@/components/icons/NavIcons';
 
 export interface DentalNavItem {
   id:     string;
@@ -35,6 +35,12 @@ export const DENTAL_NAV_GROUPS: DentalNavGroup[] = [
         label: 'Dental Queue',
         href:  '/dashboard/dental/queue',
         icon:  ToothIcon,
+      },
+      {
+        id:    'scanner',
+        label: 'QR Scanner',
+        href:  '/dashboard/dental/scanner',
+        icon:  ScannerIcon,
       },
       {
         id:    'records',

@@ -247,6 +247,8 @@ export default function ScannerPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const roleSegment = pathname.split('/')[2] || 'staff';
+  const recordBasePath = roleSegment === 'staff' ? '/dashboard/staff/record' : `/dashboard/${roleSegment}/records`;
   const studentIdParam = (searchParams.get('studentId') || '').trim();
 
   const [studentInput, setStudentInput] = useState('');
@@ -781,7 +783,7 @@ export default function ScannerPage() {
             </button>
 
             <button
-              onClick={() => router.push(`/dashboard/staff/record/${encodeURIComponent(foundStudent.studentNumber)}`)}
+              onClick={() => router.push(`${recordBasePath}/${encodeURIComponent(foundStudent.studentNumber)}`)}
               className="flex-1 border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 font-semibold text-sm px-5 py-3 rounded-xl transition-colors bg-white"
             >
               View Record

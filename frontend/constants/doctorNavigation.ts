@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { CertificatesIcon, ConsultationsIcon, DashboardIcon, NotificationsIcon } from '@/components/icons/NavIcons';
+import { CertificatesIcon, ConsultationsIcon, DashboardIcon, NotificationsIcon, ScannerIcon } from '@/components/icons/NavIcons';
 
 export interface DoctorNavItem {
   id:     string;
@@ -47,6 +47,12 @@ export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
         label: 'Patient Directory',
         href:  '/dashboard/doctor/patients',
         icon:  ConsultationsIcon, // Using ConsultationsIcon as a placeholder
+      },
+      {
+        id:    'scanner',
+        label: 'QR Scanner',
+        href:  '/dashboard/doctor/scanner',
+        icon:  ScannerIcon,
       },
       {
         id:    'notifications',
