@@ -16,11 +16,13 @@ from sklearn.linear_model import LinearRegression
 def parse_allowed_origins() -> List[str]:
     raw = os.getenv(
         "AI_ALLOWED_ORIGINS",
-        "https://capstone-gchealthlink-git-main-francisemilrosetes-projects.vercel.app,https://gc-healthlink-backend.onrender.com",
+        "https://capstone-gchealthlink-git-main-francisemilrosetes-projects.vercel.app,https://capstone-gchealthlink.vercel.app,http://localhost:3000,https://gc-healthlink-backend.onrender.com",
     )
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
     return origins or [
         "https://capstone-gchealthlink-git-main-francisemilrosetes-projects.vercel.app",
+        "https://capstone-gchealthlink.vercel.app",
+        "http://localhost:3000",
         "https://gc-healthlink-backend.onrender.com",
     ]
 
