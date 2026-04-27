@@ -52,24 +52,15 @@ function formatTime(timeStr?: string) {
   return timeStr;
 }
 
-function generateVitalSignsTrend(patientId: string): VitalSign[] {
-  const vitals: VitalSign[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const bpSys = 110 + Math.floor(Math.random() * 20);
-    const bpDia = 70 + Math.floor(Math.random() * 15);
-    vitals.push({
-      date: date.toISOString().split('T')[0],
-      bloodPressure: `${bpSys}/${bpDia}`,
-      temperature: 36.5 + Math.random() * 1.5,
-      heartRate: 60 + Math.floor(Math.random() * 30),
-    });
-  }
-  return vitals;
-}
-
 function VitalSignsPanel({ vitals }: { vitals: VitalSign[] }) {
+  if (!vitals || vitals.length === 0) {
+    return (
+      <div className="bg-gray-50 rounded-xl p-4 text-center border border-gray-100">
+        <p className="text-xs text-gray-500">No Vital Signs recorded.</p>
+      </div>
+    );
+  }
+
   const latest = vitals[vitals.length - 1];
   const minTemp = Math.min(...vitals.map(v => v.temperature));
   const maxTemp = Math.max(...vitals.map(v => v.temperature));
@@ -334,7 +325,7 @@ export default function MedicalTrackingPage() {
                 )}
 
                 {/* Vital Signs Display */}
-                <VitalSignsPanel vitals={generateVitalSignsTrend(selectedVisit.studentProfile.id)} />
+                <VitalSignsPanel vitals={selectedVisit.vitals ? [selectedVisit.vitals] : []} />
 
                 {(selectedVisit.dispensedMedicines?.length ?? 0) > 0 && (
                   <div>

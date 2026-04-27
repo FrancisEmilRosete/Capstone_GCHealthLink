@@ -89,12 +89,6 @@ export default function MedicalFlaggingPage() {
   const [selectedEvent, setSelectedEvent] = useState<CampusEvent | null>(null);
   const [notification, setNotification] = useState<{ type: 'alert' | 'success'; message: string } | null>(null);
 
-  // Mock campus events
-  const mockEvents: CampusEvent[] = [
-    { id: '1', name: 'Sports Day', date: new Date().toISOString().split('T')[0], type: 'sports' },
-    { id: '2', name: 'Foundation Day Celebration', date: new Date().toISOString().split('T')[0], type: 'festival' },
-  ];
-
   async function loadFlaggedPatients() {
     const token = getToken();
     if (!token) {
@@ -105,8 +99,12 @@ export default function MedicalFlaggingPage() {
 
     try {
       setError('');
-      const response = await api.get<QueueResponse>('/appointments/queue?limit=500', token);
-      const allQueue = response.data || [];
+      const [queueRes, advRes] = await Promise.all([
+        api.get<QueueResponse>('/appointments/queue?limit=500', token),
+        api.get<{ data: Array<{ id: string, title: string, createdAt: string }> }>('/advisory', token)
+      ]);
+
+      const allQueue = queueRes.data || [];
 
       // Flag patients with high medical risks
       const flagged = allQueue.filter((item) => {
@@ -114,13 +112,20 @@ export default function MedicalFlaggingPage() {
         return riskData.level !== 'LOW';
       });
 
+      const matchedEvents: CampusEvent[] = (advRes.data || []).map((adv: any) => ({
+        id: adv.id,
+        name: adv.title,
+        date: adv.createdAt ? new Date(adv.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        type: 'festival',
+      }));
+
       setFlaggedPatients(flagged);
-      setCampusEvents(mockEvents);
+      setCampusEvents(matchedEvents);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('Failed to load flagged patients.');
+        setError('Failed to load flagged patients and advisories.');
       }
     } finally {
       setLoading(false);

@@ -568,6 +568,59 @@ async function seedOutbreakTrigger(
   console.log(`   Paracetamol dispensed via VisitMedicine: ${totalParacetamolDispensed} pcs.`);
 }
 
+async function seedAdvisories(staffId: string) {
+  console.log("\n-> Seeding Advisories...");
+  await prisma.healthAdvisory.create({
+    data: {
+      createdBy: "Campus Clinic",
+      title: "Sports Day 2026",
+      message: "Ensure readiness for sports-related injuries during the campus-wide sports day.",
+      targetDept: "ALL"
+    }
+  });
+  await prisma.healthAdvisory.create({
+    data: {
+      createdBy: "Campus Clinic",
+      title: "Foundation Day Celebration",
+      message: "Please be aware of food safety and high crowd volume during the foundation day festivities.",
+      targetDept: "ALL"
+    }
+  });
+}
+
+async function seedCertificates(staffId: string, students: any[]) {
+  console.log("\n-> Seeding Medical Certificates...");
+  const recentDays = [1, 2, 3];
+  let issuedCount = 0;
+
+  for (const student of students.slice(0, 3)) { // Add certificates to the first 3 students
+    const dateIssued = new Date();
+    dateIssued.setDate(dateIssued.getDate() - recentDays[issuedCount]);
+    
+    await prisma.auditLog.create({
+      data: {
+        userId: staffId,
+        action: "ISSUED_MED_CERTIFICATE",
+        targetId: student.id,
+        ipAddress: "127.0.0.1",
+        timestamp: dateIssued,
+        metadata: {
+          certificateId: "CERT-SEED-" + Date.now() + "-" + issuedCount,
+          studentProfileId: student.id,
+          studentNumber: student.studentNumber,
+          studentName: student.firstName + " " + student.lastName,
+          courseDept: student.courseDept,
+          reason: "Mild viral infection; excused absent",
+          remarks: "Advised 2 days rest.",
+          issuedBy: "Campus Physician",
+          dateIssued: dateIssued.toISOString(),
+        }
+      }
+    });
+    issuedCount++;
+  }
+}
+
 async function main(): Promise<void> {
   console.log("\n=== GC HealthLink Defense Seed (Prisma) ===");
 
@@ -575,6 +628,9 @@ async function main(): Promise<void> {
   const clinicStaffId = await fetchClinicStaffId();
   const inventoryMap = await seedInventory();
   const students = await seedStudentsAndMedicalFlags();
+  
+  await seedAdvisories(clinicStaffId);
+  await seedCertificates(clinicStaffId, students);
   await seedOutbreakTrigger(students, clinicStaffId, inventoryMap);
 
   console.log("\nSeed completed successfully.");

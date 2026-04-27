@@ -60,22 +60,15 @@ function formatTime(timeStr?: string) {
   return timeStr;
 }
 
-function generateDentalMetricsTrend(patientId: string): DentalMetric[] {
-  const metrics: DentalMetric[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    metrics.push({
-      date: date.toISOString().split('T')[0],
-      painScore: Math.min(10, Math.max(0, 2 + Math.floor(Math.random() * 7))),
-      plaqueIndex: Math.round((Math.random() * 3) * 10) / 10,
-      gumHealthScore: Math.round((Math.random() * 3) * 10) / 10,
-    });
-  }
-  return metrics;
-}
-
 function DentalMetricsPanel({ metrics }: { metrics: DentalMetric[] }) {
+  if (!metrics || metrics.length === 0) {
+    return (
+      <div className="bg-gray-50 rounded-xl p-4 text-center border border-gray-100">
+        <p className="text-xs text-gray-500">No Assessment metrics recorded.</p>
+      </div>
+    );
+  }
+
   const latest = metrics[metrics.length - 1];
   const minPlaque = Math.min(...metrics.map((m) => m.plaqueIndex));
   const maxPlaque = Math.max(...metrics.map((m) => m.plaqueIndex));
@@ -341,8 +334,7 @@ export default function DentalRecordsPage() {
                 </div>
 
                 {/* Dental Metrics Display */}
-                <DentalMetricsPanel metrics={generateDentalMetricsTrend(selectedVisit.studentProfile.id)} />
-
+                  <DentalMetricsPanel metrics={[]} />
                 {(selectedVisit.dispensedMedicines?.length ?? 0) > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase">Medicines Dispensed</p>
