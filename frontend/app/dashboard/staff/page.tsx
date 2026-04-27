@@ -196,12 +196,6 @@ export default function StaffCommandCenterPage() {
           <p className="text-sm text-gray-500 mt-1">Live queue, risk flags, and clinic operations snapshot.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Link href="/dashboard/doctor" className="px-3 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold">
-            Doctor Dashboard
-          </Link>
-          <Link href="/dashboard/dental" className="px-3 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-xs font-semibold">
-            Dental Queue
-          </Link>
           <Link href="/dashboard/staff/medical-tracking" className="px-3 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold">
             Medical Tracking
           </Link>

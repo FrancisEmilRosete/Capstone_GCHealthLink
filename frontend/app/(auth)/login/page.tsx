@@ -22,7 +22,7 @@ import Link from 'next/link';
 
 import { UserRole }               from '@/types/auth';
 import { ApiError }               from '@/lib/api';
-import { authLogin, authLogout }  from '@/lib/auth';
+import { authLogin, authLogout, setUserRole } from '@/lib/auth';
 import HeartbeatIcon              from '@/components/icons/HeartbeatIcon';
 import RoleSelector               from '@/components/auth/RoleSelector';
 import LoginForm                  from '@/components/auth/LoginForm';
@@ -109,6 +109,16 @@ export default function LoginPage() {
         setError(`Role mismatch. This account is registered as ${getAccountRoleLabel(backendRole)}.`);
         return;
       }
+
+      // Map the selected UI role to the stored role value
+      const roleMap: Record<UserRole, string> = {
+        staff:   'CLINIC_STAFF',
+        doctor:  'DOCTOR',
+        dental:  'DENTAL',
+        student: 'STUDENT',
+        admin:   'ADMIN',
+      };
+      setUserRole(roleMap[selectedRole]);
 
       const dashboardRoute = selectedRole === 'admin'
         ? '/dashboard/admin'

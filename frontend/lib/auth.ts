@@ -16,7 +16,7 @@ export interface AuthUser {
   role: string;
 }
 
-export type BackendUserRole = 'ADMIN' | 'CLINIC_STAFF' | 'STUDENT';
+export type BackendUserRole = 'ADMIN' | 'CLINIC_STAFF' | 'STUDENT' | 'DOCTOR' | 'DENTAL';
 
 interface LoginResponse {
   success: boolean;
@@ -82,6 +82,17 @@ function saveSession(token: string, user: AuthUser): void {
   localStorage.setItem(USER_ID_KEY, user.id);
 }
 
+/**
+ * Override the stored role after login.
+ * Used when the frontend selected role (doctor/dental) differs from
+ * the backend role (CLINIC_STAFF) — all clinic staff share one backend role.
+ */
+export function setUserRole(role: string): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(ROLE_KEY, role);
+  }
+}
+
 function clearSession(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ROLE_KEY);
@@ -121,6 +132,8 @@ function normalizeRole(role: string | null): BackendUserRole | null {
   if (normalized === 'ADMIN') return 'ADMIN';
   if (normalized === 'CLINIC_STAFF' || normalized === 'STAFF') return 'CLINIC_STAFF';
   if (normalized === 'STUDENT') return 'STUDENT';
+  if (normalized === 'DOCTOR' || normalized === 'CAMPUS_PHYSICIAN' || normalized === 'PHYSICIAN') return 'DOCTOR';
+  if (normalized === 'DENTAL' || normalized === 'DENTIST' || normalized === 'DENTAL_STAFF') return 'DENTAL';
   return null;
 }
 
@@ -134,5 +147,7 @@ export function getDashboardRouteForRole(role: string | null | undefined): strin
   if (normalized === 'ADMIN') return '/dashboard/admin';
   if (normalized === 'CLINIC_STAFF') return '/dashboard/staff';
   if (normalized === 'STUDENT') return '/dashboard/student';
+  if (normalized === 'DOCTOR') return '/dashboard/doctor';
+  if (normalized === 'DENTAL') return '/dashboard/dental';
   return '/login';
 }

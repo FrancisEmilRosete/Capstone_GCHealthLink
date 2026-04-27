@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Bell, UserPlus, Clock, Activity, Search, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { UserPlus, Clock, Activity, Search, ChevronRight, FileCheck } from 'lucide-react';
 import CheckInPatientModal from '@/components/dashboard/shared/CheckInPatientModal';
 import Toast from '@/components/ui/Toast';
+import type { PendingCertificateRequest } from '@/components/dashboard/staff/CertificateApprovalTable';
 
 // Mock Data Interfaces
 interface QueueItem {
@@ -25,6 +26,8 @@ interface Notification {
   time: string;
   read: boolean;
 }
+
+const STORAGE_KEY = 'gchl_cert_requests';
 
 export default function DoctorDashboardPage() {
   // Mock State
@@ -50,12 +53,61 @@ export default function DoctorDashboardPage() {
     }
   ]);
 
+  // Certificate approval state
+  const [pendingCerts, setPendingCerts] = useState<PendingCertificateRequest[]>([]);
+
+  useEffect(() => {
+    function loadPendingCerts() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) { setPendingCerts([]); return; }
+        const all: PendingCertificateRequest[] = JSON.parse(raw);
+        setPendingCerts(all.filter((r) => r.status === 'pending_doctor'));
+      } catch {
+        setPendingCerts([]);
+      }
+    }
+    loadPendingCerts();
+    // Poll for changes (e.g. staff requests approval in another tab)
+    const interval = setInterval(loadPendingCerts, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  function handleDoctorApprove(cert: PendingCertificateRequest) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const all: PendingCertificateRequest[] = JSON.parse(raw);
+      const updated = all.map((r) =>
+        r.id === cert.id
+          ? { ...r, status: 'doctor_approved' as const, doctorName: mockUser.name }
+          : r
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      setPendingCerts((prev) => prev.filter((r) => r.id !== cert.id));
+      showToast(`Certificate approved for ${cert.studentName}`);
+    } catch { /* ignore */ }
+  }
+
+  function handleDoctorDeny(cert: PendingCertificateRequest) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const all: PendingCertificateRequest[] = JSON.parse(raw);
+      const updated = all.map((r) =>
+        r.id === cert.id ? { ...r, status: 'denied' as const } : r
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      setPendingCerts((prev) => prev.filter((r) => r.id !== cert.id));
+      showToast(`Certificate request denied for ${cert.studentName}`);
+    } catch { /* ignore */ }
+  }
+
   // Modal & Toast State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toastConfig, setToastConfig] = useState({ isVisible: false, message: '' });
   const [searchQuery, setSearchQuery] = useState('');
 
-  const unreadCount = mockNotifications.filter(n => !n.read).length;
 
   const handleAdmitPatient = (patient: QueueItem) => {
     setMockQueue(prev => [patient, ...prev]);
@@ -90,16 +142,6 @@ export default function DoctorDashboardPage() {
         </div>
 
         <div className="flex items-center gap-6">
-          {/* Notifications */}
-          <button className="relative p-2 text-slate-400 hover:text-emerald-600 transition-colors">
-            <Bell size={24} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-            )}
-          </button>
-
-          <div className="h-8 w-px bg-slate-200"></div>
-
           {/* Check In Button */}
           <button 
             onClick={() => setIsModalOpen(true)}
@@ -238,6 +280,50 @@ export default function DoctorDashboardPage() {
           </div>
         </div>
       </main>
+
+      {/* Certificate Approval Panel */}
+      {pendingCerts.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-20 w-full max-w-md">
+          <div className="bg-white rounded-3xl border border-emerald-200 shadow-2xl shadow-emerald-100/50 overflow-hidden">
+            <div className="px-5 py-4 bg-emerald-50 border-b border-emerald-100 flex items-center gap-3">
+              <div className="p-2 bg-emerald-100 rounded-xl">
+                <FileCheck size={18} className="text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-slate-800">Pending Certificate Approvals</p>
+                <p className="text-xs text-slate-500">{pendingCerts.length} request{pendingCerts.length > 1 ? 's' : ''} awaiting your approval</p>
+              </div>
+            </div>
+            <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
+              {pendingCerts.map((cert) => (
+                <div key={cert.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{cert.studentName}</p>
+                      <p className="text-xs text-teal-600 font-semibold">{cert.studentNumber} • {cert.courseDept}</p>
+                      <p className="text-xs text-slate-500 mt-1">Reason: <span className="font-semibold text-slate-700">{cert.reason}</span></p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleDoctorApprove(cert)}
+                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleDoctorDeny(cert)}
+                        className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold rounded-xl transition-colors"
+                      >
+                        Deny
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals & Toasts */}
       <CheckInPatientModal 

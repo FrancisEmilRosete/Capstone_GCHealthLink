@@ -28,7 +28,8 @@ export default function RoleSelector({ selectedRole, onSelect }: RoleSelectorPro
     <div className="mb-5">
       <p className="text-sm font-semibold text-gray-700 mb-2">Select Role</p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {/* flex-wrap + justify-center keeps the bottom row centered when it has fewer items */}
+      <div className="flex flex-wrap justify-center gap-2">
         {ROLES.map(({ id, label }) => {
           const isActive = selectedRole === id;
 
@@ -36,6 +37,7 @@ export default function RoleSelector({ selectedRole, onSelect }: RoleSelectorPro
             <button
               key={id}
               onClick={() => onSelect(id)}
+              style={{ width: 'calc(33.333% - 6px)', minWidth: '88px', maxWidth: '110px' }}
               className={`
                 flex flex-col items-center justify-center py-3
                 rounded-xl border-2 transition-all cursor-pointer
@@ -64,3 +66,4 @@ export default function RoleSelector({ selectedRole, onSelect }: RoleSelectorPro
     </div>
   );
 }
+

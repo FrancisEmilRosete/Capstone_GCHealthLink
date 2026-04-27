@@ -22,11 +22,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 interface TopBarProps {
   onMenuOpen?: () => void;
   userName?:   string;
   userAvatar?: string;
+  notificationsHref?: string;
 }
 
 function SearchIcon() {
@@ -61,10 +64,22 @@ export default function TopBar({
   onMenuOpen,
   userName   = 'Clinic Staff',
   userAvatar,
+  notificationsHref,
 }: TopBarProps) {
   const [search,       setSearch      ] = useState('');
   // Controls whether the search box is expanded on mobile
   const [searchOpen,   setSearchOpen  ] = useState(false);
+  const pathname = usePathname();
+
+  // Auto-derive notifications path from current route if not explicitly provided
+  const resolvedNotifHref = notificationsHref ?? (() => {
+    if (!pathname) return null;
+    if (pathname.startsWith('/dashboard/doctor'))  return '/dashboard/doctor/notifications';
+    if (pathname.startsWith('/dashboard/dental'))  return '/dashboard/dental/notifications';
+    if (pathname.startsWith('/dashboard/staff'))   return '/dashboard/staff/notifications';
+    if (pathname.startsWith('/dashboard/admin'))   return '/dashboard/admin/notifications';
+    return null;
+  })();
 
   // e.g. "Dr. Maria Santos" -> "MS"
   const initials = userName
@@ -132,10 +147,20 @@ export default function TopBar({
           <SearchIcon />
         </button>
 
-        {/* Notification Bell */}
-        <button className="p-2 rounded-xl hover:bg-gray-100 transition-colors" aria-label="Notifications">
-          <BellIcon hasUnread />
-        </button>
+        {/* Notification Bell — links to the role-specific notifications page */}
+        {resolvedNotifHref ? (
+          <Link
+            href={resolvedNotifHref}
+            className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+            aria-label="Notifications"
+          >
+            <BellIcon hasUnread />
+          </Link>
+        ) : (
+          <button className="p-2 rounded-xl hover:bg-gray-100 transition-colors" aria-label="Notifications">
+            <BellIcon hasUnread />
+          </button>
+        )}
 
         {/* User Avatar + name */}
         <div className="flex items-center gap-2">

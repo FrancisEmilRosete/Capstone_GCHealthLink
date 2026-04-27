@@ -13,7 +13,7 @@ export default function StaffCertificatesPage() {
 
       <CertificateApprovalTable
         initialRequests={staffCertificateRequestsMock}
-        approverName="Clinic Staff"
+        approverName="Campus Physician"
       />
     </div>
   );
