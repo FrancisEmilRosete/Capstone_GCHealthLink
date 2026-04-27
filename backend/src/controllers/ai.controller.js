@@ -2,7 +2,6 @@ const axios = require("axios");
 
 const { prisma } = require("../lib/prisma");
 
-const DEFAULT_AI_SERVICE_BASE_URL = "http://localhost:8000";
 const DEFAULT_PYTHON_TIMEOUT_MS = 15_000;
 
 function normalizeText(value) {
@@ -10,8 +9,7 @@ function normalizeText(value) {
 }
 
 function resolveAiServiceBaseUrl() {
-  const configured = normalizeText(process.env.AI_SERVICE_BASE_URL);
-  return configured || DEFAULT_AI_SERVICE_BASE_URL;
+  return normalizeText(process.env.AI_SERVICE_BASE_URL);
 }
 
 function resolveTimeoutMs() {
@@ -58,7 +56,7 @@ function mapPythonServiceError(error, operationLabel) {
   if (error.code === "ECONNREFUSED") {
     return buildServiceError(
       503,
-      "AI service is offline. Start the FastAPI service at http://localhost:8000 and retry."
+      "The AI analysis service is currently unavailable. Please try again later."
     );
   }
 
@@ -176,6 +174,14 @@ async function buildResourcePayload() {
 
 async function callPythonService(path, payload, operationLabel) {
   const baseUrl = resolveAiServiceBaseUrl();
+  
+  if (!baseUrl) {
+    throw buildServiceError(
+      503,
+      "The AI analysis service is currently unavailable. Please try again later."
+    );
+  }
+
   const timeout = resolveTimeoutMs();
 
   try {
