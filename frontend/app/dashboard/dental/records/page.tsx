@@ -5,12 +5,13 @@ import Link from 'next/link';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { normalizeComplaintDisplay } from '@/lib/complaint';
 
-interface VitalSign {
+interface DentalMetric {
   date: string;
-  bloodPressure: string;
-  temperature: number;
-  heartRate: number;
+  painScore: number;
+  plaqueIndex: number;
+  gumHealthScore: number;
 }
 
 interface VisitRecord {
@@ -52,91 +53,88 @@ function formatTime(timeStr?: string) {
   return timeStr;
 }
 
-function generateVitalSignsTrend(patientId: string): VitalSign[] {
-  const vitals: VitalSign[] = [];
+function generateDentalMetricsTrend(patientId: string): DentalMetric[] {
+  const metrics: DentalMetric[] = [];
   for (let i = 6; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
-    const bpSys = 110 + Math.floor(Math.random() * 20);
-    const bpDia = 70 + Math.floor(Math.random() * 15);
-    vitals.push({
+    metrics.push({
       date: date.toISOString().split('T')[0],
-      bloodPressure: `${bpSys}/${bpDia}`,
-      temperature: 36.5 + Math.random() * 1.5,
-      heartRate: 60 + Math.floor(Math.random() * 30),
+      painScore: Math.min(10, Math.max(0, 2 + Math.floor(Math.random() * 7))),
+      plaqueIndex: Math.round((Math.random() * 3) * 10) / 10,
+      gumHealthScore: Math.round((Math.random() * 3) * 10) / 10,
     });
   }
-  return vitals;
+  return metrics;
 }
 
-function VitalSignsPanel({ vitals }: { vitals: VitalSign[] }) {
-  const latest = vitals[vitals.length - 1];
-  const minTemp = Math.min(...vitals.map(v => v.temperature));
-  const maxTemp = Math.max(...vitals.map(v => v.temperature));
-  const avgHeartRate = Math.round(vitals.reduce((sum, v) => sum + v.heartRate, 0) / vitals.length);
-  const minHR = Math.min(...vitals.map(v => v.heartRate));
-  const maxHR = Math.max(...vitals.map(v => v.heartRate));
+function DentalMetricsPanel({ metrics }: { metrics: DentalMetric[] }) {
+  const latest = metrics[metrics.length - 1];
+  const minPlaque = Math.min(...metrics.map((m) => m.plaqueIndex));
+  const maxPlaque = Math.max(...metrics.map((m) => m.plaqueIndex));
+  const avgGum = Math.round((metrics.reduce((sum, m) => sum + m.gumHealthScore, 0) / metrics.length) * 10) / 10;
+  const minPain = Math.min(...metrics.map((m) => m.painScore));
+  const maxPain = Math.max(...metrics.map((m) => m.painScore));
 
-  const getBPStatus = (bp: string) => {
-    const [sys] = bp.split('/').map(Number);
-    if (sys > 140) return 'High ⚠️';
-    if (sys < 90) return 'Low ⚠️';
-    return 'Normal ✓';
+  const getPainStatus = (pain: number) => {
+    if (pain >= 7) return 'Severe ⚠️';
+    if (pain >= 4) return 'Moderate';
+    return 'Mild ✓';
   };
 
-  const getTempStatus = (temp: number) => {
-    if (temp > 38.5) return 'Fever ⚠️';
-    if (temp < 36.0) return 'Low ⚠️';
-    return 'Normal ✓';
+  const getPlaqueStatus = (index: number) => {
+    if (index >= 2.5) return 'Heavy ⚠️';
+    if (index >= 1.5) return 'Moderate';
+    return 'Light ✓';
   };
 
-  const getHRStatus = (hr: number) => {
-    if (hr > 100) return 'Elevated ⚠️';
-    if (hr < 60) return 'Low ⚠️';
-    return 'Normal ✓';
+  const getGumStatus = (score: number) => {
+    if (score >= 2.5) return 'Bleeding ⚠️';
+    if (score >= 1.5) return 'Inflamed';
+    return 'Healthy ✓';
   };
 
   return (
-    <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl p-4 border border-cyan-200 space-y-3">
-      <p className="text-xs font-bold text-teal-700 uppercase tracking-wider">📊 Vital Signs (7-day trend)</p>
+    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-200 space-y-3">
+      <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">🦷 Oral Assessment (7-day trend)</p>
       
       <div className="space-y-3">
-        {/* Blood Pressure */}
+        {/* Pain Score */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-600">BP (mmHg)</span>
-            <span className="text-xs font-bold text-gray-900">{latest.bloodPressure}</span>
-            <span className="text-xs text-gray-600">{getBPStatus(latest.bloodPressure)}</span>
+            <span className="text-xs font-semibold text-gray-600">Pain Score (0-10)</span>
+            <span className="text-xs font-bold text-gray-900">{latest.painScore}</span>
+            <span className="text-xs text-gray-600">{getPainStatus(latest.painScore)}</span>
           </div>
           <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-red-400 to-red-600 w-1/2"></div>
+            <div className="h-full bg-gradient-to-r from-rose-400 to-rose-600" style={{ width: `${(latest.painScore / 10) * 100}%` }}></div>
           </div>
         </div>
 
-        {/* Temperature */}
+        {/* Plaque Index */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-600">Temp (°C)</span>
-            <span className="text-xs font-bold text-gray-900">{latest.temperature.toFixed(1)}°</span>
-            <span className="text-xs text-gray-600">{getTempStatus(latest.temperature)}</span>
+            <span className="text-xs font-semibold text-gray-600">Plaque Index (0-3)</span>
+            <span className="text-xs font-bold text-gray-900">{latest.plaqueIndex.toFixed(1)}</span>
+            <span className="text-xs text-gray-600">{getPlaqueStatus(latest.plaqueIndex)}</span>
           </div>
           <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600 w-2/5"></div>
+            <div className="h-full bg-gradient-to-r from-amber-400 to-amber-600" style={{ width: `${(latest.plaqueIndex / 3) * 100}%` }}></div>
           </div>
-          <div className="text-xs text-gray-600 text-right">Range: {minTemp.toFixed(1)}° - {maxTemp.toFixed(1)}°</div>
+          <div className="text-xs text-gray-600 text-right">Range: {minPlaque.toFixed(1)} - {maxPlaque.toFixed(1)}</div>
         </div>
 
-        {/* Heart Rate */}
+        {/* Gum Health */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-600">HR (bpm)</span>
-            <span className="text-xs font-bold text-gray-900">{latest.heartRate}</span>
-            <span className="text-xs text-gray-600">{getHRStatus(latest.heartRate)}</span>
+            <span className="text-xs font-semibold text-gray-600">Gum Health Score (0-3)</span>
+            <span className="text-xs font-bold text-gray-900">{latest.gumHealthScore.toFixed(1)}</span>
+            <span className="text-xs text-gray-600">{getGumStatus(latest.gumHealthScore)}</span>
           </div>
           <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-purple-400 to-purple-600" style={{width: `${(latest.heartRate / 120) * 100}%`}}></div>
+            <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${(latest.gumHealthScore / 3) * 100}%` }}></div>
           </div>
-          <div className="text-xs text-gray-600 text-right">Range: {minHR} - {maxHR} | Avg: {avgHeartRate}</div>
+          <div className="text-xs text-gray-600 text-right">Avg: {avgGum} | Pain Range: {minPain}-{maxPain}</div>
         </div>
       </div>
     </div>
@@ -268,7 +266,9 @@ export default function DentalRecordsPage() {
                               <p className="text-xs text-teal-600 font-medium">{visit.studentProfile.studentNumber}</p>
                               <p className="text-sm text-gray-700 mt-1.5">{visit.concernTag || 'Dental Consultation'}</p>
                               {visit.chiefComplaintEnc && (
-                                <p className="text-xs text-gray-600 mt-1 line-clamp-2">{visit.chiefComplaintEnc}</p>
+                                <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                                  {normalizeComplaintDisplay(visit.chiefComplaintEnc)}
+                                </p>
                               )}
                             </div>
                             <div className="shrink-0 text-right">
@@ -295,7 +295,7 @@ export default function DentalRecordsPage() {
           {selectedVisit ? (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-6 max-h-[calc(100vh-120px)] overflow-y-auto">
               <div className="px-4 py-4 border-b border-gray-100 bg-teal-50 flex items-center justify-between">
-                <p className="text-sm font-bold text-gray-900">Visit Details & Vitals</p>
+                <p className="text-sm font-bold text-gray-900">Visit Details & Oral Assessment</p>
                 <button
                   onClick={() => setSelectedVisit(null)}
                   className="text-gray-400 hover:text-gray-600 text-lg"
@@ -322,19 +322,19 @@ export default function DentalRecordsPage() {
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase">Concern Tag</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Dental Concern</p>
                   <p className="text-sm text-gray-900 font-medium mt-1">{selectedVisit.concernTag || 'Dental Consultation'}</p>
                 </div>
 
-                {selectedVisit.chiefComplaintEnc && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase">Chief Complaint</p>
-                    <p className="text-sm text-gray-700 mt-1 bg-gray-50 p-2 rounded">{selectedVisit.chiefComplaintEnc}</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Primary Dental Complaint</p>
+                  <p className="text-sm text-gray-700 mt-1 bg-gray-50 p-2 rounded">
+                    {normalizeComplaintDisplay(selectedVisit.chiefComplaintEnc, 'No complaint noted.')}
+                  </p>
+                </div>
 
-                {/* Vital Signs Display */}
-                <VitalSignsPanel vitals={generateVitalSignsTrend(selectedVisit.studentProfile.id)} />
+                {/* Dental Metrics Display */}
+                <DentalMetricsPanel metrics={generateDentalMetricsTrend(selectedVisit.studentProfile.id)} />
 
                 {(selectedVisit.dispensedMedicines?.length ?? 0) > 0 && (
                   <div>

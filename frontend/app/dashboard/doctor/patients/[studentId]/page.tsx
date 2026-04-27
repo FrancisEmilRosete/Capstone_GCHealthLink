@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  User, Activity, FileText, Pill, Clock, 
-  ChevronLeft, Printer, Save, Plus
+  User, FileText, Pill, Clock, 
+  ChevronLeft, Printer, Save
 } from 'lucide-react';
 
 import PatientHeader from '@/components/doctor/PatientHeader';
@@ -18,11 +18,19 @@ import ActionBar from '@/components/doctor/ActionBar';
 const PatientProfilePage = () => {
   const params = useParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'records' | 'consultations' | 'prescriptions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'records' | 'prescriptions'>('overview');
   const [isSaving, setIsSaving] = useState(false);
 
+  interface ConsultationEntry {
+    id: string;
+    date: string;
+    complaint: string;
+    treatment: string;
+    remarks: string;
+  }
+
   // Mock Patient Data (Normally fetched via params.studentId)
-  const [patient, setPatient] = useState({
+  const [patient] = useState({
     id: params.studentId as string,
     firstName: 'Francis Emil',
     middleName: 'P.',
@@ -66,7 +74,7 @@ const PatientProfilePage = () => {
     },
     diagnostics: { chestXray: '', laboratoryTest: '', others: '' },
     systemNotes: { heent: '', chestLungs: '', abdomen: '', extremities: '', others: '' },
-    consultations: [] as any[],
+    consultations: [] as ConsultationEntry[],
     medicines: [] as any[],
   });
 
@@ -79,22 +87,47 @@ const PatientProfilePage = () => {
     }));
   };
 
+  const addConsultation = () => {
+    const newEntry: ConsultationEntry = {
+      id: Math.random().toString(36).slice(2, 11),
+      date: new Date().toISOString().split('T')[0],
+      complaint: '',
+      treatment: '',
+      remarks: '',
+    };
+
+    setFormData(prev => ({ ...prev, consultations: [...prev.consultations, newEntry] }));
+  };
+
+  const updateConsultation = (id: string, field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      consultations: prev.consultations.map(entry => entry.id === id ? { ...entry, [field as keyof ConsultationEntry]: value } : entry)
+    }));
+  };
+
+  const deleteConsultation = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      consultations: prev.consultations.filter(entry => entry.id !== id)
+    }));
+  };
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <User size={18} /> },
     { id: 'records', label: 'Medical Records', icon: <FileText size={18} /> },
-    { id: 'consultations', label: 'Consultations', icon: <Activity size={18} /> },
     { id: 'prescriptions', label: 'Prescriptions', icon: <Pill size={18} /> },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-32">
+    <div className="min-h-screen bg-slate-50 pb-32 print:bg-white print:pb-0">
       {/* Sticky Top Header */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-sm px-6 py-4">
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-sm px-6 py-4 print:static print:shadow-none print:bg-white">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => router.back()}
-              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500"
+              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 print:hidden"
             >
               <ChevronLeft size={20} />
             </button>
@@ -114,7 +147,7 @@ const PatientProfilePage = () => {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 print:hidden">
             <button className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all active:scale-95">
               <Printer size={16} /> Print
             </button>
@@ -128,9 +161,9 @@ const PatientProfilePage = () => {
         </div>
       </div>
 
-      <main className="max-w-6xl mx-auto px-6 mt-8 space-y-8">
+      <main className="max-w-6xl mx-auto px-6 mt-8 space-y-8 print:px-0 print:mt-4">
         {/* Navigation Tabs */}
-        <div className="flex gap-1 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm w-fit">
+        <div className="flex gap-1 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm w-fit print:hidden">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -193,36 +226,14 @@ const PatientProfilePage = () => {
                     consultations: formData.consultations 
                   }} 
                   onChange={handleFormChange}
-                  onAddConsultation={() => {}}
-                  onUpdateConsultation={() => {}}
-                  onDeleteConsultation={() => {}}
+                  onAddConsultation={addConsultation}
+                  onUpdateConsultation={updateConsultation}
+                  onDeleteConsultation={deleteConsultation}
                 />
               )}
               <DiagnosticsSection 
                 data={formData.diagnostics} 
                 onChange={(f, v) => handleFormChange('diagnostics', f, v)} 
-              />
-            </div>
-          )}
-
-          {activeTab === 'consultations' && (
-            <div className="space-y-8">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Clinical Consultations</h2>
-                <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all">
-                  <Plus size={16} /> New Consultation
-                </button>
-              </div>
-              <HealthRecordForm 
-                data={{ 
-                  ...formData.general, 
-                  emergencyContact: formData.emergencyContact,
-                  consultations: formData.consultations 
-                }} 
-                onChange={handleFormChange}
-                onAddConsultation={() => {}}
-                onUpdateConsultation={() => {}}
-                onDeleteConsultation={() => {}}
               />
             </div>
           )}

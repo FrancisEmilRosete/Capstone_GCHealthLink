@@ -1,4 +1,6 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
 import { FileText, Image as ImageIcon, Plus } from 'lucide-react';
 
 interface DiagnosticsSectionProps {
@@ -10,7 +12,50 @@ interface DiagnosticsSectionProps {
   onChange: (field: string, value: string) => void;
 }
 
+interface SelectedFile {
+  name: string;
+  url: string;
+  type: string;
+}
+
 const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = ({ data, onChange }) => {
+  const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const labInputRef = useRef<HTMLInputElement | null>(null);
+  const [scanFile, setScanFile] = useState<SelectedFile | null>(null);
+  const [labFile, setLabFile] = useState<SelectedFile | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (scanFile) URL.revokeObjectURL(scanFile.url);
+      if (labFile) URL.revokeObjectURL(labFile.url);
+    };
+  }, [scanFile, labFile]);
+
+  const appendAttachment = (current: string, label: string) => {
+    const trimmed = current.trim();
+    return trimmed ? `${trimmed}\n${label}` : label;
+  };
+
+  const handleSelectScan = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    if (scanFile) URL.revokeObjectURL(scanFile.url);
+    setScanFile({ name: file.name, url, type: file.type });
+    onChange('chestXray', appendAttachment(data.chestXray, `Attachment: ${file.name}`));
+    event.target.value = '';
+  };
+
+  const handleSelectLab = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    if (labFile) URL.revokeObjectURL(labFile.url);
+    setLabFile({ name: file.name, url, type: file.type });
+    onChange('laboratoryTest', appendAttachment(data.laboratoryTest, `Lab Result File: ${file.name}`));
+    event.target.value = '';
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-slate-800 border-b pb-2">Diagnostic & Lab Section</h2>
@@ -27,9 +72,29 @@ const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = ({ data, onChange 
             placeholder="Findings, impressions, or attachment link..."
             className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none text-sm"
           />
-          <button className="mt-3 flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
+          <button
+            type="button"
+            onClick={() => scanInputRef.current?.click()}
+            className="mt-3 flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+          >
             <Plus size={14} /> Upload Scan
           </button>
+          <input
+            ref={scanInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            onChange={handleSelectScan}
+            className="hidden"
+          />
+          {scanFile && (
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
+              <span className="font-semibold text-slate-600">Selected:</span>
+              <span className="truncate max-w-[220px]">{scanFile.name}</span>
+              <a href={scanFile.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                View
+              </a>
+            </div>
+          )}
         </div>
 
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
@@ -43,9 +108,29 @@ const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = ({ data, onChange 
             placeholder="CBC, Urinalysis, Blood Sugar results..."
             className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none text-sm"
           />
-          <button className="mt-3 flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
+          <button
+            type="button"
+            onClick={() => labInputRef.current?.click()}
+            className="mt-3 flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+          >
             <Plus size={14} /> Upload Lab Result
           </button>
+          <input
+            ref={labInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            onChange={handleSelectLab}
+            className="hidden"
+          />
+          {labFile && (
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
+              <span className="font-semibold text-slate-600">Selected:</span>
+              <span className="truncate max-w-[220px]">{labFile.name}</span>
+              <a href={labFile.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                View
+              </a>
+            </div>
+          )}
         </div>
 
         <div className="md:col-span-2 bg-white p-5 rounded-lg border border-slate-200 shadow-sm">

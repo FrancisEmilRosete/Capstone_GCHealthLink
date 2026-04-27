@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Bell, UserPlus, Clock, Activity, Search, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { UserPlus, Clock, Activity, Search, ChevronRight } from 'lucide-react';
 import CheckInPatientModal from '@/components/dashboard/shared/CheckInPatientModal';
 import Toast from '@/components/ui/Toast';
 
@@ -19,22 +20,12 @@ interface QueueItem {
   status: 'WAITING' | 'IN_PROGRESS' | 'DONE';
 }
 
-interface Notification {
-  id: string;
-  message: string;
-  time: string;
-  read: boolean;
-}
-
 export default function DentalDashboardPage() {
+  const router = useRouter();
+
   // Mock State
   const [mockUser] = useState({ name: "Dr. Fernandez", role: "Campus Dentist" });
   
-  const [mockNotifications, setMockNotifications] = useState<Notification[]>([
-    { id: '1', message: "Student 2024-0120 ready for oral prophylaxis", time: "5m ago", read: false },
-    { id: '2', message: "Supply low: Amalgam Capsules", time: "2h ago", read: true }
-  ]);
-
   const [mockQueue, setMockQueue] = useState<QueueItem[]>([
     {
       id: '1', studentId: '2023-1122', name: 'Mark Bautista', patientType: 'Student',
@@ -54,8 +45,6 @@ export default function DentalDashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toastConfig, setToastConfig] = useState({ isVisible: false, message: '' });
   const [searchQuery, setSearchQuery] = useState('');
-
-  const unreadCount = mockNotifications.filter(n => !n.read).length;
 
   const handleAdmitPatient = (patient: QueueItem) => {
     setMockQueue(prev => [patient, ...prev]);
@@ -90,16 +79,6 @@ export default function DentalDashboardPage() {
         </div>
 
         <div className="flex items-center gap-6">
-          {/* Notifications */}
-          <button className="relative p-2 text-slate-400 hover:text-emerald-600 transition-colors">
-            <Bell size={24} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-            )}
-          </button>
-
-          <div className="h-8 w-px bg-slate-200"></div>
-
           {/* Check In Button */}
           <button 
             onClick={() => setIsModalOpen(true)}
@@ -225,7 +204,10 @@ export default function DentalDashboardPage() {
                           </select>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider">
+                          <button
+                            onClick={() => router.push(`/dashboard/dental/records/${encodeURIComponent(patient.studentId)}`)}
+                            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider"
+                          >
                             Open <ChevronRight size={14} />
                           </button>
                         </td>

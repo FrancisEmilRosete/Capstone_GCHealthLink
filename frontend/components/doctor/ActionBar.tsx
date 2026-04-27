@@ -11,7 +11,7 @@ interface ActionBarProps {
 
 const ActionBar: React.FC<ActionBarProps> = ({ onSave, onUpdate, onPrint, onClear, isSaving }) => {
   return (
-    <div className="sticky bottom-6 left-0 right-0 z-50 px-6">
+    <div className="sticky bottom-6 left-0 right-0 z-50 px-6 print:hidden">
       <div className="max-w-5xl mx-auto bg-white/80 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex gap-2">
           <button

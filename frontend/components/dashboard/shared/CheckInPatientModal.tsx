@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, FileText, Activity } from 'lucide-react';
+import { X, UserPlus } from 'lucide-react';
 
 interface CheckInPatientModalProps {
   isOpen: boolean;
@@ -17,6 +17,7 @@ const CheckInPatientModal: React.FC<CheckInPatientModalProps> = ({ isOpen, onClo
   const [reason, setReason] = useState('');
   const [remarks, setRemarks] = useState('');
   const [isAutoFilled, setIsAutoFilled] = useState(false);
+  const [departmentLocked, setDepartmentLocked] = useState(false);
 
   // Reset form when opened
   useEffect(() => {
@@ -29,6 +30,7 @@ const CheckInPatientModal: React.FC<CheckInPatientModalProps> = ({ isOpen, onClo
       setReason('');
       setRemarks('');
       setIsAutoFilled(false);
+      setDepartmentLocked(false);
     }
   }, [isOpen, defaultDepartment]);
 
@@ -39,15 +41,21 @@ const CheckInPatientModal: React.FC<CheckInPatientModalProps> = ({ isOpen, onClo
       setPatientType('Student');
       setCourseDept('BS Information Technology');
       setIsAutoFilled(true);
+      setDepartment(defaultDepartment);
+      setDepartmentLocked(true);
     } else if (patientId.toUpperCase().startsWith('EMP')) {
       setName('Dr. Maria Santos');
       setPatientType('Employee');
       setCourseDept('CCS Faculty');
       setIsAutoFilled(true);
+      setDepartment(defaultDepartment);
+      setDepartmentLocked(true);
     } else {
       setIsAutoFilled(false);
+      setDepartment(defaultDepartment);
+      setDepartmentLocked(false);
     }
-  }, [patientId]);
+  }, [patientId, defaultDepartment]);
 
   if (!isOpen) return null;
 
@@ -160,22 +168,14 @@ const CheckInPatientModal: React.FC<CheckInPatientModalProps> = ({ isOpen, onClo
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clinic Area</label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDepartment('Medical')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 border-2 rounded-xl text-sm font-bold transition-all ${department === 'Medical' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-100 text-slate-400 hover:border-slate-200 hover:bg-slate-50'}`}
-                >
-                  <Activity size={16} /> Medical
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDepartment('Dental')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 border-2 rounded-xl text-sm font-bold transition-all ${department === 'Dental' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 hover:border-slate-200 hover:bg-slate-50'}`}
-                >
-                  <FileText size={16} /> Dental
-                </button>
+              <div className={`w-full px-4 py-2.5 rounded-xl text-sm font-semibold border ${department === 'Dental' ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-blue-100 bg-blue-50 text-blue-700'}`}>
+                {department}
               </div>
+              {!departmentLocked && (
+                <p className="text-[10px] text-slate-400 font-medium">
+                  This is set automatically for the current dashboard.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { UserPlus, Clock, Activity, Search, ChevronRight, FileCheck } from 'lucide-react';
 import CheckInPatientModal from '@/components/dashboard/shared/CheckInPatientModal';
 import Toast from '@/components/ui/Toast';
@@ -28,8 +29,11 @@ interface Notification {
 }
 
 const STORAGE_KEY = 'gchl_cert_requests';
+const CERT_POPUP_MS = 5000;
 
 export default function DoctorDashboardPage() {
+  const router = useRouter();
+
   // Mock State
   const [mockUser] = useState({ name: "Dr. Dela Cruz", role: "Campus Physician" });
   
@@ -55,6 +59,17 @@ export default function DoctorDashboardPage() {
 
   // Certificate approval state
   const [pendingCerts, setPendingCerts] = useState<PendingCertificateRequest[]>([]);
+  const [showCertPanel, setShowCertPanel] = useState(false);
+  const certPopupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPendingIds = useRef<string>('');
+
+  const showCertPanelNow = useCallback(() => {
+    setShowCertPanel(true);
+    if (certPopupTimer.current) {
+      clearTimeout(certPopupTimer.current);
+    }
+    certPopupTimer.current = setTimeout(() => setShowCertPanel(false), CERT_POPUP_MS);
+  }, []);
 
   useEffect(() => {
     function loadPendingCerts() {
@@ -71,6 +86,28 @@ export default function DoctorDashboardPage() {
     // Poll for changes (e.g. staff requests approval in another tab)
     const interval = setInterval(loadPendingCerts, 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (pendingCerts.length === 0) {
+      setShowCertPanel(false);
+      lastPendingIds.current = '';
+      return;
+    }
+
+    const nextIds = pendingCerts.map((cert) => cert.id).sort().join('|');
+    if (nextIds !== lastPendingIds.current) {
+      showCertPanelNow();
+      lastPendingIds.current = nextIds;
+    }
+  }, [pendingCerts, showCertPanelNow]);
+
+  useEffect(() => {
+    return () => {
+      if (certPopupTimer.current) {
+        clearTimeout(certPopupTimer.current);
+      }
+    };
   }, []);
 
   function handleDoctorApprove(cert: PendingCertificateRequest) {
@@ -267,7 +304,10 @@ export default function DoctorDashboardPage() {
                           </select>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider">
+                          <button
+                            onClick={() => router.push(`/dashboard/doctor/records/${encodeURIComponent(patient.studentId)}`)}
+                            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider"
+                          >
                             Open <ChevronRight size={14} />
                           </button>
                         </td>
@@ -284,44 +324,55 @@ export default function DoctorDashboardPage() {
       {/* Certificate Approval Panel */}
       {pendingCerts.length > 0 && (
         <div className="fixed bottom-6 right-6 z-20 w-full max-w-md">
-          <div className="bg-white rounded-3xl border border-emerald-200 shadow-2xl shadow-emerald-100/50 overflow-hidden">
-            <div className="px-5 py-4 bg-emerald-50 border-b border-emerald-100 flex items-center gap-3">
-              <div className="p-2 bg-emerald-100 rounded-xl">
-                <FileCheck size={18} className="text-emerald-600" />
+          {showCertPanel ? (
+            <div className="bg-white rounded-3xl border border-emerald-200 shadow-2xl shadow-emerald-100/50 overflow-hidden transition-all duration-300">
+              <div className="px-5 py-4 bg-emerald-50 border-b border-emerald-100 flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-xl">
+                  <FileCheck size={18} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-800">Pending Certificate Approvals</p>
+                  <p className="text-xs text-slate-500">{pendingCerts.length} request{pendingCerts.length > 1 ? 's' : ''} awaiting your approval</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-black text-slate-800">Pending Certificate Approvals</p>
-                <p className="text-xs text-slate-500">{pendingCerts.length} request{pendingCerts.length > 1 ? 's' : ''} awaiting your approval</p>
-              </div>
-            </div>
-            <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
-              {pendingCerts.map((cert) => (
-                <div key={cert.id} className="px-5 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-800 truncate">{cert.studentName}</p>
-                      <p className="text-xs text-teal-600 font-semibold">{cert.studentNumber} • {cert.courseDept}</p>
-                      <p className="text-xs text-slate-500 mt-1">Reason: <span className="font-semibold text-slate-700">{cert.reason}</span></p>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={() => handleDoctorApprove(cert)}
-                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleDoctorDeny(cert)}
-                        className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold rounded-xl transition-colors"
-                      >
-                        Deny
-                      </button>
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
+                {pendingCerts.map((cert) => (
+                  <div key={cert.id} className="px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{cert.studentName}</p>
+                        <p className="text-xs text-teal-600 font-semibold">{cert.studentNumber} • {cert.courseDept}</p>
+                        <p className="text-xs text-slate-500 mt-1">Reason: <span className="font-semibold text-slate-700">{cert.reason}</span></p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => handleDoctorApprove(cert)}
+                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleDoctorDeny(cert)}
+                          className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold rounded-xl transition-colors"
+                        >
+                          Deny
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex justify-end">
+              <button
+                onClick={showCertPanelNow}
+                className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
+              >
+                Pending Certificate Approvals ({pendingCerts.length})
+              </button>
+            </div>
+          )}
         </div>
       )}
 

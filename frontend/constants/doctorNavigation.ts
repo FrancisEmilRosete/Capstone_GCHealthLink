@@ -43,12 +43,6 @@ export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
         icon:  CertificatesIcon,
       },
       {
-        id:    'patients',
-        label: 'Patient Directory',
-        href:  '/dashboard/doctor/patients',
-        icon:  ConsultationsIcon, // Using ConsultationsIcon as a placeholder
-      },
-      {
         id:    'scanner',
         label: 'QR Scanner',
         href:  '/dashboard/doctor/scanner',

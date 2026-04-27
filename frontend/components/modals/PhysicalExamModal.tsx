@@ -256,6 +256,18 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    const heightMeters = Number.parseFloat(form.height) / 100;
+    const weightKg = Number.parseFloat(form.weight);
+    const nextBmi = heightMeters > 0 && weightKg > 0
+      ? (weightKg / (heightMeters * heightMeters)).toFixed(1)
+      : '';
+
+    if (form.bmi !== nextBmi) {
+      setForm((current) => ({ ...current, bmi: nextBmi }));
+    }
+  }, [form.height, form.weight, form.bmi]);
+
+  useEffect(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     closeButtonRef.current?.focus();
 
@@ -467,7 +479,7 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
                 <TextField label="Temp" value={form.temp} onChange={(value) => setField('temp', value)} />
                 <TextField label="Weight" value={form.weight} onChange={(value) => setField('weight', value)} />
                 <TextField label="Height" value={form.height} onChange={(value) => setField('height', value)} />
-                <TextField label="BMI" value={form.bmi} onChange={(value) => setField('bmi', value)} />
+                <TextField label="BMI" value={form.bmi} onChange={() => {}} readOnly />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

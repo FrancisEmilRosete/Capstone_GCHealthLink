@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import type { PendingCertificateRequest } from '@/components/dashboard/staff/CertificateApprovalTable';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 
 type Level = 'critical' | 'warning' | 'info';
-type Category = 'appointments' | 'stock';
+type Category = 'appointments' | 'stock' | 'certificates';
 
 interface Alert {
   id: string;
@@ -66,9 +67,11 @@ const LEVEL_STYLE: Record<Level, { badge: string; icon: string; border: string }
 const CATEGORY_LABEL: Record<Category, string> = {
   appointments: 'New Appointments',
   stock: 'Low Inventory',
+  certificates: 'Certificate Approvals',
 };
 
-const CATEGORY_ORDER: Category[] = ['appointments', 'stock'];
+const CATEGORY_ORDER: Category[] = ['certificates', 'appointments', 'stock'];
+const CERT_STORAGE_KEY = 'gchl_cert_requests';
 
 function formatDateTime(dateIso: string, preferredTime?: string) {
   const date = new Date(dateIso);
@@ -146,6 +149,9 @@ export default function DoctorNotificationsPage() {
       const readSet = new Set(stateResponse.data?.readIds || []);
       const dismissed = stateResponse.data?.dismissedIds || [];
       const dismissedSet = new Set(dismissed);
+      const rawCerts = localStorage.getItem(CERT_STORAGE_KEY);
+      const parsedCerts: PendingCertificateRequest[] = rawCerts ? JSON.parse(rawCerts) : [];
+      const pendingCerts = parsedCerts.filter((item) => item.status === 'pending_doctor');
 
       const appointmentAlerts: Alert[] = (queueResponse.data || []).map((item) => {
         const studentName = `${item.studentProfile.lastName}, ${item.studentProfile.firstName}`;
@@ -163,6 +169,16 @@ export default function DoctorNotificationsPage() {
         };
       });
 
+      const certificateAlerts: Alert[] = pendingCerts.map((cert) => ({
+        id: `certificate-${cert.id}`,
+        level: 'warning',
+        category: 'certificates',
+        title: `Certificate Approval Needed: ${cert.studentName}`,
+        message: `${cert.studentNumber} (${cert.courseDept || 'N/A'}) requested a medical certificate for ${cert.reason}.`,
+        time: formatDateTime(cert.requestedDateIso),
+        read: false,
+      }));
+
       const inventoryAlerts: Alert[] = (inventoryResponse.data || [])
         .filter((item) => item.currentStock <= item.reorderThreshold)
         .map((item) => ({
@@ -175,7 +191,7 @@ export default function DoctorNotificationsPage() {
           read: false,
         }));
 
-      const hydratedAlerts = [...appointmentAlerts, ...inventoryAlerts]
+      const hydratedAlerts = [...certificateAlerts, ...appointmentAlerts, ...inventoryAlerts]
         .filter((item) => !dismissedSet.has(item.id))
         .map((item) => ({
           ...item,

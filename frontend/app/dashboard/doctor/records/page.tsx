@@ -149,6 +149,12 @@ export default function DoctorRecordsPage() {
   const [visits, setVisits] = useState<VisitRecord[]>([]);
   const [selectedVisit, setSelectedVisit] = useState<VisitRecord | null>(null);
   const [searchStudent, setSearchStudent] = useState('');
+  const [recordFilter, setRecordFilter] = useState<'all' | 'student' | 'personnel'>('all');
+
+  function getPatientType(visit: VisitRecord) {
+    const studentNumber = visit.studentProfile.studentNumber?.toUpperCase() || '';
+    return studentNumber.startsWith('EMP') ? 'personnel' : 'student';
+  }
 
   async function loadVisits() {
     const token = getToken();
@@ -185,6 +191,9 @@ export default function DoctorRecordsPage() {
       visit.studentProfile.lastName.toLowerCase().includes(q) ||
       visit.studentProfile.studentNumber.toLowerCase().includes(q)
     );
+  }).filter((visit) => {
+    if (recordFilter === 'all') return true;
+    return getPatientType(visit) === recordFilter;
   });
 
   const timelineGrouped = filteredVisits.reduce(
@@ -222,8 +231,8 @@ export default function DoctorRecordsPage() {
         {/* Timeline View */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-4 border-b border-gray-100">
-              <div className="relative">
+            <div className="px-4 py-4 border-b border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative w-full sm:max-w-xs">
                 <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
                 </svg>
@@ -234,6 +243,22 @@ export default function DoctorRecordsPage() {
                   onChange={(e) => setSearchStudent(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
                 />
+              </div>
+              <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
+                {(['all', 'student', 'personnel'] as const).map((filterKey) => (
+                  <button
+                    key={filterKey}
+                    type="button"
+                    onClick={() => setRecordFilter(filterKey)}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium capitalize transition ${
+                      recordFilter === filterKey
+                        ? 'bg-teal-600 text-white'
+                        : 'text-gray-600 hover:bg-white hover:text-teal-700'
+                    }`}
+                  >
+                    {filterKey === 'all' ? 'All' : filterKey === 'student' ? 'Students' : 'Personnel'}
+                  </button>
+                ))}
               </div>
             </div>
 

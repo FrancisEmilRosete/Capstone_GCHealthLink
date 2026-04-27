@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   User, Activity, FileText, Pill, Clock, 
@@ -71,6 +71,14 @@ export default function DoctorRecordPage() {
 
   const [medicines, setMedicines] = useState<any[]>([]);
   const [historyRecords, setHistoryRecords] = useState<any[]>([]);
+
+  const handlePhysicalExamChange = useCallback((field: string, value: string | boolean) => {
+    setPhysicalExam((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleDiagnosticsChange = useCallback((field: string, value: string) => {
+    setDiagnostics((prev) => ({ ...prev, [field]: value }));
+  }, []);
 
   useEffect(() => {
     async function loadRecord() {
@@ -201,14 +209,14 @@ export default function DoctorRecordPage() {
   if (!record) return <div className="p-8 text-center text-red-500">{error || 'Record not found.'}</div>;
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-32">
+    <div className="bg-slate-50 min-h-screen pb-32 print:bg-white print:pb-0">
       {/* Sticky Header */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-sm px-6 py-4">
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-sm px-6 py-4 print:static print:shadow-none print:bg-white">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => router.push('/dashboard/doctor/records')}
-              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500"
+              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 print:hidden"
             >
               <ChevronLeft size={20} />
             </button>
@@ -226,7 +234,7 @@ export default function DoctorRecordPage() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 print:hidden">
             <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all">
               <Printer size={16} /> Print
             </button>
@@ -240,9 +248,9 @@ export default function DoctorRecordPage() {
         </div>
       </div>
 
-      <main className="max-w-6xl mx-auto px-6 mt-8 space-y-8 animate-in fade-in duration-500">
+      <main className="max-w-6xl mx-auto px-6 mt-8 space-y-8 animate-in fade-in duration-500 print:px-0 print:mt-4">
         {/* Navigation Tabs */}
-        <div className="flex gap-1 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm w-fit">
+        <div className="flex gap-1 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm w-fit print:hidden">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -309,18 +317,18 @@ export default function DoctorRecordPage() {
             </div>
           )}
 
-          {activeTab === 'exams' && (
-            <div className="space-y-12">
-              <PhysicalExamForm 
-                data={physicalExam} 
-                onChange={(f, v) => setPhysicalExam(prev => ({ ...prev, [f]: v }))} 
-              />
-              <DiagnosticsSection 
-                data={diagnostics} 
-                onChange={(f, v) => setDiagnostics(prev => ({ ...prev, [f]: v }))} 
-              />
-            </div>
-          )}
+            {activeTab === 'exams' && (
+              <div className="space-y-12">
+                <PhysicalExamForm 
+                  data={physicalExam} 
+                  onChange={handlePhysicalExamChange} 
+                />
+                <DiagnosticsSection 
+                  data={diagnostics} 
+                  onChange={handleDiagnosticsChange} 
+                />
+              </div>
+            )}
 
           {activeTab === 'rx' && (
             <div className="max-w-4xl mx-auto">
