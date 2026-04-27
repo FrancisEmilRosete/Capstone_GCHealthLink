@@ -61,6 +61,10 @@ function mapAiForecastToChartData(rows: AiForecastRow[]): OutbreakForecastPoint[
           : predicted >= 20
             ? 'Coordinate class advisories and monitor nurse queue.'
             : 'Continue routine monitoring and wellness announcements.',
+        categories: row.categories ? row.categories.map(c => ({
+          name: c.illness_category,
+          cases: c.predicted_cases
+        })) : []
       };
     });
 }

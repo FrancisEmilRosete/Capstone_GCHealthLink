@@ -21,6 +21,7 @@ export interface OutbreakForecastPoint {
   observedCases?: number;
   staffingRecommendation?: string;
   actionNote?: string;
+  categories?: Array<{ name: string; cases: number }>;
 }
 
 interface OutbreakForecastChartProps {
@@ -147,15 +148,51 @@ export default function OutbreakForecastChart({
               <Tooltip
                 contentStyle={{ borderRadius: 12, borderColor: '#e5e7eb' }}
                 labelStyle={{ fontWeight: 600 }}
-                formatter={(value, key) => {
-                  const safeValue = value ?? '-';
-                  const safeKey = String(key ?? 'value');
-
-                  if (safeKey === 'predictedCases') return [safeValue, 'Expected Cases'];
-                  if (safeKey === 'observedCases') return [safeValue, 'Actual Cases'];
-                  if (safeKey === 'upperBound') return [safeValue, 'Upper Estimate'];
-                  if (safeKey === 'lowerBound') return [safeValue, 'Lower Estimate'];
-                  return [safeValue, safeKey];
+                content={(props) => {
+                  const { active, payload, label } = props;
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload as OutbreakForecastPoint;
+                    return (
+                      <div className="bg-white p-3 border border-gray-200 rounded-xl shadow-lg text-sm">
+                        <p className="font-semibold text-gray-800 border-b border-gray-100 pb-2 mb-2">{label}</p>
+                        
+                        <div className="space-y-1.5">
+                          {payload.map((entry, index) => {
+                            let name = entry.name;
+                            if (entry.dataKey === 'predictedCases') name = 'Expected Total Cases';
+                            if (entry.dataKey === 'observedCases') name = 'Actual Cases';
+                            if (entry.dataKey === 'upperBound') name = 'Upper Estimate';
+                            if (entry.dataKey === 'lowerBound') name = 'Lower Estimate';
+                            
+                            return (
+                              <div key={`item-${index}`} className="flex justify-between items-center gap-4">
+                                <span style={{ color: entry.color }} className="font-medium">{name}</span>
+                                <span className="font-bold text-gray-900">{entry.value}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        
+                        {data.categories && data.categories.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-100">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Illness Breakdown</p>
+                            <div className="space-y-1 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                              {data.categories
+                                .filter((c) => c.cases > 0)
+                                .sort((a, b) => b.cases - a.cases)
+                                .map((cat, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-600 truncate max-w-[120px] pr-2" title={cat.name}>{cat.name}</span>
+                                    <span className="font-medium text-gray-800">{cat.cases}</span>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
