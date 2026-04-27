@@ -14,6 +14,13 @@ interface DentalMetric {
   gumHealthScore: number;
 }
 
+interface VitalSign {
+  date: string;
+  bloodPressure: string;
+  temperature: number;
+  heartRate: number;
+}
+
 interface VisitRecord {
   id: string;
   visitDate: string;
