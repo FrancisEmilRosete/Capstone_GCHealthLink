@@ -25,9 +25,11 @@ interface LoginFormProps {
   email: string;
   password: string;
   rememberMe: boolean;
+  legalAccepted: boolean;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onRememberChange: (value: boolean) => void;
+  onLegalChange: (value: boolean) => void;
   onSubmit: () => void;
   error?: string;
   loading?: boolean;
@@ -37,9 +39,11 @@ export default function LoginForm({
   email,
   password,
   rememberMe,
+  legalAccepted,
   onEmailChange,
   onPasswordChange,
   onRememberChange,
+  onLegalChange,
   onSubmit,
   error,
   loading = false,
@@ -47,6 +51,7 @@ export default function LoginForm({
   const emailInputId = 'login-email';
   const passwordInputId = 'login-password';
   const rememberInputId = 'login-remember-me';
+  const legalInputId = 'login-legal-terms';
   const [showPassword, setShowPassword] = useState(false);
 
   return (
@@ -128,6 +133,22 @@ export default function LoginForm({
         </button>
       </div>
 
+      {/* ── Privacy + Terms (Required) ── */}
+      <div className="mb-5">
+        <label htmlFor={legalInputId} className="flex items-start gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input
+            id={legalInputId}
+            type="checkbox"
+            checked={legalAccepted}
+            onChange={(e) => onLegalChange(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded accent-teal-600 cursor-pointer"
+          />
+          <span>
+            I agree to the Privacy Policy and Terms of Agreement.
+          </span>
+        </label>
+      </div>
+
       {/* ── Sign In Button ── */}
       {error && (
         <div className="mb-3 px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 text-center">
@@ -137,7 +158,7 @@ export default function LoginForm({
 
       <button
         onClick={onSubmit}
-        disabled={loading}
+        disabled={loading || !legalAccepted}
         className="w-full py-3 bg-teal-600 hover:bg-teal-700 active:bg-teal-800
           text-white font-semibold rounded-xl transition-colors
           shadow-md shadow-teal-200 cursor-pointer

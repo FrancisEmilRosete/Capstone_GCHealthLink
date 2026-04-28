@@ -49,10 +49,10 @@ async function request(path, options = {}) {
   };
 }
 
-async function login(email, password = DEMO_PASSWORD) {
+async function login(email, selectedTab, password = DEMO_PASSWORD) {
   const response = await request('/auth/login', {
     method: 'POST',
-    body: { email, password },
+    body: { email, password, selectedTab },
   });
 
   assert(response.status === 200, `Login failed for ${email}: ${response.status} ${response.text}`);
@@ -63,13 +63,13 @@ async function login(email, password = DEMO_PASSWORD) {
 async function run() {
   console.log('PHASEE_INTEGRATION_START');
 
-  const adminToken = await login(ADMIN_EMAIL);
-  const staffToken = await login(STAFF_EMAIL);
-  const seededStudentToken = await login(SEEDED_STUDENT_EMAIL);
+  const adminToken = await login(ADMIN_EMAIL, 'admin');
+  const staffToken = await login(STAFF_EMAIL, 'staff');
+  const seededStudentToken = await login(SEEDED_STUDENT_EMAIL, 'student');
 
   const invalidEmailLogin = await request('/auth/login', {
     method: 'POST',
-    body: { email: 'not-an-email', password: DEMO_PASSWORD },
+    body: { email: 'not-an-email', password: DEMO_PASSWORD, selectedTab: 'student' },
   });
   assert(invalidEmailLogin.status === 400, `Expected 400 for invalid email login, got ${invalidEmailLogin.status}`);
 
@@ -120,7 +120,7 @@ async function run() {
   assert(registration.status === 201, `Registration failed: ${registration.status} ${registration.text}`);
   assert(registration.data?.data?.studentProfileId, 'Registration missing studentProfileId');
 
-  const newStudentToken = await login(registrationPayload.personal.email);
+  const newStudentToken = await login(registrationPayload.personal.email, 'student');
 
   const invalidAppointment = await request('/appointments/book', {
     method: 'POST',

@@ -1,9 +1,7 @@
-const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
 const { generateAccessToken } = require("../lib/jwt");
 const { ROLES } = require("../lib/roles");
-
-const prisma = new PrismaClient();
+const { prisma } = require("../lib/prisma");
 
 const LOGIN_RATE_WINDOW_MS = Number(process.env.LOGIN_RATE_WINDOW_MS || 15 * 60 * 1000);
 const LOGIN_RATE_MAX_PER_IP = Number(process.env.LOGIN_RATE_MAX_PER_IP || 30);
@@ -80,6 +78,7 @@ function isLikelyEmail(value) {
 function isKnownRole(role) {
   return Object.values(ROLES).includes(role);
 }
+
 
 function getClientIp(req) {
   if (typeof req.ip === "string" && req.ip.trim()) {
@@ -188,7 +187,7 @@ const login = async (req, res, next) => {
       success: true,
       message: "Login successful",
       token,
-      user: { id: user.id, email: user.email, role: user.role }
+      user: { id: user.id, email: user.email, role: user.role, clinicStaffType: user.clinicStaffType }
     });
   } catch (error) {
     next(error);

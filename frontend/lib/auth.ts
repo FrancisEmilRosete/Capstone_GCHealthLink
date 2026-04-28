@@ -14,6 +14,7 @@ export interface AuthUser {
   id: string;
   email: string;
   role: string;
+  clinicStaffType?: string | null;
 }
 
 export type BackendUserRole = 'ADMIN' | 'CLINIC_STAFF' | 'STUDENT' | 'DOCTOR' | 'DENTAL';
@@ -139,6 +140,32 @@ function normalizeRole(role: string | null): BackendUserRole | null {
 
 export function getNormalizedUserRole(): BackendUserRole | null {
   return normalizeRole(getUserRole());
+}
+
+function normalizeClinicStaffType(value: string | null | undefined): BackendUserRole | null {
+  if (!value) return null;
+
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'DOCTOR' || normalized === 'PHYSICIAN') return 'DOCTOR';
+  if (normalized === 'DENTIST' || normalized === 'DENTAL') return 'DENTAL';
+  if (normalized === 'NURSE' || normalized === 'STAFF') return 'CLINIC_STAFF';
+  return null;
+}
+
+export function getSessionRoleFromUser(user: AuthUser): BackendUserRole | null {
+  const normalizedRole = normalizeRole(user.role);
+  if (!normalizedRole) return null;
+
+  if (normalizedRole === 'CLINIC_STAFF') {
+    return normalizeClinicStaffType(user.clinicStaffType) || 'CLINIC_STAFF';
+  }
+
+  return normalizedRole;
+}
+
+export function getDashboardRouteForUser(user: AuthUser): string {
+  const sessionRole = getSessionRoleFromUser(user);
+  return getDashboardRouteForRole(sessionRole);
 }
 
 export function getDashboardRouteForRole(role: string | null | undefined): string {

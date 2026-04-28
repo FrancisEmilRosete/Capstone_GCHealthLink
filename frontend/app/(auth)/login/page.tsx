@@ -20,21 +20,10 @@ import { useRouter } from 'next/navigation';
 
 import Link from 'next/link';
 
-import { UserRole }               from '@/types/auth';
 import { ApiError }               from '@/lib/api';
-import { authLogin, authLogout, setUserRole } from '@/lib/auth';
+import { authLogin, getDashboardRouteForUser, getSessionRoleFromUser, setUserRole } from '@/lib/auth';
 import HeartbeatIcon              from '@/components/icons/HeartbeatIcon';
-import RoleSelector               from '@/components/auth/RoleSelector';
 import LoginForm                  from '@/components/auth/LoginForm';
-
-function getAccountRoleLabel(role: string): string {
-  const normalized = role.trim().toUpperCase();
-  if (normalized === 'ADMIN') return 'admin';
-  if (normalized === 'CLINIC_STAFF') return 'clinic staff';
-  return 'student';
-}
-
-const CLINIC_STAFF_ROLES: UserRole[] = ['staff', 'doctor', 'dental'];
 
 function mapLoginErrorMessage(error: ApiError): string {
   const message = (error.message || '').trim();
@@ -70,10 +59,10 @@ export default function LoginPage() {
   const router = useRouter();
 
   // ── Form State ─────────────────────────────────────────────
-  const [selectedRole, setSelectedRole] = useState<UserRole>('staff');
   const [email,        setEmail]        = useState('');
   const [password,     setPassword]     = useState('');
   const [rememberMe,   setRememberMe]   = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [error,        setError]        = useState('');
   const [loading,      setLoading]      = useState(false);
 
@@ -88,6 +77,10 @@ export default function LoginPage() {
 
     if (!email.trim()) { setError('Please enter your email address.'); return; }
     if (!password)     { setError('Please enter your password.');       return; }
+    if (!legalAccepted) {
+      setError('Please accept the Privacy Policy and Terms of Agreement to continue.');
+      return;
+    }
 
     setLoading(true);
 
@@ -97,40 +90,12 @@ export default function LoginPage() {
         password,
       });
 
-      const backendRole = (user.role || '').trim().toUpperCase();
-      const allowedRoles: UserRole[] = backendRole === 'ADMIN'
-        ? ['admin']
-        : backendRole === 'CLINIC_STAFF'
-          ? CLINIC_STAFF_ROLES
-          : ['student'];
-
-      if (!allowedRoles.includes(selectedRole)) {
-        authLogout();
-        setError(`Role mismatch. This account is registered as ${getAccountRoleLabel(backendRole)}.`);
-        return;
+      const sessionRole = getSessionRoleFromUser(user);
+      if (sessionRole) {
+        setUserRole(sessionRole);
       }
 
-      // Map the selected UI role to the stored role value
-      const roleMap: Record<UserRole, string> = {
-        staff:   'CLINIC_STAFF',
-        doctor:  'DOCTOR',
-        dental:  'DENTAL',
-        student: 'STUDENT',
-        admin:   'ADMIN',
-      };
-      setUserRole(roleMap[selectedRole]);
-
-      const dashboardRoute = selectedRole === 'admin'
-        ? '/dashboard/admin'
-        : selectedRole === 'doctor'
-          ? '/dashboard/doctor'
-          : selectedRole === 'dental'
-            ? '/dashboard/dental'
-            : selectedRole === 'staff'
-              ? '/dashboard/staff'
-              : '/dashboard/student';
-
-      router.push(dashboardRoute);
+      router.push(getDashboardRouteForUser(user));
     } catch (err) {
       if (err instanceof ApiError) {
         setError(mapLoginErrorMessage(err));
@@ -167,20 +132,16 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Step 1: Pick a Role */}
-        <RoleSelector
-          selectedRole={selectedRole}
-          onSelect={setSelectedRole}
-        />
-
-        {/* Step 2: Enter Credentials */}
+        {/* Step 1: Enter Credentials */}
         <LoginForm
           email={email}
           password={password}
           rememberMe={rememberMe}
+          legalAccepted={legalAccepted}
           onEmailChange={(v) => { setError(''); setEmail(v); }}
           onPasswordChange={(v) => { setError(''); setPassword(v); }}
           onRememberChange={setRememberMe}
+          onLegalChange={(v) => { setError(''); setLegalAccepted(v); }}
           onSubmit={handleSignIn}
           error={error}
           loading={loading}

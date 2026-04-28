@@ -47,12 +47,13 @@ async function request(path, options = {}) {
   };
 }
 
-async function login(email, password = DEMO_PASSWORD) {
+async function login(email, selectedTab, password = DEMO_PASSWORD) {
   const result = await request('/auth/login', {
     method: 'POST',
     body: {
       email,
       password,
+      selectedTab,
     },
   });
 
@@ -64,9 +65,9 @@ async function login(email, password = DEMO_PASSWORD) {
 async function run() {
   console.log('PHASEE_SMOKE_START');
 
-  const studentToken = await login(STUDENT_EMAIL);
-  const staffToken = await login(STAFF_EMAIL);
-  const adminToken = await login(ADMIN_EMAIL);
+  const studentToken = await login(STUDENT_EMAIL, 'student');
+  const staffToken = await login(STAFF_EMAIL, 'staff');
+  const adminToken = await login(ADMIN_EMAIL, 'admin');
 
   // Student journey
   const myProfile = await request('/students/me', { token: studentToken });

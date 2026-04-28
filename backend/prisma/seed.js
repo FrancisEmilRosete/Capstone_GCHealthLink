@@ -28,6 +28,7 @@ async function main() {
       email: 'nurse@gordoncollege.edu.ph',
       passwordHash: hashedPassword,
       role: 'CLINIC_STAFF',
+      clinicStaffType: 'NURSE',
     },
   });
 
