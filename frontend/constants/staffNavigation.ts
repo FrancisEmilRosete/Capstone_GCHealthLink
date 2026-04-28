@@ -27,6 +27,7 @@ import {
   InventoryIcon,
   CertificatesIcon,
   NotificationsIcon,
+  UsersIcon,
 } from '@/components/icons/NavIcons';
 
 // Extend NavItem to attach an icon component to each nav entry
@@ -58,6 +59,12 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
         label: 'QR Scanner',
         href:  '/dashboard/staff/scanner',
         icon:  ScannerIcon,
+      },
+      {
+        id:    'students',
+        label: 'Students',
+        href:  '/dashboard/staff/students',
+        icon:  UsersIcon,
       },
       {
         id:    'notifications',

@@ -16,6 +16,7 @@ interface VisitRecord {
     studentNumber: string;
     firstName: string;
     lastName: string;
+    courseDept: string;
   };
   handledBy: {
     email: string;
@@ -46,6 +47,8 @@ interface ConsultRow {
   treatment: string;
   staff: string;
   medicines: string[];
+  department: string;
+  status: 'WITH_MEDS' | 'CONSULT_ONLY';
 }
 
 type SortKey = 'date' | 'student';
@@ -72,6 +75,8 @@ function mapVisitToRow(visit: VisitRecord): ConsultRow {
     treatment,
     staff: visit.handledBy?.email || 'Clinic Staff',
     medicines,
+    department: visit.studentProfile.courseDept || 'N/A',
+    status: medicines.length > 0 ? 'WITH_MEDS' : 'CONSULT_ONLY',
   };
 }
 
@@ -218,6 +223,9 @@ export default function ConsultationsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selected, setSelected] = useState<ConsultRow | null>(null);
+  const [dateFilter, setDateFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'WITH_MEDS' | 'CONSULT_ONLY'>('ALL');
 
   async function loadConsultations() {
     const token = getToken();
@@ -267,15 +275,26 @@ export default function ConsultationsPage() {
         )
       : [...records];
 
-    rows.sort((a, b) => {
+    const narrowed = rows.filter((row) => {
+      const matchesDate = !dateFilter || row.dateIso.slice(0, 10) === dateFilter;
+      const matchesDepartment = departmentFilter === 'ALL' || row.department === departmentFilter;
+      const matchesStatus = statusFilter === 'ALL' || row.status === statusFilter;
+      return matchesDate && matchesDepartment && matchesStatus;
+    });
+
+    narrowed.sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'date') cmp = a.dateIso.localeCompare(b.dateIso);
       if (sortKey === 'student') cmp = a.student.localeCompare(b.student);
       return sortDir === 'asc' ? cmp : -cmp;
     });
 
-    return rows;
-  }, [records, q, sortKey, sortDir]);
+    return narrowed;
+  }, [records, q, sortKey, sortDir, dateFilter, departmentFilter, statusFilter]);
+
+  const departmentOptions = useMemo(() => {
+    return Array.from(new Set(records.map((item) => item.department).filter(Boolean))).sort();
+  }, [records]);
 
   const total = records.length;
   const monthly = records.filter((record) => thisMonth(record.dateIso)).length;
@@ -328,7 +347,8 @@ export default function ConsultationsPage() {
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-gray-50">
-          <div className="relative max-w-xs">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div className="relative md:col-span-2">
             <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
             </svg>
@@ -339,6 +359,34 @@ export default function ConsultationsPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"
             />
+            </div>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300"
+            />
+            <div className="flex gap-2">
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300"
+              >
+                <option value="ALL">All Departments</option>
+                {departmentOptions.map((department) => (
+                  <option key={department} value={department}>{department}</option>
+                ))}
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'WITH_MEDS' | 'CONSULT_ONLY')}
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300"
+              >
+                <option value="ALL">All Status</option>
+                <option value="WITH_MEDS">With Medication</option>
+                <option value="CONSULT_ONLY">Consult Only</option>
+              </select>
+            </div>
           </div>
         </div>
 

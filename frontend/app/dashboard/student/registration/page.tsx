@@ -26,6 +26,7 @@ const RELATIONSHIPS = [
 ];
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const YEAR_LEVELS = ['Yr. 1', 'Yr. 2', 'Yr. 3', 'Yr. 4'];
 
 const CONDITIONS_LIST = [
   ['Allergy',       'Asthma'],
@@ -114,6 +115,7 @@ function Stepper({ current }: { current: number }) {
 interface PersonalData {
   studentId: string; firstName: string; lastName: string;
   middleInitial: string; course: string; department: string;
+  yearLevel: string;
   age: string; sex: string; birthday: string;
   civilStatus: string; contact: string; email: string; address: string;
 }
@@ -171,6 +173,14 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
               <option value="">{selectedDepartment ? 'Select Course' : 'Select College First'}</option>
               {availableCourses.map((course) => (
                 <option key={course} value={course}>{course}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Year Level">
+            <select className={selectCls} value={data.yearLevel} onChange={e => set('yearLevel', e.target.value)}>
+              <option value="">Select Year Level</option>
+              {YEAR_LEVELS.map((year) => (
+                <option key={year} value={year}>{year}</option>
               ))}
             </select>
           </Field>
@@ -441,6 +451,11 @@ export default function RegistrationPage() {
       return;
     }
 
+    if (!personal.yearLevel) {
+      setSubmitError('Please select your year level.');
+      return;
+    }
+
     setSubmitError('');
     setSubmitLoading(true);
 
@@ -468,7 +483,7 @@ export default function RegistrationPage() {
 
   const [personal, setPersonal]   = useState<Parameters<typeof StepPersonalInfo>[0]['data']>({
     studentId: '', firstName: '', lastName: '', middleInitial: '',
-    course: '', department: '', age: '', sex: '', birthday: '',
+    course: '', department: '', yearLevel: '', age: '', sex: '', birthday: '',
     civilStatus: '', contact: '', email: '', address: '',
   });
   const [emergency, setEmergency] = useState<Parameters<typeof StepEmergency>[0]['data']>({

@@ -104,6 +104,9 @@ export default function PhysicalExaminationPage() {
 
   const [records, setRecords] = useState<PhysicalExamRow[]>([]);
   const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'PENDING'>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('studentNumber');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [loading, setLoading] = useState(true);
@@ -161,6 +164,13 @@ export default function PhysicalExaminationPage() {
           record.courseDept.toLowerCase().includes(query)
         );
       })
+      .filter((record) => {
+        const matchesDate = !dateFilter || record.examDate.slice(0, 10) === dateFilter;
+        const matchesDepartment = departmentFilter === 'ALL' || record.courseDept === departmentFilter;
+        const derivedStatus = record.bp || record.bmi ? 'COMPLETED' : 'PENDING';
+        const matchesStatus = statusFilter === 'ALL' || statusFilter === derivedStatus;
+        return matchesDate && matchesDepartment && matchesStatus;
+      })
       .sort((a, b) => {
         const left = a[sortKey]?.toLowerCase() ?? '';
         const right = b[sortKey]?.toLowerCase() ?? '';
@@ -171,7 +181,11 @@ export default function PhysicalExaminationPage() {
 
         return right.localeCompare(left);
       });
-  }, [records, search, sortKey, sortDir]);
+  }, [records, search, sortKey, sortDir, dateFilter, departmentFilter, statusFilter]);
+
+  const departmentOptions = useMemo(() => {
+    return Array.from(new Set(records.map((item) => item.courseDept).filter(Boolean))).sort();
+  }, [records]);
 
   const currentYear = String(new Date().getFullYear());
   const total = records.length;
@@ -213,13 +227,42 @@ export default function PhysicalExaminationPage() {
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 pt-5 pb-3">
-          <input
-            type="text"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by name, ID, or course..."
-            className="w-full pl-3 pr-4 py-2.5 text-sm border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 transition placeholder:text-gray-300"
-          />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by name, ID, or course..."
+              className="md:col-span-2 w-full pl-3 pr-4 py-2.5 text-sm border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 transition placeholder:text-gray-300"
+            />
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(event) => setDateFilter(event.target.value)}
+              className="w-full px-3 py-2.5 text-sm border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
+            />
+            <div className="flex gap-2">
+              <select
+                value={departmentFilter}
+                onChange={(event) => setDepartmentFilter(event.target.value)}
+                className="w-full px-3 py-2.5 text-sm border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
+              >
+                <option value="ALL">All Departments</option>
+                {departmentOptions.map((department) => (
+                  <option key={department} value={department}>{department}</option>
+                ))}
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as 'ALL' | 'COMPLETED' | 'PENDING')}
+                className="w-full px-3 py-2.5 text-sm border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
+              >
+                <option value="ALL">All Status</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="PENDING">Pending</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">

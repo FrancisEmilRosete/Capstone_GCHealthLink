@@ -21,6 +21,125 @@
 
 import { useState } from 'react';
 
+type LegalModalType = 'privacy' | 'terms' | null;
+
+interface LegalModalProps {
+  type: Exclude<LegalModalType, null>;
+  onClose: () => void;
+}
+
+function LegalModal({ type, onClose }: LegalModalProps) {
+  const isPrivacy = type === 'privacy';
+  const title = isPrivacy ? 'Privacy Policy' : 'Terms of Agreement';
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center px-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="legal-modal-title"
+        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between gap-3">
+          <div>
+            <h2 id="legal-modal-title" className="text-base font-bold text-gray-900">{title}</h2>
+            <p className="text-xs text-gray-500 mt-1">GC HealthLink - Gordon College Clinic</p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close legal policy"
+            onClick={onClose}
+            className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-4 max-h-[70vh] overflow-y-auto text-sm text-gray-700 space-y-3 leading-relaxed">
+          {isPrivacy ? (
+            <>
+              <p>
+                GC HealthLink processes personal and sensitive personal information to support campus clinic operations,
+                including student registration, appointment scheduling, consultation documentation, medical and dental
+                care, inventory issuance for treatment, and generation of authorized clinic reports.
+              </p>
+              <p>
+                Data may include identification details, contact information, department and course, emergency contacts,
+                consultation notes, diagnosis details, prescribed treatment, and related health records submitted through
+                the system.
+              </p>
+              <p>
+                Processing is performed in accordance with Republic Act No. 10173 (Data Privacy Act of 2012) and only
+                for legitimate clinic, public health, safety, and academic health compliance purposes.
+              </p>
+              <p>
+                Access is limited to authorized clinic personnel and system administrators who require the data to perform
+                their official functions. GC HealthLink applies role-based access controls, authentication, and activity
+                logging to reduce unauthorized access and misuse.
+              </p>
+              <p>
+                Your records are retained only as long as necessary for medical recordkeeping, legal compliance, and
+                institutional requirements. Where legally permitted, you may request access, correction, or deletion of
+                personal data by contacting the Gordon College Clinic data privacy point of contact.
+              </p>
+              <p>
+                By continuing to use GC HealthLink and submitting your information, you acknowledge this policy and consent
+                to the collection and processing of your data for the purposes stated above.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                GC HealthLink is an official campus clinic management system for Gordon College. Use of this platform is
+                limited to authorized users such as students, clinic personnel, and designated administrators.
+              </p>
+              <p>
+                You agree to provide truthful and complete information during registration, login, and all clinic-related
+                transactions. Submission of false, misleading, or unauthorized information may result in access restriction
+                and referral for institutional action.
+              </p>
+              <p>
+                Your account credentials are your responsibility. You must maintain confidentiality of your password and
+                immediately report suspected unauthorized access.
+              </p>
+              <p>
+                Clinic records in GC HealthLink are confidential and must only be accessed for legitimate medical,
+                administrative, and reporting purposes. Copying, sharing, or extracting health information without authority
+                is strictly prohibited.
+              </p>
+              <p>
+                Gordon College may update system features, workflows, and these terms to comply with medical operations,
+                legal obligations, and institutional policies. Continued use after updates constitutes acceptance of the
+                revised terms.
+              </p>
+              <p>
+                By selecting the agreement checkbox and signing in, you confirm that you have read, understood, and agreed
+                to these terms and the Privacy Policy.
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-gray-100 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface LoginFormProps {
   email: string;
   password: string;
@@ -53,6 +172,15 @@ export default function LoginForm({
   const rememberInputId = 'login-remember-me';
   const legalInputId = 'login-legal-terms';
   const [showPassword, setShowPassword] = useState(false);
+  const [activeLegalModal, setActiveLegalModal] = useState<LegalModalType>(null);
+
+  function openLegalModal(type: Exclude<LegalModalType, null>) {
+    setActiveLegalModal(type);
+  }
+
+  function closeLegalModal() {
+    setActiveLegalModal(null);
+  }
 
   return (
     <>
@@ -144,7 +272,31 @@ export default function LoginForm({
             className="mt-0.5 w-4 h-4 rounded accent-teal-600 cursor-pointer"
           />
           <span>
-            I agree to the Privacy Policy and Terms of Agreement.
+            I agree to the{' '}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openLegalModal('privacy');
+              }}
+              className="font-medium text-teal-600 hover:text-teal-700 hover:underline"
+            >
+              Privacy Policy
+            </button>{' '}
+            and{' '}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openLegalModal('terms');
+              }}
+              className="font-medium text-teal-600 hover:text-teal-700 hover:underline"
+            >
+              Terms of Agreement
+            </button>
+            .
           </span>
         </label>
       </div>
@@ -166,6 +318,8 @@ export default function LoginForm({
       >
         {loading ? 'Signing in…' : 'Sign In'}
       </button>
+
+      {activeLegalModal && <LegalModal type={activeLegalModal} onClose={closeLegalModal} />}
     </>
   );
 }

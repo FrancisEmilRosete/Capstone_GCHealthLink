@@ -22,7 +22,7 @@ import Link from 'next/link';
 
 import { ApiError }               from '@/lib/api';
 import { authLogin, getDashboardRouteForUser, getSessionRoleFromUser, setUserRole } from '@/lib/auth';
-import HeartbeatIcon              from '@/components/icons/HeartbeatIcon';
+import AppLogo                    from '@/components/branding/AppLogo';
 import LoginForm                  from '@/components/auth/LoginForm';
 
 function mapLoginErrorMessage(error: ApiError): string {
@@ -121,8 +121,8 @@ export default function LoginPage() {
 
         {/* App Logo and Title */}
         <div className="flex flex-col items-center mb-7">
-          <div className="w-14 h-14 bg-teal-600 rounded-2xl flex items-center justify-center shadow-lg shadow-teal-200 mb-3">
-            <HeartbeatIcon />
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-teal-200 mb-3 bg-white border border-teal-100">
+            <AppLogo className="h-10 w-10 object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
             GC HealthLink

@@ -28,8 +28,9 @@ import Link            from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState }   from 'react';
 import { authLogout }  from '@/lib/auth';
+import AppLogo from '@/components/branding/AppLogo';
 
-import { SignOutIcon, StethoscopeIcon } from '@/components/icons/NavIcons';
+import { SignOutIcon } from '@/components/icons/NavIcons';
 import ConfirmLogoutModal from '@/components/ui/ConfirmLogoutModal';
 import { STAFF_NAV_GROUPS }         from '@/constants/staffNavigation';
 
@@ -117,8 +118,8 @@ export default function Sidebar({
       {/* Logo row + mobile close button */}
       <div className="flex items-center justify-between px-5 pt-6 pb-6">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-teal-600 rounded-xl flex items-center justify-center shrink-0">
-            <StethoscopeIcon className="w-5 h-5 text-white" />
+          <div className="w-9 h-9 bg-white rounded-xl border border-slate-300/60 flex items-center justify-center shrink-0">
+            <AppLogo className="h-6 w-6 object-contain" />
           </div>
           <div className="leading-tight">
             <p className="text-sm font-bold tracking-tight">GC HealthLink</p>

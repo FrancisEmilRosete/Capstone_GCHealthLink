@@ -10,6 +10,40 @@ function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function parseYearLevelFilter(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) return null;
+
+  const map = {
+    "yr. 1": "YR_1",
+    "yr 1": "YR_1",
+    "yr.1": "YR_1",
+    "yr1": "YR_1",
+    "1": "YR_1",
+    "1st year": "YR_1",
+    "yr. 2": "YR_2",
+    "yr 2": "YR_2",
+    "yr.2": "YR_2",
+    "yr2": "YR_2",
+    "2": "YR_2",
+    "2nd year": "YR_2",
+    "yr. 3": "YR_3",
+    "yr 3": "YR_3",
+    "yr.3": "YR_3",
+    "yr3": "YR_3",
+    "3": "YR_3",
+    "3rd year": "YR_3",
+    "yr. 4": "YR_4",
+    "yr 4": "YR_4",
+    "yr.4": "YR_4",
+    "yr4": "YR_4",
+    "4": "YR_4",
+    "4th year": "YR_4",
+  };
+
+  return map[normalized] || null;
+}
+
 function parseValidDate(value) {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = new Date(value);
@@ -562,13 +596,16 @@ const searchStudents = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Search query must be 100 characters or fewer." });
     }
 
+    const orConditions = [
+      { firstName: { contains: q, mode: 'insensitive' } },
+      { lastName: { contains: q, mode: 'insensitive' } },
+      { studentNumber: { contains: q, mode: 'insensitive' } },
+      { courseDept: { contains: q, mode: 'insensitive' } },
+    ];
+
     const students = await prisma.studentProfile.findMany({
       where: {
-        OR: [
-          { firstName: { contains: q, mode: 'insensitive' } },
-          { lastName: { contains: q, mode: 'insensitive' } },
-          { studentNumber: { contains: q, mode: 'insensitive' } }
-        ]
+        OR: orConditions,
       },
       take: 10,
       include: {
@@ -588,7 +625,57 @@ const searchStudents = async (req, res, next) => {
 };
 
 // ==========================================
-// 4. Simulate Emergency SMS Alert
+// 4. Students Directory (QR alternative)
+// ==========================================
+const listStudentsDirectory = async (req, res, next) => {
+  try {
+    const q = normalizeText(req.query.q);
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 500,
+      maxLimit: 2000,
+    });
+
+    if (q.length > 100) {
+      return res.status(400).json({ success: false, message: "Search query must be 100 characters or fewer." });
+    }
+
+    const whereClause = q
+      ? {
+          OR: [
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+            { studentNumber: { contains: q, mode: "insensitive" } },
+            { courseDept: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : undefined;
+
+    const [students, total] = await prisma.$transaction([
+      prisma.studentProfile.findMany({
+        where: whereClause,
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+        skip,
+        take: limit,
+        include: {
+          user: { select: { id: true } },
+        },
+      }),
+      prisma.studentProfile.count({ where: whereClause }),
+    ]);
+
+    return res.json({
+      success: true,
+      message: "Students directory retrieved successfully.",
+      data: students,
+      pagination: buildPaginationMeta({ page, limit, total }),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// ==========================================
+// 5. Simulate Emergency SMS Alert
 // ==========================================
 const sendEmergencyAlert = async (req, res, next) => {
   try {
@@ -663,5 +750,6 @@ module.exports = {
   getStudentByQrToken,
   recordVisit,
   searchStudents,
+  listStudentsDirectory,
   sendEmergencyAlert,
 };

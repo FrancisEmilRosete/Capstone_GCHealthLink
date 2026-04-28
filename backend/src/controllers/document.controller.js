@@ -14,6 +14,7 @@ const ALLOWED_MIME_TO_EXT = {
   "image/png": ".png",
 };
 const ALLOWED_DOCUMENT_TYPES = new Set(["PHYSICAL_EXAM", "LAB_RESULT", "MED_CERT", "VACCINATION_RECORD", "OTHER"]);
+const ALLOWED_UPLOAD_STAFF_TYPES = new Set(["NURSE", "DOCTOR", "DENTIST"]);
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -129,6 +130,25 @@ const upload = multer({
 
 const uploadDocument = async (req, res, next) => {
   try {
+    if (req.user?.role !== "CLINIC_STAFF") {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Only clinic staff can upload medical documents.",
+      });
+    }
+
+    const staffUser = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { clinicStaffType: true },
+    });
+
+    if (!staffUser?.clinicStaffType || !ALLOWED_UPLOAD_STAFF_TYPES.has(staffUser.clinicStaffType)) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Only nurses, doctors, and dentists can upload medical documents.",
+      });
+    }
+
     if (!req.file) {
       return res.status(400).json({ success: false, message: "No file uploaded." });
     }

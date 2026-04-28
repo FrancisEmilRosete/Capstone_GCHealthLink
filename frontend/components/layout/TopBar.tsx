@@ -24,6 +24,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import AppLogo from '@/components/branding/AppLogo';
 
 interface TopBarProps {
   onMenuOpen?: () => void;
@@ -110,12 +111,8 @@ export default function TopBar({
 
         {/* GC HealthLink brand — replaces per-page title */}
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-teal-500 rounded-lg flex items-center justify-center shrink-0">
-            {/* Heartbeat / pulse icon */}
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-            </svg>
+          <div className="w-7 h-7 bg-white rounded-lg border border-teal-100 flex items-center justify-center shrink-0">
+            <AppLogo className="h-5 w-5 object-contain" />
           </div>
           <span className="text-base font-bold text-gray-900 tracking-tight">GC HealthLink</span>
         </div>

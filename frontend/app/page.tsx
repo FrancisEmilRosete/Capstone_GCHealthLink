@@ -8,7 +8,7 @@
  */
 
 import Link from 'next/link';
-import HeartbeatIcon from '@/components/icons/HeartbeatIcon';
+import AppLogo from '@/components/branding/AppLogo';
 
 export default function RootPage() {
   return (
@@ -22,8 +22,8 @@ export default function RootPage() {
         {/* Top bar */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-600 shadow-lg shadow-teal-200">
-              <HeartbeatIcon />
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white border border-teal-100 shadow-lg shadow-teal-200">
+              <AppLogo className="h-8 w-8 object-contain" />
             </span>
             <div className="leading-tight">
               <p className="text-sm font-semibold tracking-wide text-teal-700">GC HealthLink</p>

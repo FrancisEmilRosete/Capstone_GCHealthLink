@@ -7,6 +7,7 @@ const {
   getStudentByQrToken,
   recordVisit,
   searchStudents,
+  listStudentsDirectory,
   getVisits,
 } = require("../controllers/clinic.controller");
 const { sendEmergencySmsToGuardian } = require("../controllers/emergency.controller");
@@ -20,6 +21,14 @@ const { auditLogger } = require("../middleware/auditLogger.middleware");
 // Backward-compatible emergency SMS paths, both routed to the SMS gateway controller.
 router.post("/emergency-alert", protect, authorize("CLINIC_STAFF", "ADMIN"), sendEmergencySmsToGuardian);
 router.post("/emergency/send-sms", protect, authorize("CLINIC_STAFF", "ADMIN"), sendEmergencySmsToGuardian);
+
+router.get(
+  "/students",
+  protect,
+  authorize("CLINIC_STAFF"),
+  auditLogger("VIEWED_STUDENT_DIRECTORY"),
+  listStudentsDirectory
+);
 
 router.get(
   "/search",

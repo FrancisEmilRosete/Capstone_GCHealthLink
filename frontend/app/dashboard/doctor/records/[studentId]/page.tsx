@@ -83,40 +83,9 @@ export default function DoctorRecordPage() {
   useEffect(() => {
     async function loadRecord() {
       const token = getToken();
-      
-      const MOCK_DATA: ScanProfile = {
-        id: 'mock-123',
-        studentNumber: studentNumberParam || '2024-0001',
-        firstName: 'Francis Emil',
-        lastName: 'Rosete',
-        courseDept: 'BS Information Technology',
-        civilStatus: 'Single',
-        age: 21,
-        sex: 'Male',
-        birthday: '2002-10-12',
-        presentAddress: '123 Health St., Quezon City, Metro Manila',
-        telNumber: '0912-345-6789',
-        medicalHistory: {
-          pastOperationEnc: 'Appendectomy (2018), Wisdom Tooth Extraction (2021)',
-          allergyEnc: 'Peanuts, Penicillin',
-        },
-        physicalExaminations: [{
-          bp: '120/80', cr: '72', rr: '18', temp: '36.5',
-          weight: '70', height: '175', bmi: '22.9',
-          visualAcuity: '20/20', heent: 'Normal findings, no tonsillitis.',
-          chestLungs: 'Clear breath sounds, symmetric chest expansion.',
-          abdomen: 'Soft, non-tender, no masses.',
-          extremities: 'Good range of motion, no edema.', others: '',
-        }],
-        labResults: [{
-          xrayFindingsEnc: 'Normal lung fields, heart not enlarged.',
-          othersEnc: 'CBC: Normal WBC count; Urinalysis: Negative for protein/sugar.',
-        }],
-      };
 
       if (!token) {
-        setRecord(MOCK_DATA);
-        populateForm(MOCK_DATA);
+        setError('You are not logged in. Please sign in again.');
         setLoading(false);
         return;
       }
@@ -126,8 +95,7 @@ export default function DoctorRecordPage() {
         const exact = (search.data || []).find((item: any) => item.studentNumber.toLowerCase() === studentNumberParam.toLowerCase());
 
         if (!exact) {
-          setRecord(MOCK_DATA);
-          populateForm(MOCK_DATA);
+          setError(`No student record found for ${studentNumberParam}.`);
           setLoading(false);
           return;
         }
@@ -136,8 +104,11 @@ export default function DoctorRecordPage() {
         setRecord(scan.data);
         populateForm(scan.data);
       } catch (err) {
-        setRecord(MOCK_DATA);
-        populateForm(MOCK_DATA);
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError('Failed to load doctor record.');
+        }
       } finally {
         setLoading(false);
       }
@@ -176,15 +147,8 @@ export default function DoctorRecordPage() {
         });
       }
 
-      setMedicines([
-        { id: '1', name: 'Paracetamol', dosage: '500mg', frequency: 'Every 4 hours', duration: '3 days' },
-        { id: '2', name: 'Multivitamins', dosage: '1 cap', frequency: 'Daily', duration: '30 days' }
-      ]);
-      
-      setHistoryRecords([
-        { id: '1', date: '2023-05-15', complaint: 'Common Cold', treatment: 'Rest, Hydration', remarks: 'Resolved' },
-        { id: '2', date: '2022-11-20', complaint: 'Sprained Ankle', treatment: 'RICE Method', remarks: 'Good' }
-      ]);
+      setMedicines([]);
+      setHistoryRecords([]);
     }
 
     void loadRecord();

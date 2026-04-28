@@ -65,6 +65,9 @@ model StudentProfile {
   mi             String?
   // Stores department code (CAHS, CBA, CCS, CEAS, CHTM) for admin analytics heatmaps.
   courseDept     String
+  // Academic program (e.g., BSCS, BSIT, BSN).
+  course         String?
+  yearLevel      YearLevel?
   civilStatus    String?
   age            Int?
   sex            String?

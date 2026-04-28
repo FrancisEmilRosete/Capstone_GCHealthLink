@@ -36,6 +36,7 @@ const STEPS = [
 const RELATIONSHIPS = ['Parent', 'Spouse', 'Sibling', 'Guardian', 'Relative', 'Friend'];
 const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'];
 const BLOOD_TYPES    = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'];
+const YEAR_LEVELS    = ['Yr. 1', 'Yr. 2', 'Yr. 3', 'Yr. 4'];
 
 const MEDICAL_CONDITIONS = [
   'Allergy',          'Asthma',
@@ -240,6 +241,13 @@ function Step1({
             {availableCourses.map((course) => (
               <option key={course} value={course}>{course}</option>
             ))}
+          </Select>
+        </div>
+        <div>
+          <Label required>Year Level</Label>
+          <Select value={data.yearLevel ?? ''} onChange={e => set('yearLevel', e.target.value)}>
+            <option value="">Select Year Level</option>
+            {YEAR_LEVELS.map((year) => <option key={year} value={year}>{year}</option>)}
           </Select>
         </div>
       </div>
@@ -609,6 +617,7 @@ export default function RegisterPage() {
 
     const department = (personal.department ?? '').trim();
     const course = (personal.course ?? '').trim();
+    const yearLevel = (personal.yearLevel ?? '').trim();
     const password = (personal.password ?? '').trim();
     const confirmPassword = (personal.confirmPassword ?? '').trim();
 
@@ -619,6 +628,11 @@ export default function RegisterPage() {
 
     if (!isValidCourseForDepartment(course, department)) {
       setSubmitError('Please select a valid course for the selected college.');
+      return;
+    }
+
+    if (!yearLevel) {
+      setSubmitError('Please select your year level.');
       return;
     }
 

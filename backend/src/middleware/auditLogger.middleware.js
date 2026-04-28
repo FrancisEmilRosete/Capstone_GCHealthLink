@@ -27,9 +27,21 @@ function auditLogger(actionOrResolver) {
           return;
         }
 
+        // Tokens can reference stale user IDs after DB reset/reseed.
+        // Only persist userId if the account still exists.
+        let safeUserId = null;
+        const candidateUserId = req.user?.userId || null;
+        if (candidateUserId) {
+          const existingUser = await prisma.user.findUnique({
+            where: { id: candidateUserId },
+            select: { id: true },
+          });
+          safeUserId = existingUser?.id || null;
+        }
+
         await prisma.auditLog.create({
           data: {
-            userId: req.user?.userId || null,
+            userId: safeUserId,
             action,
             targetId:
               req.params?.id || req.body?.studentProfileId || req.body?.studentId || null,

@@ -13,6 +13,33 @@ const {
 } = require("../constants/departments");
 const prisma = new PrismaClient();
 
+const STUDENT_YEAR_LEVEL_MAP = {
+  "yr. 1": "YR_1",
+  "yr 1": "YR_1",
+  "yr.1": "YR_1",
+  "yr1": "YR_1",
+  "1": "YR_1",
+  "1st year": "YR_1",
+  "yr. 2": "YR_2",
+  "yr 2": "YR_2",
+  "yr.2": "YR_2",
+  "yr2": "YR_2",
+  "2": "YR_2",
+  "2nd year": "YR_2",
+  "yr. 3": "YR_3",
+  "yr 3": "YR_3",
+  "yr.3": "YR_3",
+  "yr3": "YR_3",
+  "3": "YR_3",
+  "3rd year": "YR_3",
+  "yr. 4": "YR_4",
+  "yr 4": "YR_4",
+  "yr.4": "YR_4",
+  "yr4": "YR_4",
+  "4": "YR_4",
+  "4th year": "YR_4",
+};
+
 const REGISTRATION_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const QR_TOKEN_SECRET = normalizeText(process.env.QR_TOKEN_SECRET)
   || normalizeText(process.env.JWT_SECRET)
@@ -68,6 +95,15 @@ function parseAge(value) {
   }
 
   return parsed;
+}
+
+function parseStudentYearLevel(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  return STUDENT_YEAR_LEVEL_MAP[normalized] || null;
 }
 
 function normalizeConditionName(value) {
@@ -321,6 +357,7 @@ const submitRegistration = async (req, res, next) => {
     const lastName = normalizeText(personal.lastName);
     const middleInitial = normalizeText(personal.middleInitial);
     const course = normalizeText(personal.course);
+    const yearLevel = parseStudentYearLevel(personal.yearLevel);
     const departmentCode = normalizeDepartmentCode(personal.department);
     const civilStatus = normalizeText(personal.civilStatus);
     const sex = normalizeText(personal.sex);
@@ -355,6 +392,13 @@ const submitRegistration = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: `course is invalid for department ${departmentCode}. Allowed courses: ${getCoursesByDepartmentCode(departmentCode).join("; ")}`,
+      });
+    }
+
+    if (personal.yearLevel !== undefined && personal.yearLevel !== null && personal.yearLevel !== "" && !yearLevel) {
+      return res.status(400).json({
+        success: false,
+        message: "yearLevel must be one of: Yr. 1, Yr. 2, Yr. 3, Yr. 4.",
       });
     }
 
@@ -460,6 +504,8 @@ const submitRegistration = async (req, res, next) => {
       lastName,
       mi: middleInitial || null,
       courseDept: departmentCode,
+      course: course || null,
+      yearLevel,
       civilStatus: civilStatus || null,
       age,
       sex: sex || null,

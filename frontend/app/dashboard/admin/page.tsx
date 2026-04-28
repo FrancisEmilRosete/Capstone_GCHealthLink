@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { DEPARTMENT_COURSE_MAP, normalizeDepartmentCode } from '@/constants/departments';
-import { MOCK_ADMIN_HEAT_MAP_POINTS, MOCK_ADMIN_OUTBREAK_FORECAST } from '@/lib/mock/adminPredictiveAnalytics';
 import AdminPredictiveAnalyticsSection from '@/components/dashboard/admin/AdminPredictiveAnalyticsSection';
 import type { HeatMapPoint } from '@/components/dashboard/admin/PredictiveHeatMap';
 import type { OutbreakForecastPoint } from '@/components/dashboard/admin/OutbreakForecastChart';
@@ -240,7 +239,7 @@ export default function AdminDashboard() {
   const predictiveHeatMapData = useMemo(
     () => {
       const rows = mapDepartmentHeatMapToOperationalRows(data?.departmentHeatmap || {}, data?.topConcerns || []);
-      return rows.length > 0 ? rows : MOCK_ADMIN_HEAT_MAP_POINTS;
+      return rows;
     },
     [data?.departmentHeatmap, data?.topConcerns],
   );
@@ -248,7 +247,7 @@ export default function AdminDashboard() {
   const outbreakForecastData = useMemo(
     () => {
       const rows = mapMonthlyVisitsToForecast(data?.monthlyVisits || []);
-      return rows.length > 0 ? rows : MOCK_ADMIN_OUTBREAK_FORECAST;
+      return rows;
     },
     [data?.monthlyVisits],
   );

@@ -13,9 +13,22 @@ interface SearchStudent {
   firstName: string;
   lastName: string;
   courseDept: string;
+  course?: string | null;
+  yearLevel?: string | null;
   age: number | null;
   sex: string | null;
   user: { id: string };
+}
+
+function formatYearLevel(value?: string | null) {
+  if (!value) return 'N/A';
+  switch (value) {
+    case 'YR_1': return 'Yr. 1';
+    case 'YR_2': return 'Yr. 2';
+    case 'YR_3': return 'Yr. 3';
+    case 'YR_4': return 'Yr. 4';
+    default: return value;
+  }
 }
 
 interface SearchResponse {
@@ -101,7 +114,7 @@ export default function StaffRecordPage() {
               </h3>
               <p className="text-sm text-teal-600 font-medium">{student.studentNumber}</p>
               <p className="text-xs text-gray-500 mt-1">
-                {student.courseDept} • {student.sex || 'Sex N/A'} • {student.age ? `${student.age} yrs` : 'Age N/A'}
+                {student.courseDept} • {student.course || 'Course N/A'} • {formatYearLevel(student.yearLevel)} • {student.sex || 'Sex N/A'} • {student.age ? `${student.age} yrs` : 'Age N/A'}
               </p>
             </div>
             <ChevronRight className="ml-3 h-5 w-5 text-gray-300 group-hover:text-teal-500 shrink-0" />

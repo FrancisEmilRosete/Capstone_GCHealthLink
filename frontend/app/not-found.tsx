@@ -9,7 +9,7 @@
  */
 
 import Link from 'next/link';
-import HeartbeatIcon from '@/components/icons/HeartbeatIcon';
+import AppLogo from '@/components/branding/AppLogo';
 import BackButton from '@/components/ui/BackButton';
 
 export const metadata = {
@@ -22,9 +22,8 @@ export default function NotFound() {
 
       {/* ── Logo ──────────────────────────────────────────── */}
       <div className="flex items-center gap-3 mb-10">
-        <div className="w-11 h-11 rounded-xl flex items-center justify-center"
-             style={{ background: 'var(--primary)' }}>
-          <HeartbeatIcon />
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-white border border-teal-100 shadow-sm">
+          <AppLogo className="h-8 w-8 object-contain" />
         </div>
         <span className="text-xl font-bold text-gray-800 tracking-tight">
           GC HealthLink

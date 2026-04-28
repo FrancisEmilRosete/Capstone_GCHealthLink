@@ -1,7 +1,6 @@
 'use client';
 
 import MedicalCertificateRequestPanel from '@/components/dashboard/student/MedicalCertificateRequestPanel';
-import { studentCertificateRequestsMock } from '@/lib/mock/studentCertificateRequests';
 
 export default function StudentCertificatesPage() {
   return (
@@ -11,7 +10,7 @@ export default function StudentCertificatesPage() {
         <p className="text-sm text-gray-500 mt-1">Submit a request and monitor approval status from the clinic.</p>
       </div>
 
-      <MedicalCertificateRequestPanel initialRequests={studentCertificateRequestsMock} />
+      <MedicalCertificateRequestPanel initialRequests={[]} />
     </div>
   );
 }
