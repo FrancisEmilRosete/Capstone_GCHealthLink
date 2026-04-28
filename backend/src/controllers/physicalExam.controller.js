@@ -189,6 +189,72 @@ function mapXrayResult(value) {
   return null;
 }
 
+function collectMissingRequiredFields(body) {
+  const requiredTextFields = [
+    { key: "allergy", label: "allergy" },
+    { key: "bp", label: "bp" },
+    { key: "cr", label: "cr" },
+    { key: "rr", label: "rr" },
+    { key: "temp", label: "temp" },
+    { key: "weight", label: "weight" },
+    { key: "height", label: "height" },
+    { key: "visualAcuity", label: "visualAcuity" },
+    { key: "skin", label: "skin" },
+    { key: "heent", label: "heent" },
+    { key: "chestLungs", label: "chestLungs" },
+    { key: "heart", label: "heart" },
+    { key: "abdomen", label: "abdomen" },
+    { key: "extremities", label: "extremities" },
+    { key: "others", label: "others" },
+    { key: "examinedBy", label: "examinedBy" },
+    { key: "hgb", label: "hgb" },
+    { key: "hct", label: "hct" },
+    { key: "wbc", label: "wbc" },
+    { key: "pltCt", label: "pltCt" },
+    { key: "bloodType", label: "bloodType" },
+    { key: "glucoseSugar", label: "glucoseSugar" },
+    { key: "protein", label: "protein" },
+    { key: "labOthers", label: "labOthers" },
+  ];
+
+  const missing = [];
+  for (const field of requiredTextFields) {
+    if (!normalizeText(body?.[field.key])) {
+      missing.push(field.label);
+    }
+  }
+
+  const hasPastOperation = parseBooleanInput(body?.hasPastOperation);
+  if (hasPastOperation === null) {
+    missing.push("hasPastOperation");
+  } else if (hasPastOperation === true && !normalizeText(body?.operationNatureAndDate)) {
+    missing.push("operationNatureAndDate");
+  }
+
+  if (!parseDate(body?.cbcDate)) {
+    missing.push("cbcDate");
+  }
+  if (!parseDate(body?.uaDate)) {
+    missing.push("uaDate");
+  }
+  if (!parseDate(body?.chestXrayDate)) {
+    missing.push("chestXrayDate");
+  }
+  if (!parseDate(body?.dateReceived)) {
+    missing.push("dateReceived");
+  }
+
+  const xrayResult = mapXrayResult(body?.xrayResult);
+  if (!xrayResult) {
+    missing.push("xrayResult");
+  }
+  if (xrayResult === XrayResult.ABNORMAL && !normalizeText(body?.abnormalFindings)) {
+    missing.push("abnormalFindings");
+  }
+
+  return missing;
+}
+
 function toExamRow(exam) {
   return {
     id: exam.id,
@@ -297,6 +363,14 @@ const createPhysicalExam = async (req, res, next) => {
 
     if (!examDate) {
       return res.status(400).json({ success: false, message: "dateOfExam must be a valid date." });
+    }
+
+    const missingRequiredFields = collectMissingRequiredFields(req.body);
+    if (missingRequiredFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Please complete all required physical examination fields: ${missingRequiredFields.join(", ")}.`,
+      });
     }
 
     const studentProfile = await prisma.studentProfile.findUnique({

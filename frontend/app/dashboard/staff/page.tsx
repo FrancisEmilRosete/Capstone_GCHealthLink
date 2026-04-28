@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
 
 interface QueueItem {
   id: string;
@@ -340,6 +341,8 @@ export default function StaffCommandCenterPage() {
           </div>
         )}
       </div>
+
+      <PredictiveInsightsCard role="staff" />
     </div>
   );
 }

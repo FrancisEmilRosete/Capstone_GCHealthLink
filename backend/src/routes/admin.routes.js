@@ -1,47 +1,39 @@
 const express = require("express");
 const router = express.Router();
-const { getHealthAnalytics, getAdminSessionProfile } = require("../controllers/admin.controller");
+const {
+  getHealthAnalytics,
+  getAdminSessionProfile,
+  getUsers,
+  getAuditLogs,
+  getStudentRecords,
+  getStudentHealthDetail,
+} = require("../controllers/admin.controller");
 const { exportMonthlyReportPdf } = require("../controllers/report.controller");
 const { protect } = require("../middleware/auth.middleware");
 const { authorize } = require("../middleware/rbac.middleware");
 const { auditLogger } = require("../middleware/auditLogger.middleware");
 
-const ALLOWED_ADMIN_AGGREGATED_PATHS = new Set([
-  "/me",
-  "/analytics",
-  "/reports/monthly-pdf",
-]);
+// All admin routes require authentication and ADMIN role
+router.use(protect, authorize("ADMIN"));
 
-function enforceAggregatedAdminScope(req, res, next) {
-  if (!ALLOWED_ADMIN_AGGREGATED_PATHS.has(req.path)) {
-    return res.status(403).json({
-      success: false,
-      message: "Forbidden: Admin access is limited to aggregated analytics endpoints by MVP policy.",
-    });
-  }
+router.get("/me", auditLogger("VIEWED_ADMIN_PROFILE"), getAdminSessionProfile);
 
-  return next();
-}
+// Analytics
+router.get("/analytics", auditLogger("VIEWED_HEALTH_ANALYTICS"), getHealthAnalytics);
 
-router.use(protect, authorize("ADMIN"), enforceAggregatedAdminScope);
+// Reports
+router.get("/reports/monthly-pdf", auditLogger("EXPORTED_MONTHLY_REPORT_PDF"), exportMonthlyReportPdf);
 
-router.get(
-  "/me",
-  auditLogger("VIEWED_ADMIN_PROFILE"),
-  getAdminSessionProfile
-);
+// User Management
+router.get("/users", auditLogger("ADMIN_VIEWED_USERS"), getUsers);
 
-// GET /api/v1/admin/analytics
-router.get(
-  "/analytics",
-  auditLogger("VIEWED_HEALTH_ANALYTICS"),
-  getHealthAnalytics
-);
+// Activity / Audit Logs
+router.get("/audit-logs", auditLogger("ADMIN_VIEWED_AUDIT_LOGS"), getAuditLogs);
 
-router.get(
-  "/reports/monthly-pdf",
-  auditLogger("EXPORTED_MONTHLY_REPORT_PDF"),
-  exportMonthlyReportPdf
-);
+// Health Records – list all students
+router.get("/records", auditLogger("ADMIN_VIEWED_RECORDS_LIST"), getStudentRecords);
+
+// Health Records – single student detail
+router.get("/records/:studentProfileId", auditLogger("ADMIN_VIEWED_STUDENT_DETAIL"), getStudentHealthDetail);
 
 module.exports = router;

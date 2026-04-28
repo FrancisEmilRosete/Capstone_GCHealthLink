@@ -7,6 +7,7 @@ import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
 import PersonalWellnessTrendsCard from '@/components/dashboard/student/PersonalWellnessTrendsCard';
+import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
 
 interface ClinicVisit {
   id: string;
@@ -271,7 +272,6 @@ export default function StudentDashboard() {
     () => buildMonthlyTrendFromVisits(profile?.clinicVisits || []),
     [profile?.clinicVisits],
   );
-
   return (
     <div className="p-5 space-y-5 max-w-4xl mx-auto">
       <div
@@ -387,6 +387,8 @@ export default function StudentDashboard() {
       </div>
 
       <PersonalWellnessTrendsCard data={personalTrendData} />
+
+      <PredictiveInsightsCard role="student" />
     </div>
   );
 }

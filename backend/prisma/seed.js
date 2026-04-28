@@ -23,12 +23,36 @@ async function main() {
   // 3. Create a Clinic Staff (Nurse) User
   const nurse = await prisma.user.upsert({
     where: { email: 'nurse@gordoncollege.edu.ph' },
-    update: {},
+    update: { clinicStaffType: 'NURSE' },
     create: {
       email: 'nurse@gordoncollege.edu.ph',
       passwordHash: hashedPassword,
       role: 'CLINIC_STAFF',
       clinicStaffType: 'NURSE',
+    },
+  });
+
+  // 3b. Create a Doctor (Campus Physician) User
+  const doctor = await prisma.user.upsert({
+    where: { email: 'doctor@gordoncollege.edu.ph' },
+    update: { clinicStaffType: 'DOCTOR' },
+    create: {
+      email: 'doctor@gordoncollege.edu.ph',
+      passwordHash: hashedPassword,
+      role: 'CLINIC_STAFF',
+      clinicStaffType: 'DOCTOR',
+    },
+  });
+
+  // 3c. Create a Dental Staff User
+  const dental = await prisma.user.upsert({
+    where: { email: 'dental@gordoncollege.edu.ph' },
+    update: { clinicStaffType: 'DENTIST' },
+    create: {
+      email: 'dental@gordoncollege.edu.ph',
+      passwordHash: hashedPassword,
+      role: 'CLINIC_STAFF',
+      clinicStaffType: 'DENTIST',
     },
   });
 
@@ -66,7 +90,13 @@ async function main() {
   });
 
   console.log('✅ Seeding finished successfully!');
-  console.log({ admin: admin.email, nurse: nurse.email, student: student.email });
+  console.log({
+    admin: admin.email,
+    nurse: nurse.email,
+    doctor: doctor.email,
+    dental: dental.email,
+    student: student.email,
+  });
 }
 
 main()

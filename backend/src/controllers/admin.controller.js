@@ -334,7 +334,17 @@ const getUsers = async (req, res, next) => {
         id: true,
         email: true,
         role: true,
+        clinicStaffType: true,
         createdAt: true,
+        studentProfile: {
+          select: {
+            firstName: true,
+            lastName: true,
+            mi: true,
+            studentNumber: true,
+            courseDept: true,
+          },
+        },
       },
     });
 
@@ -350,24 +360,155 @@ const getUsers = async (req, res, next) => {
 
 const getAuditLogs = async (req, res, next) => {
   try {
-    const logs = await prisma.auditLog.findMany({
-      orderBy: { timestamp: "desc" },
-      take: 300,
-      include: {
-        user: {
-          select: {
-            email: true,
-            role: true,
+    const page   = Math.max(1, parseInt(req.query.page  || '1',  10));
+    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit || '50', 10)));
+    const skip   = (page - 1) * limit;
+
+    const { search, role, action, dateFrom, dateTo } = req.query;
+
+    // Build where clause
+    const where = {};
+
+    if (action && typeof action === 'string' && action.trim()) {
+      where.action = { contains: action.trim(), mode: 'insensitive' };
+    }
+
+    if (dateFrom || dateTo) {
+      where.timestamp = {};
+      if (dateFrom) where.timestamp.gte = new Date(dateFrom);
+      if (dateTo)   where.timestamp.lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
+    }
+
+    // User-level filters (search by email or role)
+    const userFilter = {};
+    if (search && typeof search === 'string' && search.trim()) {
+      userFilter.email = { contains: search.trim(), mode: 'insensitive' };
+    }
+    if (role && typeof role === 'string' && role.trim() && role !== 'ALL') {
+      userFilter.role = role.trim().toUpperCase();
+    }
+    if (Object.keys(userFilter).length > 0) {
+      where.user = userFilter;
+    }
+
+    const [logs, total] = await prisma.$transaction([
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { timestamp: "desc" },
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: { email: true, role: true },
           },
         },
-      },
-    });
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
 
     res.json({
       success: true,
       message: "Audit logs retrieved successfully",
-      data: logs,
+      data: {
+        logs,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getStudentRecords = async (req, res, next) => {
+  try {
+    const { search, dept } = req.query;
+    const page  = Math.max(1, parseInt(req.query.page  || '1',  10));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '30', 10)));
+    const skip  = (page - 1) * limit;
+
+    const where = {};
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { firstName:     { contains: q, mode: 'insensitive' } },
+        { lastName:      { contains: q, mode: 'insensitive' } },
+        { studentNumber: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    if (dept && typeof dept === 'string' && dept.trim() && dept !== 'ALL') {
+      where.courseDept = { contains: dept.trim(), mode: 'insensitive' };
+    }
+
+    const [students, total] = await prisma.$transaction([
+      prisma.studentProfile.findMany({
+        where,
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          studentNumber: true,
+          firstName: true,
+          lastName: true,
+          mi: true,
+          courseDept: true,
+          age: true,
+          sex: true,
+          _count: {
+            select: {
+              clinicVisits: true,
+              physicalExaminations: true,
+            },
+          },
+        },
+      }),
+      prisma.studentProfile.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Student records retrieved',
+      data: {
+        students,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getStudentHealthDetail = async (req, res, next) => {
+  try {
+    const { studentProfileId } = req.params;
+
+    const student = await prisma.studentProfile.findUnique({
+      where: { id: studentProfileId },
+      include: {
+        medicalHistory: true,
+        physicalExaminations: { orderBy: { examDate: 'desc' } },
+        labResults: { orderBy: { date: 'desc' } },
+        clinicVisits: {
+          orderBy: { visitDate: 'desc' },
+          take: 50,
+          include: {
+            handledBy: { select: { email: true, role: true, clinicStaffType: true } },
+          },
+        },
+        medicalDocuments: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found.' });
+    }
+
+    res.json({ success: true, message: 'Student health detail retrieved', data: student });
   } catch (error) {
     next(error);
   }
@@ -453,5 +594,7 @@ module.exports = {
   getAdminSessionProfile,
   getUsers,
   getAuditLogs,
+  getStudentRecords,
+  getStudentHealthDetail,
   buildHealthAnalyticsPayload,
 };

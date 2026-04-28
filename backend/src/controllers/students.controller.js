@@ -590,4 +590,67 @@ const submitRegistration = async (req, res, next) => {
   }
 };
 
-module.exports = { getMyProfile, generateMyQRCode, submitRegistration };
+// GET /api/v1/students/by-number/:studentNumber
+// Returns a student's profile, clinic visits, and appointments for the health history page.
+const getStudentByNumber = async (req, res, next) => {
+  try {
+    const studentNumber = (req.params.studentNumber || '').trim();
+    if (!studentNumber) {
+      return res.status(400).json({ success: false, message: 'studentNumber is required.' });
+    }
+
+    const profile = await prisma.studentProfile.findUnique({
+      where: { studentNumber },
+      select: {
+        studentNumber: true,
+        firstName: true,
+        lastName: true,
+        courseDept: true,
+        clinicVisits: {
+          orderBy: { visitDate: 'desc' },
+          select: {
+            id: true,
+            visitDate: true,
+            visitTime: true,
+            chiefComplaintEnc: true,
+            concernTag: true,
+          },
+        },
+        appointments: {
+          orderBy: { preferredDate: 'desc' },
+          select: {
+            id: true,
+            preferredDate: true,
+            preferredTime: true,
+            serviceType: true,
+            symptoms: true,
+            status: true,
+          },
+        },
+        physicalExaminations: {
+          orderBy: { examDate: 'desc' },
+          select: {
+            id: true,
+            examDate: true,
+            yearLevel: true,
+            bp: true,
+            weight: true,
+            height: true,
+            bmi: true,
+            examinedBy: true,
+          },
+        },
+      },
+    });
+
+    if (!profile) {
+      return res.status(404).json({ success: false, message: 'Student not found.' });
+    }
+
+    return res.json({ success: true, data: profile });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getMyProfile, generateMyQRCode, submitRegistration, getStudentByNumber };

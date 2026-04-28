@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Clock, Activity, Search, ChevronRight } from 'lucide-react';
+import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
 
 import Toast from '@/components/ui/Toast';
 import { api, ApiError } from '@/lib/api';
@@ -270,6 +271,8 @@ export default function DentalDashboardPage() {
         message={toastConfig.message}
         onClose={() => setToastConfig({ isVisible: false, message: '' })}
       />
+
+      <PredictiveInsightsCard role="dental" className="mx-8 mb-8" />
     </div>
   );
 }

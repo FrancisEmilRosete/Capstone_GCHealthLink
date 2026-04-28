@@ -84,6 +84,7 @@ const certificateRoutes = require("./routes/certificate.routes");
 const settingsRoutes = require("./routes/settings.routes");
 const emergencyRoutes = require("./routes/emergency.routes");
 const aiRoutes = require("./routes/ai.routes");
+const debugRoutes = require("./routes/debug.routes");
 
 // 5. Base Route
 app.get("/", (req, res) => {
@@ -105,6 +106,7 @@ app.use("/api/v1/certificates", certificateRoutes);
 app.use("/api/v1/settings", settingsRoutes);
 app.use("/api/v1/emergency", emergencyRoutes);
 app.use("/api/v1/ai", aiRoutes);
+app.use("/api/v1/debug", debugRoutes);
 
 // 7. Error Handling Middleware
 app.use(notFound);

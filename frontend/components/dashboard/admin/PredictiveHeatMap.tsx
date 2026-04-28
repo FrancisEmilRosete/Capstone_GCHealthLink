@@ -43,7 +43,7 @@ function getHeatColor(value: number) {
 
 export default function PredictiveHeatMap({
   title = 'Predictive Heat Map',
-  subtitle = 'Department-level risk score based on recent clinic activity',
+  subtitle = 'Predicted outbreak risk by department based on recent visit patterns',
   data,
   className,
 }: PredictiveHeatMapProps) {

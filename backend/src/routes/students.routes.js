@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
-// Import both functions from the controller
-const { getMyProfile, generateMyQRCode, submitRegistration } = require("../controllers/students.controller"); 
+const { getMyProfile, generateMyQRCode, submitRegistration, getStudentByNumber } = require("../controllers/students.controller"); 
 const { protect } = require("../middleware/auth.middleware");
 const { authorize } = require("../middleware/rbac.middleware");
 const { auditLogger } = require("../middleware/auditLogger.middleware");
@@ -17,5 +16,14 @@ router.get("/me", protect, authorize("STUDENT"), auditLogger("VIEWED_OWN_PROFILE
 
 // Your NEW QR Code route
 router.get("/qr", protect, authorize("STUDENT"), auditLogger("GENERATED_QR_CODE"), generateMyQRCode);
+
+// Health history lookup by student number (staff/admin/doctor access)
+router.get(
+  "/by-number/:studentNumber",
+  protect,
+  authorize("CLINIC_STAFF", "ADMIN", "CLINIC_DOCTOR", "DENTAL_DOCTOR"),
+  auditLogger("VIEWED_STUDENT_HEALTH_HISTORY"),
+  getStudentByNumber
+);
 
 module.exports = router;

@@ -7,6 +7,7 @@ import { UserPlus, Clock, Activity, Search, ChevronRight } from 'lucide-react';
 import Toast from '@/components/ui/Toast';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
 
 interface QueueItem {
   id: string;
@@ -270,6 +271,8 @@ export default function DoctorDashboardPage() {
         message={toastConfig.message}
         onClose={() => setToastConfig({ isVisible: false, message: '' })}
       />
+
+      <PredictiveInsightsCard role="doctor" className="mx-8 mb-8" />
     </div>
   );
 }

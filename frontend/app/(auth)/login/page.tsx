@@ -7,10 +7,11 @@
  * It is the first page users see when they open the app.
  *
  * Responsibilities:
- * 1. Holds the form state (role, email, password, rememberMe)
+ * 1. Holds the form state (email, password, rememberMe, legalAccepted)
  * 2. Passes state and handlers down to child components
  * 3. Calls the real Node.js backend API when Sign In is clicked
- * 4. Redirects to the correct dashboard based on the database role
+ * 4. Automatically detects the user's role from the backend response
+ *    and redirects to the correct dashboard (no manual role selection)
  */
 
 'use client';
@@ -21,7 +22,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 import { ApiError }               from '@/lib/api';
-import { authLogin, getDashboardRouteForUser, getSessionRoleFromUser, setUserRole } from '@/lib/auth';
+import { authLogin, getDashboardRouteForRole, getSessionRoleFromUser, setUserRole } from '@/lib/auth';
 import AppLogo                    from '@/components/branding/AppLogo';
 import LoginForm                  from '@/components/auth/LoginForm';
 
@@ -59,18 +60,20 @@ export default function LoginPage() {
   const router = useRouter();
 
   // ── Form State ─────────────────────────────────────────────
-  const [email,        setEmail]        = useState('');
-  const [password,     setPassword]     = useState('');
-  const [rememberMe,   setRememberMe]   = useState(false);
+  const [email,         setEmail]         = useState('');
+  const [password,      setPassword]      = useState('');
+  const [rememberMe,    setRememberMe]    = useState(false);
   const [legalAccepted, setLegalAccepted] = useState(false);
-  const [error,        setError]        = useState('');
-  const [loading,      setLoading]      = useState(false);
+  const [error,         setError]         = useState('');
+  const [loading,       setLoading]       = useState(false);
 
   // ── Handlers ───────────────────────────────────────────────
 
   /**
    * Handles the Sign In button click.
-   * Sends credentials to the Node.js backend and handles the JWT token.
+   * Sends credentials to the Node.js backend, reads the user's role
+   * from the response (including clinicStaffType for staff), and
+   * redirects automatically to the correct dashboard.
    */
   async function handleSignIn() {
     setError('');
@@ -90,12 +93,20 @@ export default function LoginPage() {
         password,
       });
 
+      // Resolve the correct dashboard role from the backend response.
+      // For CLINIC_STAFF users, clinicStaffType distinguishes DOCTOR / DENTAL / NURSE.
       const sessionRole = getSessionRoleFromUser(user);
-      if (sessionRole) {
-        setUserRole(sessionRole);
+
+      if (!sessionRole) {
+        setError('Your account has an unrecognized role. Please contact the administrator.');
+        setLoading(false);
+        return;
       }
 
-      router.push(getDashboardRouteForUser(user));
+      // Persist the resolved role so layout auth guards can read it.
+      setUserRole(sessionRole);
+
+      router.push(getDashboardRouteForRole(sessionRole));
     } catch (err) {
       if (err instanceof ApiError) {
         setError(mapLoginErrorMessage(err));
@@ -132,7 +143,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Step 1: Enter Credentials */}
+        {/* Login Form — role is detected automatically from the backend */}
         <LoginForm
           email={email}
           password={password}

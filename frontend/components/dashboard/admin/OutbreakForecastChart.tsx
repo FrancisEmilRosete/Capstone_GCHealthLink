@@ -143,7 +143,7 @@ export default function OutbreakForecastChart({
             <ComposedChart data={visibleData} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} label={{ value: 'Expected Cases', angle: -90, position: 'insideLeft', fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} label={{ value: 'Forecasted Visits', angle: -90, position: 'insideLeft', fontSize: 11 }} />
 
               <Tooltip
                 contentStyle={{ borderRadius: 12, borderColor: '#e5e7eb' }}
@@ -225,7 +225,7 @@ export default function OutbreakForecastChart({
               <Line
                 type="monotone"
                 dataKey="predictedCases"
-                name="Expected Cases"
+                name="Forecasted Clinic Visits"
                 stroke="#0f766e"
                 strokeWidth={3}
                 dot={{ r: 3 }}

@@ -14,6 +14,9 @@ const DOCUMENT_TYPES = [
   { value: 'OTHER', label: 'Other' },
 ] as const;
 
+const CERT_REQUEST_STORAGE_KEY = 'gchl_cert_requests';
+type CertificateStatus = 'pending' | 'pending_doctor' | 'doctor_approved' | 'denied';
+
 interface SearchStudent {
   studentNumber: string;
   user: { id: string };
@@ -132,6 +135,17 @@ interface StatusToast {
   message: string;
 }
 
+interface CertificateRequestRow {
+  id: string;
+  studentName: string;
+  studentNumber: string;
+  courseDept: string;
+  reason: string;
+  requestedDateIso: string;
+  status: CertificateStatus;
+  doctorName?: string;
+}
+
 interface MedicalDocument {
   id: string;
   fileName: string;
@@ -210,6 +224,23 @@ function parseYesNoChoice(value?: string | null) {
   return null;
 }
 
+function readCertificateRequests(): CertificateRequestRow[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CERT_REQUEST_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCertificateRequests(rows: CertificateRequestRow[]) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(CERT_REQUEST_STORAGE_KEY, JSON.stringify(rows));
+}
+
 const MEDICAL_HISTORY_BOOLEAN_FIELDS: Array<{ key: keyof NonNullable<ScanProfile['medicalHistory']>; label: string }> = [
   { key: 'asthmaEnc', label: 'Asthma' },
   { key: 'chickenPoxEnc', label: 'Chicken Pox' },
@@ -251,6 +282,8 @@ export default function StudentRecordPage() {
   const [documentFeedback, setDocumentFeedback] = useState('');
   const [downloadingDocumentId, setDownloadingDocumentId] = useState('');
   const [activeClinicalTab, setActiveClinicalTab] = useState<'medicalHistory' | 'physicalExam' | 'labResults'>('medicalHistory');
+  const [certificateStatus, setCertificateStatus] = useState<CertificateStatus | null>(null);
+  const [requestingCertificate, setRequestingCertificate] = useState(false);
 
   useEffect(() => {
     if (!statusToast) {
@@ -327,6 +360,44 @@ export default function StudentRecordPage() {
   const allergies = useMemo(() => splitCsv(record?.medicalHistory?.allergyEnc), [record]);
   const latestExam = record?.physicalExaminations?.[0] || null;
   const latestLab = record?.labResults?.[0] || null;
+
+  useEffect(() => {
+    if (!record) {
+      setCertificateStatus(null);
+      return;
+    }
+    const rows = readCertificateRequests();
+    const latest = rows
+      .filter((item) => item.studentNumber.toLowerCase() === record.studentNumber.toLowerCase())
+      .sort((a, b) => new Date(b.requestedDateIso).getTime() - new Date(a.requestedDateIso).getTime())[0];
+    setCertificateStatus(latest?.status ?? null);
+  }, [record]);
+
+  async function handleRequestMedicalCertificate() {
+    if (!record || requestingCertificate || certificateStatus) return;
+
+    setRequestingCertificate(true);
+    try {
+      const rows = readCertificateRequests();
+      const request: CertificateRequestRow = {
+        id: `cert-${Date.now()}`,
+        studentName: `${record.firstName} ${record.lastName}`,
+        studentNumber: record.studentNumber,
+        courseDept: record.courseDept || 'N/A',
+        reason: 'Medical certificate requested from QR View Record.',
+        requestedDateIso: new Date().toISOString(),
+        status: 'pending',
+      };
+      saveCertificateRequests([request, ...rows]);
+      setCertificateStatus('pending');
+      setStatusToast({
+        type: 'success',
+        message: 'Medical certificate request submitted. Status: Pending.',
+      });
+    } finally {
+      setRequestingCertificate(false);
+    }
+  }
 
   async function handleEmergencyAlert() {
     if (!record) return;
@@ -513,6 +584,28 @@ export default function StudentRecordPage() {
           >
             {sendingEmergency ? 'Sending SMS...' : 'Text Emergency Contact'}
           </button>
+          <button
+            onClick={() => { void handleRequestMedicalCertificate(); }}
+            disabled={requestingCertificate || !!certificateStatus}
+            className="text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-70"
+          >
+            {requestingCertificate ? 'Requesting...' : 'Request Medical Certificate'}
+          </button>
+          {certificateStatus && (
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                certificateStatus === 'doctor_approved'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : certificateStatus === 'denied'
+                    ? 'bg-red-100 text-red-700'
+                    : certificateStatus === 'pending_doctor'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-amber-100 text-amber-700'
+              }`}
+            >
+              Certificate Status: {certificateStatus === 'pending_doctor' ? 'Awaiting Doctor' : certificateStatus === 'doctor_approved' ? 'Approved' : certificateStatus === 'denied' ? 'Denied' : 'Pending'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -571,23 +664,24 @@ export default function StudentRecordPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
         <h2 className="text-sm font-bold text-gray-800">Clinic Record (Paper Form Layout)</h2>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex border-b border-gray-200">
           {([
-            ['medicalHistory', 'Medical History'],
-            ['physicalExam', 'Physical Examination'],
-            ['labResults', 'Lab Results'],
-          ] as const).map(([tabKey, tabLabel]) => (
+            ['medicalHistory', 'Medical History', '🩺'],
+            ['physicalExam', 'Physical Examination', '🏥'],
+            ['labResults', 'Lab Results', '🧪'],
+          ] as const).map(([tabKey, tabLabel, icon]) => (
             <button
               key={tabKey}
               type="button"
               onClick={() => setActiveClinicalTab(tabKey)}
-              className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+              className={`relative flex items-center gap-1.5 px-5 py-3 text-sm font-semibold transition-all duration-200 focus:outline-none ${
                 activeClinicalTab === tabKey
-                  ? 'bg-teal-600 text-white'
-                  : 'bg-white border border-gray-300 text-gray-600 hover:border-teal-300 hover:text-teal-600'
+                  ? 'text-teal-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-teal-600 after:rounded-t'
+                  : 'text-gray-500 hover:text-teal-500 hover:bg-teal-50/50'
               }`}
             >
-              {tabLabel}
+              <span className="text-base leading-none">{icon}</span>
+              <span>{tabLabel}</span>
             </button>
           ))}
         </div>

@@ -175,6 +175,94 @@ const MEDICAL_CONDITIONS: Array<{ key: MedicalConditionKey; label: string }> = [
 
 const INPUT_CLASS = 'w-full border border-gray-300 rounded p-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500';
 
+const FIELD_LABELS: Record<string, string> = {
+  allergy: 'Allergy',
+  operationNatureAndDate: 'Operation details',
+  bp: 'BP',
+  cr: 'CR',
+  rr: 'RR',
+  temp: 'Temp',
+  weight: 'Weight',
+  height: 'Height',
+  visualAcuity: 'Visual Acuity',
+  skin: 'Skin',
+  heent: 'HEENT',
+  chestLungs: 'Chest/Lungs',
+  heart: 'Heart',
+  abdomen: 'Abdomen',
+  extremities: 'Extremities',
+  others: 'Others (specify)',
+  examinedBy: 'Examined by',
+  hgb: 'Hgb',
+  hct: 'Hct',
+  wbc: 'WBC',
+  pltCt: 'Plt. Ct.',
+  bloodType: 'Bld. Type',
+  glucoseSugar: 'Glucose/Sugar',
+  protein: 'Protein',
+  xrayResult: 'Chest X-ray Result',
+  abnormalFindings: 'Abnormal Findings',
+  labOthers: 'Lab Others',
+};
+
+const PHYSICAL_REQUIRED_FIELDS: Array<keyof PhysicalExamRecordFormData> = [
+  'allergy',
+  'bp',
+  'cr',
+  'rr',
+  'temp',
+  'weight',
+  'height',
+  'visualAcuity',
+  'skin',
+  'heent',
+  'chestLungs',
+  'heart',
+  'abdomen',
+  'extremities',
+  'others',
+  'examinedBy',
+  'hgb',
+  'hct',
+  'wbc',
+  'pltCt',
+  'bloodType',
+  'glucoseSugar',
+  'protein',
+  'xrayResult',
+  'labOthers',
+];
+
+const FIELD_TAB: Record<string, FormTab> = {
+  allergy: 'medicalHistory',
+  operationNatureAndDate: 'medicalHistory',
+  bp: 'physicalExamination',
+  cr: 'physicalExamination',
+  rr: 'physicalExamination',
+  temp: 'physicalExamination',
+  weight: 'physicalExamination',
+  height: 'physicalExamination',
+  visualAcuity: 'physicalExamination',
+  skin: 'physicalExamination',
+  heent: 'physicalExamination',
+  chestLungs: 'physicalExamination',
+  heart: 'physicalExamination',
+  abdomen: 'physicalExamination',
+  extremities: 'physicalExamination',
+  others: 'physicalExamination',
+  examinedBy: 'physicalExamination',
+  hgb: 'labResults',
+  hct: 'labResults',
+  wbc: 'labResults',
+  pltCt: 'labResults',
+  bloodType: 'labResults',
+  glucoseSugar: 'labResults',
+  protein: 'labResults',
+  xrayResult: 'labResults',
+  abnormalFindings: 'labResults',
+  labOthers: 'labResults',
+};
+
 function TextField({
   label,
   value,
@@ -182,6 +270,7 @@ function TextField({
   placeholder,
   type = 'text',
   readOnly = false,
+  error = '',
 }: {
   label: string;
   value: string;
@@ -189,12 +278,13 @@ function TextField({
   placeholder?: string;
   type?: string;
   readOnly?: boolean;
+  error?: string;
 }) {
   const inputId = useId();
 
   const className = readOnly
     ? 'w-full border border-gray-200 rounded p-2.5 text-sm text-gray-700 bg-gray-100'
-    : INPUT_CLASS;
+    : `${INPUT_CLASS} ${error ? 'border-red-300 focus:ring-red-300 focus:border-red-400' : ''}`.trim();
 
   return (
     <div>
@@ -210,6 +300,7 @@ function TextField({
         readOnly={readOnly}
         className={className}
       />
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -220,12 +311,14 @@ function TextAreaField({
   onChange,
   rows = 3,
   placeholder,
+  error = '',
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   rows?: number;
   placeholder?: string;
+  error?: string;
 }) {
   const inputId = useId();
 
@@ -240,8 +333,9 @@ function TextAreaField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className={`${INPUT_CLASS} resize-none`}
+        className={`${INPUT_CLASS} resize-none ${error ? 'border-red-300 focus:ring-red-300 focus:border-red-400' : ''}`.trim()}
       />
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -249,6 +343,7 @@ function TextAreaField({
 export default function PhysicalExamModal({ studentName, onClose, onSave }: PhysicalExamModalProps) {
   const [form, setForm] = useState<PhysicalExamRecordFormData>(INITIAL_FORM);
   const [activeTab, setActiveTab] = useState<FormTab>('medicalHistory');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -321,9 +416,50 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
     value: PhysicalExamRecordFormData[K],
   ) {
     setForm((current) => ({ ...current, [field]: value }));
+    setErrors((current) => {
+      if (!current[field as string] && field !== 'hasPastOperation' && field !== 'xrayResult') {
+        return current;
+      }
+      const next = { ...current };
+      delete next[field as string];
+      if (field === 'hasPastOperation' && value === 'NO') {
+        delete next.operationNatureAndDate;
+      }
+      if (field === 'xrayResult' && value === 'NORMAL') {
+        delete next.abnormalFindings;
+      }
+      return next;
+    });
   }
 
   function handleSave() {
+    const nextErrors: Record<string, string> = {};
+
+    PHYSICAL_REQUIRED_FIELDS.forEach((field) => {
+      if (!String(form[field] ?? '').trim()) {
+        nextErrors[field] = `${FIELD_LABELS[field]} is required.`;
+      }
+    });
+
+    if (form.hasPastOperation === 'YES' && !form.operationNatureAndDate.trim()) {
+      nextErrors.operationNatureAndDate = 'Operation details are required when past operation is YES.';
+    }
+
+    if (form.xrayResult === 'ABNORMAL' && !form.abnormalFindings.trim()) {
+      nextErrors.abnormalFindings = 'Abnormal findings are required for an abnormal X-ray result.';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      const firstMissingField = Object.keys(nextErrors)[0];
+      const targetTab = FIELD_TAB[firstMissingField];
+      if (targetTab) {
+        setActiveTab(targetTab);
+      }
+      return;
+    }
+
+    setErrors({});
     onSave(form);
     onClose();
   }
@@ -382,6 +518,12 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
         </div>
 
         <div className="space-y-5">
+          {Object.keys(errors).length > 0 && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              Please complete all required fields before saving.
+            </div>
+          )}
+
           {activeTab === 'medicalHistory' && (
             <>
               <TextField
@@ -389,6 +531,7 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
                 value={form.allergy}
                 placeholder="Specify allergy"
                 onChange={(value) => setField('allergy', value)}
+                error={errors.allergy}
               />
 
               <div>
@@ -441,6 +584,7 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
                   onChange={(value) => setField('operationNatureAndDate', value)}
                   rows={2}
                   placeholder="Operation details"
+                  error={errors.operationNatureAndDate}
                 />
               </div>
             </>
@@ -473,27 +617,27 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                <TextField label="BP" value={form.bp} onChange={(value) => setField('bp', value)} />
-                <TextField label="CR" value={form.cr} onChange={(value) => setField('cr', value)} />
-                <TextField label="RR" value={form.rr} onChange={(value) => setField('rr', value)} />
-                <TextField label="Temp" value={form.temp} onChange={(value) => setField('temp', value)} />
-                <TextField label="Weight" value={form.weight} onChange={(value) => setField('weight', value)} />
-                <TextField label="Height" value={form.height} onChange={(value) => setField('height', value)} />
+                <TextField label="BP" value={form.bp} onChange={(value) => setField('bp', value)} error={errors.bp} />
+                <TextField label="CR" value={form.cr} onChange={(value) => setField('cr', value)} error={errors.cr} />
+                <TextField label="RR" value={form.rr} onChange={(value) => setField('rr', value)} error={errors.rr} />
+                <TextField label="Temp" value={form.temp} onChange={(value) => setField('temp', value)} error={errors.temp} />
+                <TextField label="Weight" value={form.weight} onChange={(value) => setField('weight', value)} error={errors.weight} />
+                <TextField label="Height" value={form.height} onChange={(value) => setField('height', value)} error={errors.height} />
                 <TextField label="BMI" value={form.bmi} onChange={() => {}} readOnly />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <TextField label="Visual Acuity" value={form.visualAcuity} onChange={(value) => setField('visualAcuity', value)} />
-                <TextField label="Skin" value={form.skin} onChange={(value) => setField('skin', value)} />
-                <TextField label="HEENT" value={form.heent} onChange={(value) => setField('heent', value)} />
-                <TextField label="Chest/Lungs" value={form.chestLungs} onChange={(value) => setField('chestLungs', value)} />
-                <TextField label="Heart" value={form.heart} onChange={(value) => setField('heart', value)} />
-                <TextField label="Abdomen" value={form.abdomen} onChange={(value) => setField('abdomen', value)} />
-                <TextField label="Extremities" value={form.extremities} onChange={(value) => setField('extremities', value)} />
+                <TextField label="Visual Acuity" value={form.visualAcuity} onChange={(value) => setField('visualAcuity', value)} error={errors.visualAcuity} />
+                <TextField label="Skin" value={form.skin} onChange={(value) => setField('skin', value)} error={errors.skin} />
+                <TextField label="HEENT" value={form.heent} onChange={(value) => setField('heent', value)} error={errors.heent} />
+                <TextField label="Chest/Lungs" value={form.chestLungs} onChange={(value) => setField('chestLungs', value)} error={errors.chestLungs} />
+                <TextField label="Heart" value={form.heart} onChange={(value) => setField('heart', value)} error={errors.heart} />
+                <TextField label="Abdomen" value={form.abdomen} onChange={(value) => setField('abdomen', value)} error={errors.abdomen} />
+                <TextField label="Extremities" value={form.extremities} onChange={(value) => setField('extremities', value)} error={errors.extremities} />
               </div>
 
-              <TextAreaField label="Others (specify)" value={form.others} onChange={(value) => setField('others', value)} rows={2} />
-              <TextField label="Examined by" value={form.examinedBy} onChange={(value) => setField('examinedBy', value)} />
+              <TextAreaField label="Others (specify)" value={form.others} onChange={(value) => setField('others', value)} rows={2} error={errors.others} />
+              <TextField label="Examined by" value={form.examinedBy} onChange={(value) => setField('examinedBy', value)} error={errors.examinedBy} />
             </>
           )}
 
@@ -503,11 +647,11 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
                 <p className="text-xs font-semibold text-gray-600">CBC</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <TextField label="Date" type="date" value={form.cbcDate} onChange={(value) => setField('cbcDate', value)} />
-                  <TextField label="Hgb" value={form.hgb} onChange={(value) => setField('hgb', value)} />
-                  <TextField label="Hct" value={form.hct} onChange={(value) => setField('hct', value)} />
-                  <TextField label="WBC" value={form.wbc} onChange={(value) => setField('wbc', value)} />
-                  <TextField label="Plt. Ct." value={form.pltCt} onChange={(value) => setField('pltCt', value)} />
-                  <TextField label="Bld. Type" value={form.bloodType} onChange={(value) => setField('bloodType', value)} />
+                  <TextField label="Hgb" value={form.hgb} onChange={(value) => setField('hgb', value)} error={errors.hgb} />
+                  <TextField label="Hct" value={form.hct} onChange={(value) => setField('hct', value)} error={errors.hct} />
+                  <TextField label="WBC" value={form.wbc} onChange={(value) => setField('wbc', value)} error={errors.wbc} />
+                  <TextField label="Plt. Ct." value={form.pltCt} onChange={(value) => setField('pltCt', value)} error={errors.pltCt} />
+                  <TextField label="Bld. Type" value={form.bloodType} onChange={(value) => setField('bloodType', value)} error={errors.bloodType} />
                 </div>
               </div>
 
@@ -515,8 +659,8 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
                 <p className="text-xs font-semibold text-gray-600">U/A</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <TextField label="Date" type="date" value={form.uaDate} onChange={(value) => setField('uaDate', value)} />
-                  <TextField label="Glucose/Sugar" value={form.glucoseSugar} onChange={(value) => setField('glucoseSugar', value)} />
-                  <TextField label="Protein" value={form.protein} onChange={(value) => setField('protein', value)} />
+                  <TextField label="Glucose/Sugar" value={form.glucoseSugar} onChange={(value) => setField('glucoseSugar', value)} error={errors.glucoseSugar} />
+                  <TextField label="Protein" value={form.protein} onChange={(value) => setField('protein', value)} error={errors.protein} />
                 </div>
               </div>
 
@@ -530,12 +674,13 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
                       id="xray-result"
                       value={form.xrayResult}
                       onChange={(event) => setField('xrayResult', event.target.value as PhysicalExamRecordFormData['xrayResult'])}
-                      className={INPUT_CLASS}
+                      className={`${INPUT_CLASS} ${errors.xrayResult ? 'border-red-300 focus:ring-red-300 focus:border-red-400' : ''}`.trim()}
                     >
                       <option value="">Select result</option>
                       <option value="NORMAL">Normal</option>
                       <option value="ABNORMAL">Abnormal</option>
                     </select>
+                    {errors.xrayResult && <p className="mt-1 text-xs text-red-600">{errors.xrayResult}</p>}
                   </div>
                 </div>
                 <TextAreaField
@@ -543,10 +688,11 @@ export default function PhysicalExamModal({ studentName, onClose, onSave }: Phys
                   value={form.abnormalFindings}
                   onChange={(value) => setField('abnormalFindings', value)}
                   rows={2}
+                  error={errors.abnormalFindings}
                 />
               </div>
 
-              <TextAreaField label="Others" value={form.labOthers} onChange={(value) => setField('labOthers', value)} rows={2} />
+              <TextAreaField label="Others" value={form.labOthers} onChange={(value) => setField('labOthers', value)} rows={2} error={errors.labOthers} />
               <TextField label="Date Received" type="date" value={form.dateReceived} onChange={(value) => setField('dateReceived', value)} />
             </>
           )}

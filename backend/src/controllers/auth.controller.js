@@ -3,6 +3,16 @@ const { generateAccessToken } = require("../lib/jwt");
 const { ROLES } = require("../lib/roles");
 const { prisma } = require("../lib/prisma");
 
+async function writeAuditLog({ userId, action, ipAddress, metadata }) {
+  try {
+    await prisma.auditLog.create({
+      data: { userId: userId || null, action, ipAddress: ipAddress || null, metadata: metadata || null },
+    });
+  } catch {
+    // Non-blocking — audit failure must never break auth
+  }
+}
+
 const LOGIN_RATE_WINDOW_MS = Number(process.env.LOGIN_RATE_WINDOW_MS || 15 * 60 * 1000);
 const LOGIN_RATE_MAX_PER_IP = Number(process.env.LOGIN_RATE_MAX_PER_IP || 30);
 const LOGIN_MAX_FAILED_ATTEMPTS = Number(process.env.LOGIN_MAX_FAILED_ATTEMPTS || 5);
@@ -154,6 +164,7 @@ const login = async (req, res, next) => {
     const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user) {
       const failure = recordFailedIdentityAttempt(identityKey, now);
+      void writeAuditLog({ action: 'LOGIN_FAILED', ipAddress: ip, metadata: { email: normalizedEmail, reason: 'user_not_found' } });
       if (failure.lockUntil > now) {
         return lockedResponse(res, failure.lockUntil, now);
       }
@@ -163,6 +174,7 @@ const login = async (req, res, next) => {
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
       const failure = recordFailedIdentityAttempt(identityKey, now);
+      void writeAuditLog({ userId: user.id, action: 'LOGIN_FAILED', ipAddress: ip, metadata: { email: normalizedEmail, reason: 'wrong_password' } });
       if (failure.lockUntil > now) {
         return lockedResponse(res, failure.lockUntil, now);
       }
@@ -178,20 +190,35 @@ const login = async (req, res, next) => {
 
     clearIdentityFailures(identityKey);
 
+    // For CLINIC_STAFF accounts with null clinicStaffType, infer the type from
+    // the email pattern so the frontend can route to the correct dashboard.
+    let resolvedStaffType = user.clinicStaffType;    if (user.role === 'CLINIC_STAFF' && !resolvedStaffType) {
+      const emailLower = user.email.toLowerCase();
+      if (emailLower.includes('doctor') || emailLower.includes('physician') || emailLower.includes('dr.')) {
+        resolvedStaffType = 'DOCTOR';
+      } else if (emailLower.includes('dental') || emailLower.includes('dentist')) {
+        resolvedStaffType = 'DENTIST';
+      } else if (emailLower.includes('nurse') || emailLower.includes('staff')) {
+        resolvedStaffType = 'NURSE';
+      }
+    }
+
     const token = generateAccessToken(
       { userId: user.id, role: user.role },
       { expiresIn: "12h" }
     );
 
+    void writeAuditLog({ userId: user.id, action: 'LOGIN_SUCCESS', ipAddress: ip, metadata: { email: normalizedEmail, role: user.role } });
+
     res.json({
       success: true,
       message: "Login successful",
       token,
-      user: { id: user.id, email: user.email, role: user.role, clinicStaffType: user.clinicStaffType }
+      user: { id: user.id, email: user.email, role: user.role, clinicStaffType: resolvedStaffType ?? null }
     });
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { login };
+module.exports = { login, clearIdentityFailures, identityFailures };

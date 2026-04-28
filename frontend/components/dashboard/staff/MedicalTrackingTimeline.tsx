@@ -7,7 +7,7 @@ export interface MedicalTrackingEvent {
   dateIso: string;
   title: string;
   description: string;
-  type: 'intervention' | 'treatment' | 'follow-up';
+  type: 'consultation' | 'examination' | 'treatment' | 'follow-up';
   status?: 'completed' | 'scheduled' | 'pending';
   actor?: string;
 }
@@ -21,13 +21,15 @@ interface MedicalTrackingTimelineProps {
 
 function typeLabel(type: MedicalTrackingEvent['type']) {
   if (type === 'follow-up') return 'Follow-up';
-  if (type === 'intervention') return 'Intervention';
+  if (type === 'consultation') return 'Consultation';
+  if (type === 'examination') return 'Physical Exam';
   return 'Treatment';
 }
 
 function typeColor(type: MedicalTrackingEvent['type']) {
   if (type === 'follow-up') return 'bg-indigo-100 text-indigo-700 border-indigo-200';
-  if (type === 'intervention') return 'bg-teal-100 text-teal-700 border-teal-200';
+  if (type === 'consultation') return 'bg-teal-100 text-teal-700 border-teal-200';
+  if (type === 'examination') return 'bg-purple-100 text-purple-700 border-purple-200';
   return 'bg-amber-100 text-amber-700 border-amber-200';
 }
 
@@ -51,7 +53,7 @@ function formatDate(dateIso: string) {
 export default function MedicalTrackingTimeline({
   events,
   title = 'Medical Tracking Timeline',
-  subtitle = 'Interventions, treatments, and follow-up schedule',
+  subtitle = 'Clinic visits, physical exams, consultations and follow-up schedule',
   className,
 }: MedicalTrackingTimelineProps) {
   const [filter, setFilter] = useState<'all' | MedicalTrackingEvent['type']>('all');
@@ -71,7 +73,7 @@ export default function MedicalTrackingTimeline({
         </div>
 
         <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
-          {(['all', 'intervention', 'treatment', 'follow-up'] as const).map((key) => (
+          {(['all', 'consultation', 'examination', 'follow-up'] as const).map((key) => (
             <button
               key={key}
               type="button"
@@ -82,7 +84,7 @@ export default function MedicalTrackingTimeline({
                   : 'text-gray-600 hover:bg-white hover:text-teal-700'
               }`}
             >
-              {key}
+              {key === 'all' ? 'All' : key === 'follow-up' ? 'Follow-up' : key === 'examination' ? 'Exams' : 'Consultations'}
             </button>
           ))}
         </div>

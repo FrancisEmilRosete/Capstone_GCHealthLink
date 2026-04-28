@@ -9,7 +9,7 @@ const { authorize } = require("../middleware/rbac.middleware");
 
 const router = express.Router();
 
-router.get("/", protect, authorize("CLINIC_STAFF"), listCertificates);
-router.post("/", protect, authorize("CLINIC_STAFF"), issueCertificate);
+router.get("/", protect, authorize("CLINIC_STAFF", "ADMIN"), listCertificates);
+router.post("/", protect, authorize("CLINIC_STAFF", "ADMIN"), issueCertificate);
 
 module.exports = router;

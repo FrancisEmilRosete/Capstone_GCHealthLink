@@ -19,7 +19,7 @@ interface CertificatesResponse {
   data: BackendCertificate[];
 }
 
-export default function StaffCertificatesPage() {
+export default function AdminCertificatesPage() {
   const [requests, setRequests] = useState<PendingCertificateRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,7 +42,7 @@ export default function StaffCertificatesPage() {
           courseDept: cert.course,
           reason: cert.reason || 'Medical Concern',
           requestedDateIso: cert.dateIso,
-          status: 'doctor_approved', // Hardcode to approved since backend only returns issued certs
+          status: 'doctor_approved',
         }));
         setRequests(mapped);
       } catch (err) {
@@ -62,8 +62,8 @@ export default function StaffCertificatesPage() {
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Medical Certificates Log</h1>
-        <p className="text-sm text-gray-500 mt-1">View issued medical certificates.</p>
+        <h1 className="text-xl font-bold text-gray-900">Medical Certificates</h1>
+        <p className="text-sm text-gray-500 mt-1">Admin view of issued medical certificates.</p>
       </div>
 
       {error && (
@@ -77,9 +77,7 @@ export default function StaffCertificatesPage() {
           Loading certificates...
         </div>
       ) : (
-        <CertificateApprovalTable
-          initialRequests={requests}
-        />
+        <CertificateApprovalTable initialRequests={requests} />
       )}
     </div>
   );

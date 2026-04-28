@@ -37,9 +37,11 @@ interface ScanProfile {
   studentNumber: string;
   firstName: string;
   lastName: string;
+  mi?: string | null;
   courseDept: string;
   age: number | null;
   sex: string | null;
+  physicalExaminations?: { yearLevel?: string | null }[];
   medicalHistory?: {
     allergyEnc?: string | null;
     bloodType?: string | null;
@@ -82,8 +84,10 @@ interface UiStudent {
   studentNumber: string;
   firstName: string;
   lastName: string;
+  mi: string;
   course: string;
   college: string;
+  yearLevel: string;
   age: string;
   sex: string;
   allergies: string[];
@@ -91,6 +95,20 @@ interface UiStudent {
 }
 
 type SearchStatus = 'idle' | 'found' | 'not-found';
+type CertificateStatus = 'pending' | 'pending_doctor' | 'doctor_approved' | 'denied';
+
+const CERT_REQUEST_STORAGE_KEY = 'gchl_cert_requests';
+
+interface ScannerCertificateRequest {
+  id: string;
+  studentName: string;
+  studentNumber: string;
+  courseDept: string;
+  reason: string;
+  requestedDateIso: string;
+  status: CertificateStatus;
+  doctorName?: string;
+}
 
 function parseAllergies(value?: string | null): string[] {
   if (!value) return [];
@@ -198,8 +216,10 @@ function mapProfileToStudent(userId: string, profile: ScanProfile): UiStudent {
     studentNumber: profile.studentNumber,
     firstName: profile.firstName,
     lastName: profile.lastName,
+    mi: profile.mi?.trim() || '',
     course: profile.courseDept || 'N/A',
     college: profile.courseDept || 'N/A',
+    yearLevel: profile.physicalExaminations?.[0]?.yearLevel?.replace('YR_', 'Year ') || '',
     age: profile.age ? String(profile.age) : '',
     sex: profile.sex || '',
     allergies: parseAllergies(profile.medicalHistory?.allergyEnc),
@@ -243,6 +263,23 @@ function appendPendingLog(payload: unknown) {
   localStorage.setItem(storageKey, JSON.stringify(existing));
 }
 
+function readCertificateRequests(): ScannerCertificateRequest[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CERT_REQUEST_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as ScannerCertificateRequest[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCertificateRequests(rows: ScannerCertificateRequest[]) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(CERT_REQUEST_STORAGE_KEY, JSON.stringify(rows));
+}
+
 export default function ScannerPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -264,6 +301,8 @@ export default function ScannerPage() {
   const [actionMessage, setActionMessage] = useState('');
   const [statusToast, setStatusToast] = useState<StatusToast | null>(null);
   const [sendingEmergency, setSendingEmergency] = useState(false);
+  const [requestingCertificate, setRequestingCertificate] = useState(false);
+  const [certificateStatus, setCertificateStatus] = useState<CertificateStatus | null>(null);
 
   const [toastType, setToastType] = useState<'found' | 'not-found' | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -292,6 +331,18 @@ export default function ScannerPage() {
 
     return () => clearTimeout(timer);
   }, [statusToast]);
+
+  useEffect(() => {
+    if (!foundStudent) {
+      setCertificateStatus(null);
+      return;
+    }
+    const rows = readCertificateRequests();
+    const latest = rows
+      .filter((item) => typeof item?.studentNumber === 'string' && item.studentNumber.toLowerCase() === foundStudent.studentNumber.toLowerCase())
+      .sort((a, b) => new Date(b.requestedDateIso || 0).getTime() - new Date(a.requestedDateIso || 0).getTime())[0];
+    setCertificateStatus((latest?.status as CertificateStatus | undefined) ?? null);
+  }, [foundStudent]);
 
   function replaceStudentIdParam(nextStudentId: string | null) {
     const params = new URLSearchParams(searchParams.toString());
@@ -491,9 +542,10 @@ export default function ScannerPage() {
   async function handleConsultSave(
     form: {
       visitDate: string;
-      concernTag: string;
-      symptoms: string;
-      diagnosisDetails: string;
+      visitTime: string;
+      age: string;
+      sex: string;
+      chiefComplaint: string;
       bp: string;
       temperature: string;
       treatmentProvided: string;
@@ -520,25 +572,25 @@ export default function ScannerPage() {
       })
       .filter((entry): entry is { inventoryId: string; quantity: number } => entry !== null);
 
-    const normalizedTag = form.concernTag?.trim() || 'General Consultation';
-    const normalizedSymptoms = form.symptoms?.trim() || '';
-    const normalizedDiagnosis = form.diagnosisDetails?.trim() || '';
+    const normalizedTag = 'General Consultation';
+    const normalizedChiefComplaint = form.chiefComplaint?.trim() || '';
     const normalizedTreatment = form.treatmentProvided?.trim() || '';
     const normalizedVisitDate = form.visitDate?.trim() || new Date().toISOString();
 
     const structuredComplaint = {
       concernTag: normalizedTag,
-      symptoms: normalizedSymptoms,
-      chiefComplaint: normalizedSymptoms || normalizedTag,
-      diagnosis: normalizedDiagnosis || normalizedTag,
-      diagnosisDetails: normalizedDiagnosis,
+      symptoms: normalizedChiefComplaint,
+      chiefComplaint: normalizedChiefComplaint || normalizedTag,
+      diagnosis: normalizedTag,
       treatmentProvided: normalizedTreatment,
       treatmentManagement: normalizedTreatment,
+      age: form.age?.trim() || null,
+      sex: form.sex?.trim() || null,
       vitals: {
         bp: form.bp?.trim() || null,
         temperature: form.temperature?.trim() || null,
       },
-      notes: [normalizedTag, normalizedSymptoms, normalizedDiagnosis, normalizedTreatment]
+      notes: [normalizedTag, normalizedChiefComplaint, normalizedTreatment]
         .map((part) => part?.trim())
         .filter(Boolean)
         .join(' | ') || 'General consultation',
@@ -547,7 +599,7 @@ export default function ScannerPage() {
     const requestPayload = {
       studentProfileId: foundStudent.studentProfileId,
       visitDate: normalizedVisitDate,
-      visitTime: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+      visitTime: form.visitTime?.trim() || new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
       chiefComplaintEnc: JSON.stringify(structuredComplaint),
       dispensedMedicines,
     };
@@ -662,6 +714,32 @@ export default function ScannerPage() {
     }
   }
 
+  async function handleRequestMedicalCertificate() {
+    if (!foundStudent || requestingCertificate || certificateStatus) return;
+    setRequestingCertificate(true);
+
+    try {
+      const rows = readCertificateRequests();
+      const newRequest = {
+        id: `cert-${Date.now()}`,
+        studentName: `${foundStudent.firstName} ${foundStudent.lastName}`,
+        studentNumber: foundStudent.studentNumber,
+        courseDept: foundStudent.course || foundStudent.college || 'N/A',
+        reason: 'Medical certificate requested from QR View Record.',
+        requestedDateIso: new Date().toISOString(),
+        status: 'pending' as const,
+      };
+      saveCertificateRequests([newRequest, ...rows]);
+      setCertificateStatus('pending');
+      setStatusToast({
+        type: 'success',
+        message: 'Medical certificate request submitted. Status: Pending.',
+      });
+    } finally {
+      setRequestingCertificate(false);
+    }
+  }
+
   const initials = foundStudent
     ? `${foundStudent.firstName[0]}${foundStudent.lastName[0]}`.toUpperCase()
     : '';
@@ -671,9 +749,14 @@ export default function ScannerPage() {
       {showConsultModal && foundStudent && (
         <ConsultationModal
           patient={{
-            name: `${foundStudent.firstName} ${foundStudent.lastName}`,
+            firstName: foundStudent.firstName,
+            middleName: foundStudent.mi || '',
+            lastName: foundStudent.lastName,
             department: foundStudent.college,
             course: foundStudent.course,
+            yearLevel: foundStudent.yearLevel,
+            age: foundStudent.age,
+            sex: foundStudent.sex,
           }}
           inventoryOptions={inventoryOptions}
           onClose={() => setShowConsultModal(false)}
@@ -743,10 +826,11 @@ export default function ScannerPage() {
 
             <div>
               <h2 className="text-lg font-bold text-gray-900 leading-tight">
-                {foundStudent.lastName}, {foundStudent.firstName}
+                {foundStudent.lastName}, {foundStudent.firstName}{foundStudent.mi ? ` ${foundStudent.mi}.` : ''}
               </h2>
               <p className="text-sm font-semibold text-teal-500 mt-0.5">{foundStudent.studentNumber}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{foundStudent.course}</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {foundStudent.course}{foundStudent.yearLevel ? ` · ${foundStudent.yearLevel}` : ''}</p>
             </div>
           </div>
 
@@ -759,17 +843,17 @@ export default function ScannerPage() {
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
+          <div className="grid grid-cols-2 gap-3 mt-6">
             <button
               onClick={() => setShowConsultModal(true)}
-              className="flex-1 bg-teal-500 hover:bg-teal-600 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors"
+              className="bg-teal-500 hover:bg-teal-600 text-white font-semibold text-sm px-4 py-3 rounded-xl transition-colors"
             >
               Consult
             </button>
 
             <button
               onClick={() => setShowExamModal(true)}
-              className="flex-1 border-2 border-teal-500 text-teal-600 hover:bg-teal-50 font-semibold text-sm px-5 py-3 rounded-xl transition-colors bg-white"
+              className="border-2 border-teal-500 text-teal-600 hover:bg-teal-50 font-semibold text-sm px-4 py-3 rounded-xl transition-colors bg-white"
             >
               Physical Exam
             </button>
@@ -777,18 +861,32 @@ export default function ScannerPage() {
             <button
               onClick={() => { void handleEmergencyAlert(); }}
               disabled={sendingEmergency}
-              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors disabled:opacity-70"
+              className="bg-red-500 hover:bg-red-600 text-white font-semibold text-sm px-4 py-3 rounded-xl transition-colors disabled:opacity-70"
             >
               {sendingEmergency ? 'Sending SMS...' : 'Text Emergency Contact'}
             </button>
 
             <button
               onClick={() => router.push(`${recordBasePath}/${encodeURIComponent(foundStudent.studentNumber)}`)}
-              className="flex-1 border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 font-semibold text-sm px-5 py-3 rounded-xl transition-colors bg-white"
+              className="border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 font-semibold text-sm px-4 py-3 rounded-xl transition-colors bg-white"
             >
               View Record
             </button>
           </div>
+
+          {certificateStatus && (
+            <div className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+              certificateStatus === 'doctor_approved'
+                ? 'bg-emerald-100 text-emerald-700'
+                : certificateStatus === 'denied'
+                  ? 'bg-red-100 text-red-700'
+                  : certificateStatus === 'pending_doctor'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-amber-100 text-amber-700'
+            }`}>
+              Certificate Status: {certificateStatus === 'pending_doctor' ? 'Awaiting Doctor' : certificateStatus === 'doctor_approved' ? 'Approved' : certificateStatus === 'denied' ? 'Denied' : 'Pending'}
+            </div>
+          )}
 
           <div className="text-center mt-5">
             <button onClick={handleReset} className="text-xs text-gray-400 hover:text-teal-500 transition-colors">

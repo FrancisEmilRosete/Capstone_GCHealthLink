@@ -269,7 +269,6 @@ export default function AdminDashboard() {
 
   const topConcern = topConcerns[0]?.tag || '-';
   const outbreakCount = Array.isArray(data?.outbreakWatch) ? data?.outbreakWatch.length : 0;
-
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div>

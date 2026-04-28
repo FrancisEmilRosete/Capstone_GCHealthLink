@@ -17,7 +17,8 @@ import Link from 'next/link';
 import ConsultationModal, { ConsultationPatient } from '@/components/modals/ConsultationModal';
 
 const EMPTY_PATIENT: ConsultationPatient = {
-  name:       '',
+  firstName:  '',
+  lastName:   '',
   department: '',
   course:     '',
 };
