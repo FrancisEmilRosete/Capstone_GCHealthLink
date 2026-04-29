@@ -53,6 +53,40 @@ interface StudentByNumberResponse {
   };
 }
 
+interface TreatmentEntry {
+  id: string;
+  date: string;
+  treatment: string;
+  remarks: string;
+  staff: string;
+}
+
+interface DentalPatientState {
+  id: string;
+  firstName: string;
+  lastName: string;
+  middleInitial: string;
+  dob: string;
+  sex: string;
+  address: string;
+  courseYear: string;
+  contact: string;
+  history: {
+    Diabetes: boolean;
+    'Heart Disease': boolean;
+    Allergies: boolean;
+    Hygiene: boolean;
+  };
+  chartData: Record<number, string>;
+  treatmentEntries: TreatmentEntry[];
+  prescription: string;
+  clearance: {
+    treatment: string;
+    reason: string;
+  };
+  resolvedAge?: number | null;
+}
+
 function toDisplayYearLevel(value?: 'YR_1' | 'YR_2' | 'YR_3' | 'YR_4' | null) {
   if (!value) return '';
   return value.replace('YR_', 'Yr. ');
@@ -102,7 +136,7 @@ const DentalRecordPage = () => {
   const [error, setError] = useState('');
 
   // MOCK DATA
-  const [patient, setPatient] = useState({
+  const [patient, setPatient] = useState<DentalPatientState>({
     id: studentNumber,
     firstName: 'Francis Emil',
     lastName: 'Rosete',
@@ -118,7 +152,7 @@ const DentalRecordPage = () => {
       Allergies: true,
       Hygiene: true,
     },
-    chartData: {} as any,
+    chartData: {},
     treatmentEntries: [],
     prescription: '',
     clearance: {

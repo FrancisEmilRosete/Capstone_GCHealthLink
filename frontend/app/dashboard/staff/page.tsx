@@ -98,7 +98,7 @@ function EmptyQueueState() {
   );
 }
 
-const SERVICE_OPTIONS = ['Medical Consultation', 'Dental Check-up', 'Medical Clearance'] as const;
+const SERVICE_OPTIONS = ['Medical Consultation', 'Medical Clearance'] as const;
 const FILTER_OPTIONS = ['All', ...SERVICE_OPTIONS] as const;
 type ServiceFilter = (typeof FILTER_OPTIONS)[number];
 

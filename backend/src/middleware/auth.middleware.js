@@ -48,6 +48,10 @@ const protect = (req, res, next) => {
     req.user = {
       userId: decoded.userId,
       role: decoded.role,
+      clinicStaffType:
+        typeof decoded.clinicStaffType === "string" && decoded.clinicStaffType.trim()
+          ? decoded.clinicStaffType.trim().toUpperCase()
+          : null,
     };
 
     return next();

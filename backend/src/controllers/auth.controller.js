@@ -204,7 +204,7 @@ const login = async (req, res, next) => {
     }
 
     const token = generateAccessToken(
-      { userId: user.id, role: user.role },
+      { userId: user.id, role: user.role, clinicStaffType: resolvedStaffType ?? null },
       { expiresIn: "12h" }
     );
 

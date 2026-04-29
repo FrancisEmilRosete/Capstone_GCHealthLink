@@ -9,6 +9,18 @@ const SERVICE_TYPE_OPTIONS = [
   "Medical Clearance",
 ];
 
+function resolveAllowedServiceTypes(req) {
+  const clinicStaffType = typeof req.user?.clinicStaffType === "string"
+    ? req.user.clinicStaffType.trim().toUpperCase()
+    : "";
+
+  if (clinicStaffType === "DENTIST" || clinicStaffType === "DENTAL") {
+    return ["Dental Check-up"];
+  }
+
+  return ["Medical Consultation", "Medical Clearance"];
+}
+
 function parseValidDate(value) {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = new Date(value);
@@ -146,6 +158,7 @@ const getLiveQueue = async (req, res, next) => {
     });
     const rawServiceType = typeof req.query?.serviceType === "string" ? req.query.serviceType.trim() : "";
     const normalizedServiceType = normalizeServiceType(rawServiceType);
+    const allowedServiceTypes = resolveAllowedServiceTypes(req);
 
     if (rawServiceType && !normalizedServiceType) {
       return res.status(400).json({
@@ -154,20 +167,21 @@ const getLiveQueue = async (req, res, next) => {
       });
     }
 
+    if (normalizedServiceType && !allowedServiceTypes.includes(normalizedServiceType)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to view that service queue.",
+      });
+    }
+
     const whereClause = {
       status: "WAITING",
       preferredDate: { gte: startOfDay },
+      serviceType: { in: allowedServiceTypes },
     };
 
     if (normalizedServiceType) {
-      whereClause.AND = [
-        {
-          OR: [
-            { serviceType: normalizedServiceType },
-            { symptoms: { startsWith: `[${normalizedServiceType}]`, mode: "insensitive" } },
-          ],
-        },
-      ];
+      whereClause.serviceType = normalizedServiceType;
     }
 
     const [queue, total] = await prisma.$transaction([
@@ -242,6 +256,24 @@ const updateAppointmentStatus = async (req, res, next) => {
       });
     }
 
+    const allowedServiceTypes = resolveAllowedServiceTypes(req);
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: { id: true, serviceType: true },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ success: false, message: "Appointment not found." });
+    }
+
+    const normalizedAppointmentServiceType = normalizeServiceType(appointment.serviceType) || "Medical Consultation";
+    if (!allowedServiceTypes.includes(normalizedAppointmentServiceType)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update this service queue item.",
+      });
+    }
+
     const updated = await prisma.appointment.update({
       where: { id: appointmentId },
       data: { status },
@@ -253,9 +285,6 @@ const updateAppointmentStatus = async (req, res, next) => {
       data: updated,
     });
   } catch (error) {
-    if (error.code === "P2025") {
-      return res.status(404).json({ success: false, message: "Appointment not found." });
-    }
     next(error);
   }
 };
