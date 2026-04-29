@@ -9,7 +9,7 @@ import { getToken } from '@/lib/auth';
 import PhysicalExamModal, { type PhysicalExamRecordFormData } from '@/components/modals/PhysicalExamModal';
 import ConsultationModal, { type InventoryOption } from '@/components/modals/ConsultationModal';
 
-const QrCameraScanner = dynamic(() => import('@/components/scanner/QrCameraScanner'), {
+const QrScannerInput = dynamic(() => import('@/components/scanner/QrCameraScanner'), {
   ssr: false,
 });
 
@@ -801,8 +801,8 @@ export default function ScannerPage() {
       </div>
 
       <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">QR Code Scanner</h1>
-        <p className="text-sm text-gray-500 mt-1">Scan a student QR code or search by student number.</p>
+        <h1 className="text-2xl font-bold text-gray-900">QR Scanner</h1>
+        <p className="text-sm text-gray-500 mt-1">Use the connected QR scanner or search by student number.</p>
       </div>
 
       {error && (
@@ -898,7 +898,7 @@ export default function ScannerPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 max-w-lg mx-auto w-full">
           <div className="mb-5">
             {cameraActive ? (
-              <QrCameraScanner active={true} onScan={(value) => { void handleQrScan(value); }} />
+              <QrScannerInput active={true} onScan={(value) => { void handleQrScan(value); }} />
             ) : (
               <div className="max-w-sm mx-auto">
                 <button
@@ -910,7 +910,7 @@ export default function ScannerPage() {
                   }}
                   className="w-full flex flex-col items-center justify-center aspect-square bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 hover:text-teal-500 hover:border-teal-300 transition-colors"
                 >
-                  <span className="text-sm font-medium">Tap to scan again</span>
+                  <span className="text-sm font-medium">Tap to enable scanner again</span>
                 </button>
               </div>
             )}
@@ -918,8 +918,8 @@ export default function ScannerPage() {
 
           <p className="text-center text-sm text-gray-500 mb-6">
             {cameraActive
-              ? 'Hold the QR code steady within the camera frame'
-              : 'Camera paused. Restart scan above or search manually below.'}
+              ? 'Scan a QR code with the connected scanner device'
+              : 'Scanner paused. Restart scanning above or search manually below.'}
           </p>
 
           <div className="flex items-center gap-3 mb-5">

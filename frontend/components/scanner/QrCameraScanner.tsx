@@ -1,125 +1,90 @@
 /**
- * QR CAMERA SCANNER COMPONENT
- * ──────────────────────────────────────────────────────────────
- * Wraps the `html5-qrcode` library in a React component.
- * Renders a live camera viewfinder that automatically decodes
- * QR codes and calls `onScan` with the decoded text.
- *
- * Must be a 'use client' component — html5-qrcode is browser-only.
- * Import it with dynamic({ ssr: false }) in the parent page.
+ * QR HID SCANNER INPUT COMPONENT
+ * -----------------------------------------------------------------
+ * Captures keyboard-wedge scanner input from a connected QR scanner
+ * (USB/Bluetooth HID mode). Most scanners type the QR payload then
+ * send Enter/Tab as a suffix.
  *
  * Props:
- *   onScan   → called with the decoded QR string on success
- *   onError  → optional: called with error messages (non-fatal)
- *   active   → set to false to stop the camera (default: true)
+ *   onScan  -> called with the scanned QR string on submit
+ *   active  -> set to false to pause listening (default: true)
  */
 
 'use client';
 
-import { useEffect, useId, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
-interface QrCameraScannerProps {
+interface QrHidScannerProps {
   onScan:   (text: string) => void;
-  onError?: (err: string) => void;
   active?:  boolean;
 }
 
-// Unique DOM id for the html5-qrcode mount point
-const SCANNER_ELEMENT_ID = 'gc-qr-scanner';
-
-export default function QrCameraScanner({
+export default function QrHidScanner({
   onScan,
-  onError,
   active = true,
-}: QrCameraScannerProps) {
-  const instanceId = useId();
-  const scannerElementId = `${SCANNER_ELEMENT_ID}-${instanceId}`;
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const isRunning  = useRef(false);
+}: QrHidScannerProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [scanValue, setScanValue] = useState('');
 
   useEffect(() => {
-    if (!active) {
-      void stopScanner();
+    if (!active || !inputRef.current) {
       return;
     }
 
-    // Small delay so the DOM element is mounted before we attach
-    const timer = setTimeout(() => startScanner(), 100);
-    return () => {
-      clearTimeout(timer);
-      void stopScanner();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    inputRef.current.focus();
   }, [active]);
 
-  async function startScanner() {
-    if (isRunning.current || scannerRef.current) return;
-
-    try {
-      const scanner = new Html5Qrcode(scannerElementId);
-      scannerRef.current = scanner;
-
-      await scanner.start(
-        { facingMode: 'environment' }, // rear camera on mobile
-        {
-          fps: 10,
-          qrbox: { width: 220, height: 220 },
-          aspectRatio: 1,
-        },
-        (decodedText) => {
-          // QR code successfully decoded — stop camera and notify parent
-          stopScanner();
-          onScan(decodedText);
-        },
-        (errorMsg) => {
-          // Non-fatal scan errors (no QR in frame) — suppress noisy logs
-          if (onError && !errorMsg.includes('No MultiFormat Readers')) {
-            onError(errorMsg);
-          }
-        },
-      );
-      isRunning.current = true;
-    } catch (err) {
-      // Camera permission denied or not available
-      if (onError) onError(String(err));
-    }
+  function submitScan(rawValue: string) {
+    const value = rawValue.trim();
+    if (!value || !active) return;
+    setScanValue('');
+    onScan(value);
   }
 
-  async function stopScanner() {
-    if (scannerRef.current) {
-      try {
-        if (isRunning.current) {
-          await scannerRef.current.stop();
-        }
-        scannerRef.current.clear();
-      } catch {
-        // ignore stop errors
-      }
-      isRunning.current = false;
-      scannerRef.current = null;
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      submitScan(scanValue);
     }
   }
 
   return (
-    <div className="relative w-full max-w-sm mx-auto">
-      {/* html5-qrcode mounts the <video> element inside this div */}
+    <div
+      className="relative w-full max-w-sm mx-auto"
+      onClick={() => {
+        if (active) inputRef.current?.focus();
+      }}
+    >
       <div
-        id={scannerElementId}
-        className="w-full aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-100"
+        className="w-full aspect-square rounded-xl overflow-hidden bg-gradient-to-br from-teal-50 via-white to-cyan-50 border border-teal-100"
       />
 
-      {/* Teal corner-bracket overlay on top of the live video */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative w-52 h-52">
           <span className="absolute top-0 left-0  w-9 h-9 border-t-[3px] border-l-[3px] border-teal-400 rounded-tl-xl" />
           <span className="absolute top-0 right-0 w-9 h-9 border-t-[3px] border-r-[3px] border-teal-400 rounded-tr-xl" />
           <span className="absolute bottom-0 left-0  w-9 h-9 border-b-[3px] border-l-[3px] border-teal-400 rounded-bl-xl" />
           <span className="absolute bottom-0 right-0 w-9 h-9 border-b-[3px] border-r-[3px] border-teal-400 rounded-br-xl" />
-          {/* Animated scan line */}
-          <span className="absolute left-4 right-4 h-[2px] bg-gradient-to-r from-transparent via-teal-400 to-transparent animate-scan" />
+
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="rounded-full bg-white/90 px-4 py-2 shadow-sm border border-teal-100 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-600">Scanner Ready</p>
+              <p className="text-[11px] text-gray-500 mt-1">Scan using connected QR scanner</p>
+            </div>
+          </div>
         </div>
       </div>
+
+      <input
+        ref={inputRef}
+        value={scanValue}
+        onChange={(event) => setScanValue(event.target.value)}
+        onKeyDown={handleKeyDown}
+        autoFocus
+        disabled={!active}
+        className="absolute inset-0 opacity-0"
+        aria-label="QR scanner input"
+      />
     </div>
   );
 }
