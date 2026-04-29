@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { History } from 'lucide-react';
+import RecordHistoryModal from './RecordHistoryModal';
 
 interface MedicalHistoryFormProps {
   data: {
@@ -11,6 +13,23 @@ interface MedicalHistoryFormProps {
 }
 
 const MedicalHistoryForm: React.FC<MedicalHistoryFormProps> = ({ data, onChange }) => {
+  const [showHistory, setShowHistory] = useState(false);
+
+  const mockHistory = [
+    {
+      timestamp: new Date().toISOString(),
+      staffName: 'Dr. Smith',
+      changes: ['Past medical history updated', 'Allergies recorded'],
+      version: 2,
+    },
+    {
+      timestamp: new Date(Date.now() - 86400000).toISOString(),
+      staffName: 'Dr. Johnson',
+      changes: ['Initial history intake completed'],
+      version: 1,
+    },
+  ];
+
   const sections = [
     { id: 'pastMedicalHistory', label: 'SECTION A: PAST MEDICAL HISTORY', placeholder: 'Enter past medical conditions, surgeries, hospitalizations...' },
     { id: 'reviewOfSystem', label: 'SECTION B: REVIEW OF SYSTEM', placeholder: 'General, Head, Eyes, Ears, Nose, Throat, Cardiovascular...' },
@@ -20,7 +39,21 @@ const MedicalHistoryForm: React.FC<MedicalHistoryFormProps> = ({ data, onChange 
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-slate-800 border-b pb-2">Medical History</h2>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800 border-b pb-2">Medical History</h2>
+          {/* PHASE 5: Last Updated Indicator */}
+          <div className="text-xs text-slate-400 italic mt-2">
+            Last Updated: {new Date().toLocaleDateString()} by Current Staff
+          </div>
+        </div>
+        <button
+          onClick={() => setShowHistory(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+        >
+          <History size={16} /> History
+        </button>
+      </div>
       <div className="grid grid-cols-1 gap-6">
         {sections.map((section) => (
           <div key={section.id} className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm hover:border-blue-200 transition-colors">
@@ -49,6 +82,13 @@ const MedicalHistoryForm: React.FC<MedicalHistoryFormProps> = ({ data, onChange 
           </div>
         ))}
       </div>
+
+      <RecordHistoryModal
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+        sectionName="Medical History"
+        history={mockHistory}
+      />
     </div>
   );
 };

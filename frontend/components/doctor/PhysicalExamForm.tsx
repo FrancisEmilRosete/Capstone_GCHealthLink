@@ -42,7 +42,13 @@ const PhysicalExamForm: React.FC<PhysicalExamFormProps> = ({ data, onChange }) =
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-slate-800 border-b pb-2">Physical Examination</h2>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-800 border-b pb-2">Physical Examination</h2>
+        {/* PHASE 5: Last Updated Indicator */}
+        <div className="text-xs text-slate-400 italic mt-2">
+          Last Updated: {new Date().toLocaleDateString()} by Current Staff
+        </div>
+      </div>
       
       <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   User, Activity, FileText, Pill, Clock, 
-  ChevronLeft, Printer, Save, Plus, ShieldAlert
+  ChevronLeft, Printer, Save, Plus, ShieldAlert, Stethoscope, Heart, Smile
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -17,7 +17,9 @@ import DiagnosticsSection from '@/components/doctor/DiagnosticsSection';
 import SystemSpecificNotes from '@/components/doctor/SystemSpecificNotes';
 import HistoryTable from '@/components/doctor/HistoryTable';
 import PrescriptionPad from '@/components/doctor/PrescriptionPad';
-import ActionBar from '@/components/doctor/ActionBar';
+import MedicalConsultation from '@/components/doctor/MedicalConsultation';
+import SaveConfirmationModal from '@/components/doctor/SaveConfirmationModal';
+import RecordHistoryModal from '@/components/doctor/RecordHistoryModal';
 
 interface ScanProfile {
   id: string;
@@ -45,7 +47,8 @@ export default function DoctorRecordPage() {
   const [error, setError] = useState('');
   const [record, setRecord] = useState<ScanProfile | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'exams' | 'rx'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'laboratory-results' | 'clinical-history' | 'dental-records' | 'medical-consultation' | 'prescriptions'>('overview');
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
   // Form State
   const [medicalHistory, setMedicalHistory] = useState({
@@ -71,6 +74,12 @@ export default function DoctorRecordPage() {
 
   const [medicines, setMedicines] = useState<any[]>([]);
   const [historyRecords, setHistoryRecords] = useState<any[]>([]);
+  const [medicalConsultation, setMedicalConsultation] = useState({
+    findings: '',
+    diagnosis: '',
+    followUpDate: '',
+    noFollowUp: false,
+  });
 
   const handlePhysicalExamChange = useCallback((field: string, value: string | boolean) => {
     setPhysicalExam((prev) => ({ ...prev, [field]: value }));
@@ -156,9 +165,11 @@ export default function DoctorRecordPage() {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <User size={18} /> },
-    { id: 'history', label: 'Clinical History', icon: <FileText size={18} /> },
-    { id: 'exams', label: 'Physical Exams', icon: <Activity size={18} /> },
-    { id: 'rx', label: 'Prescriptions', icon: <Pill size={18} /> },
+    { id: 'laboratory-results', label: 'Laboratory Results', icon: <Activity size={18} /> },
+    { id: 'clinical-history', label: 'Clinical History', icon: <FileText size={18} /> },
+    { id: 'dental-records', label: 'Dental Records', icon: <Smile size={18} /> },
+    { id: 'medical-consultation', label: 'Medical Consultation', icon: <Stethoscope size={18} /> },
+    { id: 'prescriptions', label: 'Prescriptions', icon: <Pill size={18} /> },
   ];
 
   if (loading) return (
@@ -174,9 +185,9 @@ export default function DoctorRecordPage() {
 
   return (
     <div className="bg-slate-50 min-h-screen pb-32 print:bg-white print:pb-0">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-sm px-6 py-4 print:static print:shadow-none print:bg-white">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+      {/* NEW: Patient Info Card - STICKY AT TOP */}
+      <div className="sticky top-0 z-50 bg-white border-b border-slate-100 shadow-sm px-6 py-6 print:static print:shadow-none">
+        <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => router.push('/dashboard/doctor/records')}
@@ -184,81 +195,92 @@ export default function DoctorRecordPage() {
             >
               <ChevronLeft size={20} />
             </button>
-            <div className="h-10 w-px bg-slate-100 mx-2" />
-            <div>
-              <h1 className="text-xl font-bold text-slate-800">
-                {record.lastName}, {record.firstName}
-              </h1>
-              <div className="flex items-center gap-3 mt-0.5">
-                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                  Student Record
-                </span>
-                <span className="text-xs font-bold text-slate-400">{record.age}Y • {record.sex}</span>
-              </div>
+            <div className="flex-1">
+              <PatientHeader 
+                patient={{
+                  firstName: record.firstName, middleName: '', lastName: record.lastName,
+                  age: record.age || 0, sex: record.sex || 'N/A',
+                  dob: record.birthday ? new Date(record.birthday).toLocaleDateString() : 'N/A',
+                  address: record.presentAddress || 'N/A',
+                  contactNumber: record.telNumber || 'N/A',
+                  department: record.courseDept, status: 'Student'
+                }} 
+              />
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="flex gap-2 print:hidden">
-            <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all">
-              <Printer size={16} /> Print
-            </button>
+      {/* PHASE 1.4: Action Buttons - Save on left, Print on right */}
+      <div className="sticky top-[140px] z-40 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-6 py-3 print:hidden">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div />
+          <div className="flex gap-2">
             <button 
-              onClick={() => setIsSaving(true)}
+              onClick={() => setShowSaveConfirmation(true)}
               className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all"
             >
               <Save size={16} /> {isSaving ? 'Saving...' : 'Save Record'}
+            </button>
+            <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all">
+              <Printer size={16} /> Print
             </button>
           </div>
         </div>
       </div>
 
-      <main className="max-w-6xl mx-auto px-6 mt-8 space-y-8 animate-in fade-in duration-500 print:px-0 print:mt-4">
-        {/* Navigation Tabs */}
-        <div className="flex gap-1 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm w-fit print:hidden">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
-                activeTab === tab.id
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-100'
-                  : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
+      {/* Navigation Tabs */}
+      <div className="sticky top-[220px] z-40 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-6 py-4 print:hidden">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex gap-1 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm w-full overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-100'
+                    : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
+      </div>
 
+      <main className="max-w-6xl mx-auto px-6 mt-8 space-y-8 animate-in fade-in duration-500 print:px-0 print:mt-4">
         {/* Tab Content */}
         <div className="min-h-[60vh] pb-20">
+          {/* OVERVIEW TAB - PHASE 3.1: Vitals at top, then System-Specific Notes with Allergies moved to right */}
           {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-8">
-                <PatientHeader 
-                  patient={{
-                    firstName: record.firstName, middleName: '', lastName: record.lastName,
-                    age: record.age || 0, sex: record.sex || 'N/A',
-                    dob: record.birthday ? new Date(record.birthday).toLocaleDateString() : 'N/A',
-                    address: record.presentAddress || 'N/A',
-                    contactNumber: record.telNumber || 'N/A',
-                    department: record.courseDept, status: 'Student'
-                  }} 
-                />
-                <SystemSpecificNotes 
-                  data={systemNotes} 
-                  onChange={(f, v) => setSystemNotes(prev => ({ ...prev, [f]: v }))} 
-                />
-              </div>
-              <div className="space-y-8">
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <ShieldAlert size={18} className="text-rose-500" /> Critical Info
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                      <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Allergies</p>
-                      <p className="text-sm font-bold text-rose-700">{medicalHistory.allergies || 'No known allergies'}</p>
+            <div className="space-y-8">
+              {/* PHASE 3.1: Physical Exam Summary at top */}
+              <PhysicalExamForm 
+                data={physicalExam} 
+                onChange={handlePhysicalExamChange} 
+              />
+              
+              {/* PHASE 3.2 & 3.3: System-Specific Notes with upload button, Allergies on right */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2">
+                  <SystemSpecificNotes 
+                    data={systemNotes} 
+                    onChange={(f, v) => setSystemNotes(prev => ({ ...prev, [f]: v }))} 
+                  />
+                </div>
+                <div className="pt-[83px]">
+                  {/* PHASE 3.2: Critical Info moved from header to right side */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      <ShieldAlert size={18} className="text-rose-500" /> Critical Info
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
+                        <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Allergies</p>
+                        <p className="text-sm font-bold text-rose-700">{medicalHistory.allergies || 'No known allergies'}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -266,7 +288,18 @@ export default function DoctorRecordPage() {
             </div>
           )}
 
-          {activeTab === 'history' && (
+           {/* LABORATORY RESULTS TAB (renamed from Physical Examination) */}
+          {activeTab === 'laboratory-results' && (
+            <div className="space-y-12">
+              <DiagnosticsSection 
+                data={diagnostics} 
+                onChange={handleDiagnosticsChange} 
+              />
+            </div>
+          )}
+
+           {/* CLINICAL HISTORY TAB */}
+          {activeTab === 'clinical-history' && (
             <div className="space-y-12">
               <MedicalHistoryForm 
                 data={medicalHistory} 
@@ -281,20 +314,25 @@ export default function DoctorRecordPage() {
             </div>
           )}
 
-            {activeTab === 'exams' && (
-              <div className="space-y-12">
-                <PhysicalExamForm 
-                  data={physicalExam} 
-                  onChange={handlePhysicalExamChange} 
-                />
-                <DiagnosticsSection 
-                  data={diagnostics} 
-                  onChange={handleDiagnosticsChange} 
-                />
-              </div>
-            )}
+          {/* DENTAL RECORDS TAB - Coming Soon */}
+          {activeTab === 'dental-records' && (
+            <div className="bg-white p-12 rounded-2xl border border-slate-100 text-center">
+              <Smile size={48} className="mx-auto text-slate-300 mb-4" />
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Dental Records</h3>
+              <p className="text-slate-500">Dental records module coming soon</p>
+            </div>
+          )}
 
-          {activeTab === 'rx' && (
+           {/* MEDICAL CONSULTATION TAB */}
+          {activeTab === 'medical-consultation' && (
+            <MedicalConsultation 
+              data={medicalConsultation}
+              onChange={(f, v) => setMedicalConsultation(prev => ({ ...prev, [f]: v }))}
+            />
+          )}
+
+          {/* PRESCRIPTIONS TAB */}
+          {activeTab === 'prescriptions' && (
             <div className="max-w-4xl mx-auto">
               <PrescriptionPad 
                 patient={{
@@ -315,12 +353,18 @@ export default function DoctorRecordPage() {
         </div>
       </main>
 
-      <ActionBar 
-        onSave={() => setIsSaving(true)}
-        onUpdate={() => {}}
-        onPrint={() => window.print()}
-        onClear={() => window.location.reload()}
-        isSaving={isSaving}
+      <SaveConfirmationModal 
+        isOpen={showSaveConfirmation}
+        onConfirm={() => {
+          setIsSaving(true);
+          setTimeout(() => {
+            setIsSaving(false);
+            setShowSaveConfirmation(false);
+            alert('Record saved successfully!');
+          }, 1500);
+        }}
+        onCancel={() => setShowSaveConfirmation(false)}
+        isLoading={isSaving}
       />
     </div>
   );

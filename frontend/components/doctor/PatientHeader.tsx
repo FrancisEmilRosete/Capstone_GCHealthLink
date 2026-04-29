@@ -18,7 +18,7 @@ interface PatientHeaderProps {
 
 const PatientHeader: React.FC<PatientHeaderProps> = ({ patient }) => {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 mb-6">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100">
@@ -26,12 +26,9 @@ const PatientHeader: React.FC<PatientHeaderProps> = ({ patient }) => {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-800">
-              {patient.lastName}, {patient.firstName} {patient.middleName}
+              {patient.lastName}, {patient.firstName}
             </h1>
             <div className="flex flex-wrap gap-3 mt-2">
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full uppercase">
-                {patient.status}
-              </span>
               <span className="flex items-center gap-1 text-slate-500 text-sm">
                 <Calendar size={14} /> {patient.age} years old • {patient.sex} • {patient.dob}
               </span>

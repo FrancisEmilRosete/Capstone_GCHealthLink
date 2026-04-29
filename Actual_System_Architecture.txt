@@ -1,0 +1,162 @@
+GC HealthLink - Actual System Architecture & AI Logic
+=====================================================
+
+Based on the actual code implemented in the workspace (specifically the frontend/backend directories and ai-service-python/main.py), the system utilizes a modern microservices architecture and focuses on epidemiological forecasting and resource management.
+
+1. Actual System Architecture (Microservices)
+---------------------------------------------
+The system is built on a decoupled, three-tier microservice architecture:
+
+* Frontend (User Interface): Built with Next.js 15 (React) using Tailwind CSS for styling. It handles the dashboards for the medical and dental sides.
+* Core Backend (Data API): Built with Node.js and uses Prisma ORM to connect to the primary database. This handles user authentication, patient records, and standard CRUD operations.
+* AI Microservice: A standalone Python application built with FastAPI. It exposes predictive endpoints and communicates with the main Node.js backend. It uses pandas for data manipulation and scikit-learn for machine learning.
+
+
+2. Actual AI Logic & Predictive Analytics
+-----------------------------------------
+The AI service handles two specific predictive domains. It currently focuses on Epidemiological Forecasting and Resource Management:
+
+A. Outbreak Forecasting Model (/predict/outbreak)
+This logic predicts future spikes in specific illnesses (e.g., flu, dengue) among the student population.
+* Algorithm Used: Linear Regression via scikit-learn.
+* How it Works: 
+  1. Data Aggregation: The API receives historical health records (dates, illness categories, and case counts). It uses pandas to floor the dates to the start of the month and aggregates total cases per month for each illness.
+  2. Time-Series Modeling: It extracts the month index as the "time feature" and the case counts as the target variable.
+  3. Prediction: It fits a stable linear trend model to the historical data. It then predicts the exact number of cases for N months into the future. If an illness is trending upwards, the system will forecast higher numbers for upcoming months, alerting the clinic to prepare for an outbreak.
+
+B. Resource Depletion & Inventory Prediction (/predict/resources)
+This logic prevents the clinic from running out of critical supplies (e.g., Paracetamol, Amalgam capsules) using deterministic algorithmic prediction rather than ML.
+* Algorithm Used: Rate-of-Consumption Mathematical Modeling.
+* How it Works:
+  1. Burn Rate Calculation: It takes the current_stock and the daily_usage_rate of an item and calculates exactly how many days are left until total depletion.
+  2. Predictive Timeline: It calculates a concrete predicted_depletion_date (e.g., "Will run out on May 12th").
+  3. Automated Risk Categorization: It classifies inventory into statuses:
+     - Critical: <= 7 days of stock remaining.
+     - Warning: Stock will run out within the user-defined horizon (e.g., 30 days).
+     - Stable: Healthy stock levels.
+  4. Smart Restock Recommendation: It automatically calculates a recommended_restock_qty targeting a 60-day buffer to ensure the clinic buys exactly what it needs without overstocking.
+
+
+3. Patient Record Interface & Data Hierarchy (UI/UX Restructuring - Phase 2026-04-29 / Phase 2026-04-30)
+------------------------------------------------------------------------------------------------------
+
+A. Global Layout & Persistence Logic
+* Header Hierarchy Reorganization:
+  - Level 1 (Top, Sticky): Patient Information Card (Name, Age, DOB, Department, Contact, Address)
+    ∘ Remains anchored at top of page, always visible across all tabs for context preservation
+  - Level 2 (Below Patient Info): Action Button Bar (Save Record left-aligned, Print right-aligned)
+  - Level 3 (Below Actions): Navigation Tab Bar with enhanced tab sequence
+
+* Sub-Header Refinement:
+  - Removed redundant patient name and "Student Record" label from sub-header
+  - Patient info displayed once in top card to avoid duplication
+  - Buttons repositioned: Save Record on left, Print on right
+
+B. Navigation & Tab Architecture (Revised - Phase 2)
+Final tab sequence reflecting specialized clinical workflow:
+  1. Overview          - Vitals summary at top, system-specific notes (2-col), critical info sidebar
+  2. Laboratory Results - (renamed from "Physical Examination") Structured CBC, U/A, Chest X-Ray cards
+  3. Clinical History  - Medical history form + family/medical history records table
+  4. Dental Records    - Placeholder tab for future dental staff workflows
+  5. Medical Consultation - NEW: Findings, Diagnosis Assessment, Follow-Up date picker with toggle
+  6. Prescriptions     - Prescription pad with medicine management
+
+Tab navigation is sticky for consistent access while scrolling through clinical data.
+
+C. Data Component Migration & Layout Refactoring
+* Overview Tab:
+  - Physical Examination vitals summary at very top (BP, PR, RR, Temp, Height, Weight, BMI)
+  - System-Specific Notes in main content area (2-column grid)
+  - Critical Info (Allergies) card + "+ Upload Lab Results" button on right sidebar
+  - Top/bottom margins of Critical Info card align with System-Specific Notes grid
+
+* System-Specific Notes Enhancements:
+  - File upload button far right of section header for direct attachment
+  - History button to open chronological update history modal
+  - HEENT, Chest/Lungs, Abdomen, Extremities, Others sections
+  - "Last Updated: MM/DD/YYYY by Staff" audit label below section title
+
+* Clinical History Tab:
+  - "Family / Medical History Records" header with "Last Added Entry: MM/DD/YYYY" sub-label
+  - Entry timestamp updates whenever a new row is added to the history table
+
+D. Laboratory Results Tab (Remodeled - Phase 2)
+* Replaced generic "Physical Examination" card in this tab view
+* Structured Data Cards:
+  - CBC (Complete Blood Count): Date, Hgb, Hct, WBC, Plt.Ct., Blood Type, + Upload Scan
+  - U/A (Urinalysis): Date, Glucose/Sugar, Protein, + Upload Lab Result
+  - Chest X-Ray: Date, Result dropdown, Findings textarea, + Upload Scan
+  - Others: Free-text for ECG, Ultrasound, specialized tests
+* History button on section header opens audit history modal
+* All design matches system language: border-slate-200, blue accents, clean typography
+
+E. Medical Consultation Tab (NEW - Phase 2)
+* Dedicated tab for clinical consultation documentation:
+  - Findings card: Large textarea for clinical observations
+  - Diagnosis Assessment card: Large textarea for professional evaluation
+  - Follow-Up Date card:
+    ∘ "No Follow-Up Required" toggle checkbox
+    ∘ When toggle OFF: Date picker is shown and required
+    ∘ When toggle ON: Date picker is hidden/disabled
+  - History button opens chronological version history modal
+  - "Last Updated: MM/DD/YYYY by Staff" audit label
+
+F. Audit & Metadata Integration (Phase 1 + Phase 2)
+* Last Updated Indicators on all major section headers:
+  - Format: "Last Updated: [MM/DD/YYYY] by Current Staff"
+  - Display style: Subtle gray italic text below section titles
+  - Applied to: System-Specific Notes, Medical History, Physical Examination, Diagnostic & Lab Section, Medical Consultation
+* History Modals (Phase 2 addition):
+  - System-Specific Notes: History button → RecordHistoryModal
+  - Diagnostic & Lab Section: History button → RecordHistoryModal
+  - Medical History: History button → RecordHistoryModal
+  - Medical Consultation: History button → RecordHistoryModal
+  - Modal shows chronological list of versioned entries (version number, timestamp, staff name, list of changes)
+
+G. Save Logic & Data Integrity (NEW - Phase 2)
+* "Save Record" triggers SaveConfirmationModal before persisting:
+  - Modal text: "Are you sure you want to save these changes?"
+  - Buttons: "Confirm" (blue) and "Cancel" (slate)
+  - Loading spinner shown during save operation
+* Smart data retention: only modified fields update; unchanged fields are not overwritten with nulls
+* All save events timestamped for audit purposes
+
+H. Component Architecture Updates
+* Modified Components:
+  - /frontend/app/dashboard/doctor/records/[studentId]/page.tsx
+    ∘ Tab type updated: 'laboratory-results' replaces 'physical-exam'
+    ∘ New state: medicalConsultation, showSaveConfirmation, familyMedicalHistoryLastAdded
+    ∘ New imports: MedicalConsultation, SaveConfirmationModal, RecordHistoryModal
+    ∘ Laboratory Results tab shows DiagnosticsSection only (no PhysicalExamForm)
+    ∘ Clinical History tab includes "Last Added Entry" tracking
+    ∘ Critical Info card gains "+ Upload Lab Results" button
+  - /frontend/components/doctor/SystemSpecificNotes.tsx
+    ∘ Added History button + RecordHistoryModal integration
+    ∘ Restructured header row (title+metadata left, buttons right)
+  - /frontend/components/doctor/DiagnosticsSection.tsx
+    ∘ Added History button + RecordHistoryModal integration
+    ∘ History state (showHistory) and mockHistory data added
+  - /frontend/components/doctor/MedicalHistoryForm.tsx
+    ∘ Added History button + RecordHistoryModal integration
+
+* New Components Created (Phase 2):
+  - /frontend/components/doctor/MedicalConsultation.tsx
+    ∘ Findings, Diagnosis Assessment, Follow-Up date with toggle logic
+    ∘ History modal integration
+  - /frontend/components/doctor/RecordHistoryModal.tsx
+    ∘ Reusable modal for section update history
+    ∘ Props: isOpen, onClose, sectionName, history (HistoryEntry[])
+    ∘ Chronological display with version numbers, timestamps, staff names
+  - /frontend/components/doctor/SaveConfirmationModal.tsx
+    ∘ Confirmation dialog before saving changes
+    ∘ Supports isLoading state with animated spinner
+
+This restructuring prioritizes:
+1. Data hierarchy clarity through spatial organization (sticky 3-tier header)
+2. Navigation persistence via sticky patient info card
+3. Specialized tabs for domain-specific clinical workflows
+4. Audit trail visibility through metadata timestamps + history modals
+5. Structured data entry for consistency (CBC, U/A, Chest X-Ray)
+6. Accessibility of critical information (allergies) in sidebar
+7. Safe save operations via confirmation flow and smart null-protection
+8. Consistent design language throughout all updates (no color palette changes)
