@@ -602,10 +602,20 @@ const getStudentByNumber = async (req, res, next) => {
     const profile = await prisma.studentProfile.findUnique({
       where: { studentNumber },
       select: {
+        id: true,
         studentNumber: true,
         firstName: true,
         lastName: true,
+        mi: true,
         courseDept: true,
+        course: true,
+        yearLevel: true,
+        age: true,
+        sex: true,
+        birthday: true,
+        presentAddress: true,
+        telNumber: true,
+        medicalHistory: true,
         clinicVisits: {
           orderBy: { visitDate: 'desc' },
           select: {
@@ -647,7 +657,13 @@ const getStudentByNumber = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Student not found.' });
     }
 
-    return res.json({ success: true, data: profile });
+    return res.json({
+      success: true,
+      data: {
+        ...profile,
+        medicalHistory: decryptMedicalHistory(profile.medicalHistory),
+      },
+    });
   } catch (error) {
     next(error);
   }

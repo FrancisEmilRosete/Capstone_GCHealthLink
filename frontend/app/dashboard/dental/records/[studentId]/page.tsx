@@ -6,6 +6,8 @@ import {
   User, Clipboard, Activity, Pill, FileCheck, 
   ChevronLeft, Printer, Save, Download 
 } from 'lucide-react';
+import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
 import DentalPatientProfile from '@/components/dental/DentalPatientProfile';
 import DentalCharting from '@/components/dental/DentalCharting';
@@ -13,15 +15,95 @@ import DentalTreatmentLog from '@/components/dental/DentalTreatmentLog';
 import DentalPrescription from '@/components/dental/DentalPrescription';
 import DentalClearance from '@/components/dental/DentalClearance';
 
+interface StudentByNumberResponse {
+  success: boolean;
+  data: {
+    id: string;
+    studentNumber: string;
+    firstName: string;
+    lastName: string;
+    mi?: string | null;
+    courseDept?: string | null;
+    course?: string | null;
+    yearLevel?: 'YR_1' | 'YR_2' | 'YR_3' | 'YR_4' | null;
+    age?: number | null;
+    sex?: string | null;
+    birthday?: string | null;
+    presentAddress?: string | null;
+    telNumber?: string | null;
+    medicalHistory?: {
+      allergyEnc?: string | null;
+      diabetesEnc?: string | null;
+      heartDisorderEnc?: string | null;
+      hypertensionEnc?: string | null;
+    } | null;
+    clinicVisits?: Array<{
+      id: string;
+      visitDate?: string | null;
+      concernTag?: string | null;
+      chiefComplaintEnc?: string | null;
+    }>;
+    appointments?: Array<{
+      id: string;
+      preferredDate?: string | null;
+      serviceType?: string | null;
+      symptoms?: string | null;
+      status?: string | null;
+    }>;
+  };
+}
+
+function toDisplayYearLevel(value?: 'YR_1' | 'YR_2' | 'YR_3' | 'YR_4' | null) {
+  if (!value) return '';
+  return value.replace('YR_', 'Yr. ');
+}
+
+function computeAgeFromBirthday(birthday?: string | null) {
+  if (!birthday) return null;
+  const date = new Date(birthday);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - date.getFullYear();
+  const monthDiff = today.getMonth() - date.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : null;
+}
+
+function isPositiveFlag(value?: string | null) {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  return !['no', 'none', 'false', 'n/a', 'na'].includes(normalized);
+}
+
+function toIsoDateLabel(value?: string | null) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+}
+
+function isDentalText(value?: string | null) {
+  if (!value) return false;
+  const normalized = value.toLowerCase();
+  return normalized.includes('dental') || normalized.includes('tooth') || normalized.includes('oral') || normalized.includes('teeth');
+}
+
 const DentalRecordPage = () => {
   const params = useParams();
   const router = useRouter();
+  const studentNumber = typeof params.studentId === 'string' ? decodeURIComponent(params.studentId) : '';
   const [activeTab, setActiveTab] = useState<'profile' | 'charting' | 'log' | 'prescription' | 'clearance'>('profile');
   const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // MOCK DATA
   const [patient, setPatient] = useState({
-    id: params.studentId as string,
+    id: studentNumber,
     firstName: 'Francis Emil',
     lastName: 'Rosete',
     middleInitial: 'P.',
@@ -37,16 +119,87 @@ const DentalRecordPage = () => {
       Hygiene: true,
     },
     chartData: {} as any,
-    treatmentEntries: [
-      { id: '1', date: '2024-03-10', treatment: 'Oral Prophylaxis', remarks: 'Good hygiene maintained.', staff: 'Dr. Dela Cruz' },
-      { id: '2', date: '2023-10-15', treatment: 'Composite Filling (#14)', remarks: 'Successful restoration.', staff: 'Dr. Dela Cruz' }
-    ],
+    treatmentEntries: [],
     prescription: '',
     clearance: {
       treatment: '',
       reason: '',
     }
   });
+
+  useEffect(() => {
+    async function loadStudentRecord() {
+      const token = getToken();
+      if (!token || !studentNumber) {
+        setError('Unable to load student record.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setError('');
+        const response = await api.get<StudentByNumberResponse>(`/students/by-number/${encodeURIComponent(studentNumber)}`, token);
+        const profile = response.data;
+        const courseText = [profile.course, toDisplayYearLevel(profile.yearLevel)].filter(Boolean).join(' ').trim();
+        const resolvedAge = typeof profile.age === 'number' ? profile.age : computeAgeFromBirthday(profile.birthday);
+        const history = profile.medicalHistory || {};
+        const completedDentalAppointments = (profile.appointments || [])
+          .filter((entry) => (entry.status || '').toUpperCase() === 'COMPLETED')
+          .filter((entry) => isDentalText(entry.serviceType) || isDentalText(entry.symptoms))
+          .map((entry) => ({
+            id: `appointment-${entry.id}`,
+            date: toIsoDateLabel(entry.preferredDate) || new Date().toISOString().slice(0, 10),
+            treatment: entry.serviceType || 'Dental Appointment',
+            remarks: entry.symptoms || 'Dental appointment completed.',
+            staff: 'Dental clinic',
+          }));
+
+        const dentalClinicVisits = (profile.clinicVisits || [])
+          .filter((entry) => isDentalText(entry.concernTag) || isDentalText(entry.chiefComplaintEnc))
+          .map((entry) => ({
+            id: `visit-${entry.id}`,
+            date: toIsoDateLabel(entry.visitDate) || new Date().toISOString().slice(0, 10),
+            treatment: entry.concernTag || 'Dental Consultation',
+            remarks: entry.chiefComplaintEnc || 'Dental consultation completed.',
+            staff: 'Clinic staff',
+          }));
+
+        const treatmentEntries = [...completedDentalAppointments, ...dentalClinicVisits]
+          .sort((a, b) => b.date.localeCompare(a.date));
+
+        setPatient((prev) => ({
+          ...prev,
+          id: profile.studentNumber || studentNumber,
+          firstName: profile.firstName || prev.firstName,
+          lastName: profile.lastName || prev.lastName,
+          middleInitial: profile.mi?.trim() || prev.middleInitial,
+          dob: profile.birthday ? new Date(profile.birthday).toISOString().slice(0, 10) : prev.dob,
+          sex: profile.sex?.trim() || prev.sex,
+          address: profile.presentAddress?.trim() || prev.address,
+          contact: profile.telNumber?.trim() || prev.contact,
+          courseYear: courseText || profile.courseDept || prev.courseYear,
+          history: {
+            ...prev.history,
+            Diabetes: isPositiveFlag(history.diabetesEnc),
+            'Heart Disease': isPositiveFlag(history.heartDisorderEnc) || isPositiveFlag(history.hypertensionEnc),
+            Allergies: isPositiveFlag(history.allergyEnc),
+          },
+          treatmentEntries,
+          resolvedAge,
+        }));
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError('Failed to load student record.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadStudentRecord();
+  }, [studentNumber]);
 
   const handlePatientUpdate = (field: string, value: any) => {
     setPatient(prev => ({ ...prev, [field]: value }));
@@ -97,9 +250,9 @@ const DentalRecordPage = () => {
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2 mt-0.5">
               <span>{patient.courseYear}</span>
               <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-              <span>ID: {patient.id.slice(0, 5)}</span>
+              <span>ID: {patient.id || studentNumber}</span>
               <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-              <span>{patient.sex}, 21 YRS</span>
+              <span>{patient.sex || 'N/A'}, {patient.resolvedAge ?? 'N/A'} YRS</span>
             </p>
           </div>
         </div>
@@ -114,6 +267,17 @@ const DentalRecordPage = () => {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6 lg:p-8">
         <div className="max-w-6xl mx-auto space-y-8">
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+
+          {loading && (
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
+              Loading student record...
+            </div>
+          )}
           
           {/* Horizontal Tabs */}
           <div className="w-full overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">

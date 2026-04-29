@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { normalizeComplaintDisplay } from '@/lib/complaint';
 import MedicalTrackingTimeline, { type MedicalTrackingEvent } from '@/components/dashboard/staff/MedicalTrackingTimeline';
 
 interface StudentProfile {
@@ -73,7 +74,7 @@ function mapToTimelineEvents(student: StudentProfile | null): MedicalTrackingEve
     events.push({
       id: `visit-${visit.id}`,
       dateIso,
-      title: normalizeLabel(visit.chiefComplaintEnc, visit.concernTag || 'Clinic visit'),
+      title: normalizeComplaintDisplay(visit.chiefComplaintEnc, visit.concernTag || 'Clinic visit'),
       description: normalizeLabel(visit.concernTag, 'Clinic consultation completed'),
       type: 'treatment',
       status: 'completed',

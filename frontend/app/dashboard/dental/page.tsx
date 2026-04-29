@@ -249,7 +249,7 @@ export default function DentalDashboardPage() {
                           </td>
                           <td className="px-6 py-4 text-right">
                             <button
-                              onClick={() => router.push(`/dashboard/dental/records/${encodeURIComponent(patient.studentProfile.studentNumber)}/history`)}
+                              onClick={() => router.push(`/dashboard/dental/records/${encodeURIComponent(patient.studentProfile.studentNumber)}`)}
                               className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider"
                             >
                               Open <ChevronRight size={14} />
