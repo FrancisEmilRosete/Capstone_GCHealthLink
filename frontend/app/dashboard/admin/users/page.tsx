@@ -21,7 +21,7 @@ interface UserEntry {
 
 interface UsersResponse {
   success: boolean;
-  data: { users: UserEntry[] };
+  data: { users?: UserEntry[] } | UserEntry[];
 }
 
 const ROLE_BADGE: Record<string, string> = {
@@ -44,8 +44,15 @@ export default function AdminUsersPage() {
     setLoading(true);
     try {
       const res = await api.get<UsersResponse>('/admin/users', token);
-      setUsers(res.data.users);
-      setFiltered(res.data.users);
+      const payload = res.data;
+      const resolvedUsers = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.users)
+          ? payload.users
+          : [];
+
+      setUsers(resolvedUsers);
+      setFiltered(resolvedUsers);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load users.');
     } finally {
@@ -82,6 +89,7 @@ export default function AdminUsersPage() {
       <div>
         <h1 className="text-xl font-bold text-gray-900">User Accounts</h1>
         <p className="text-sm text-gray-500 mt-0.5">{users.length} registered accounts</p>
+        <p className="text-xs text-gray-400 mt-0.5">Directory of login accounts with role and linked academic profile details.</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3">
@@ -112,19 +120,19 @@ export default function AdminUsersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dept / Staff Type</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Student No.</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Joined</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Account Email</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Full Name</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User Role</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Department / Staff Type</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Student Number</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Account Created</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">Loading...</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">Loading user account records...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No users found.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No user accounts match the selected filters.</td></tr>
               ) : filtered.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-gray-800 font-medium">{u.email}</td>

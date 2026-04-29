@@ -3,13 +3,21 @@ const axios = require("axios");
 const { prisma } = require("../lib/prisma");
 
 const DEFAULT_PYTHON_TIMEOUT_MS = 15_000;
+const DEFAULT_AI_SERVICE_BASE_URL = "http://127.0.0.1:8000";
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
 function resolveAiServiceBaseUrl() {
-  return normalizeText(process.env.AI_SERVICE_BASE_URL);
+  const candidates = [
+    normalizeText(process.env.AI_SERVICE_BASE_URL),
+    normalizeText(process.env.AI_SERVICE_URL),
+    DEFAULT_AI_SERVICE_BASE_URL,
+  ];
+
+  const resolved = candidates.find(Boolean) || "";
+  return resolved.replace(/\/+$/, "");
 }
 
 function resolveTimeoutMs() {
@@ -174,7 +182,7 @@ async function buildResourcePayload() {
 
 async function callPythonService(path, payload, operationLabel) {
   const baseUrl = resolveAiServiceBaseUrl();
-  
+
   if (!baseUrl) {
     throw buildServiceError(
       503,

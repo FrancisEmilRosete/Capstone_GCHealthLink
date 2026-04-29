@@ -10,6 +10,33 @@ const TOKEN_KEY = 'token';
 const ROLE_KEY = 'userRole';
 const USER_ID_KEY = 'userId';
 
+function readSessionValue(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const fromSession = window.sessionStorage.getItem(key);
+  if (fromSession) return fromSession;
+
+  // Backward-compatible fallback for older logins saved in localStorage.
+  const fromLocal = window.localStorage.getItem(key);
+  if (fromLocal) {
+    window.sessionStorage.setItem(key, fromLocal);
+    return fromLocal;
+  }
+
+  return null;
+}
+
+function writeSessionValue(key: string, value: string): void {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.setItem(key, value);
+}
+
+function clearSessionValue(key: string): void {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.removeItem(key);
+  window.localStorage.removeItem(key);
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -56,7 +83,7 @@ function isTokenExpired(token: string): boolean {
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
 
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = readSessionValue(TOKEN_KEY);
   if (!token) return null;
 
   if (isTokenExpired(token)) {
@@ -69,18 +96,18 @@ export function getToken(): string | null {
 
 export function getUserRole(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(ROLE_KEY);
+  return readSessionValue(ROLE_KEY);
 }
 
 export function getUserId(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(USER_ID_KEY);
+  return readSessionValue(USER_ID_KEY);
 }
 
 function saveSession(token: string, user: AuthUser): void {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(ROLE_KEY, user.role);
-  localStorage.setItem(USER_ID_KEY, user.id);
+  writeSessionValue(TOKEN_KEY, token);
+  writeSessionValue(ROLE_KEY, user.role);
+  writeSessionValue(USER_ID_KEY, user.id);
 }
 
 /**
@@ -90,18 +117,22 @@ function saveSession(token: string, user: AuthUser): void {
  */
 export function setUserRole(role: string): void {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(ROLE_KEY, role);
+    writeSessionValue(ROLE_KEY, role);
   }
 }
 
 function clearSession(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(ROLE_KEY);
-  localStorage.removeItem(USER_ID_KEY);
+  clearSessionValue(TOKEN_KEY);
+  clearSessionValue(ROLE_KEY);
+  clearSessionValue(USER_ID_KEY);
 
   // Backward-compatible cleanup for previously used keys.
-  localStorage.removeItem('gchl_token');
-  localStorage.removeItem('gchl_user');
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.removeItem('gchl_token');
+    window.sessionStorage.removeItem('gchl_user');
+    window.localStorage.removeItem('gchl_token');
+    window.localStorage.removeItem('gchl_user');
+  }
 }
 
 export async function authLogin(credentials: {

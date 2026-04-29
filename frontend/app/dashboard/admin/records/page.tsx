@@ -74,6 +74,7 @@ export default function AdminRecordsPage() {
       <div>
         <h1 className="text-xl font-bold text-gray-900">Health Records</h1>
         <p className="text-sm text-gray-500 mt-0.5">{total.toLocaleString()} student profiles</p>
+        <p className="text-xs text-gray-400 mt-0.5">Master list of student health records with consultation and examination totals.</p>
       </div>
 
       <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3">
@@ -103,19 +104,19 @@ export default function AdminRecordsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Student No.</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Department</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Clinic Visits</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Exams</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">View</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Student Name</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Student Number</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Course / Department</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Clinic Visits</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Physical Exams</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Record Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">Loading...</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">Loading student health record list...</td></tr>
               ) : students.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No records found.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No student records match the current search filters.</td></tr>
               ) : students.map((s) => (
                 <tr key={s.studentProfileId} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-gray-800 font-medium">{fullName(s)}</td>
@@ -128,7 +129,7 @@ export default function AdminRecordsPage() {
                       href={`/dashboard/admin/records/${s.studentProfileId}`}
                       className="text-xs font-semibold text-teal-600 hover:text-teal-800 hover:underline"
                     >
-                      View →
+                      Open Record →
                     </Link>
                   </td>
                 </tr>

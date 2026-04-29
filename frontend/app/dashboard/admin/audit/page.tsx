@@ -106,6 +106,7 @@ export default function AdminAuditPage() {
         <p className="text-sm text-gray-500 mt-0.5">
           Comprehensive audit trail of all user actions — {total.toLocaleString()} entries
         </p>
+        <p className="text-xs text-gray-400 mt-0.5">Tracks sign-ins, system actions, and affected entities for accountability and review.</p>
       </div>
 
       {/* Filter bar */}
@@ -114,7 +115,7 @@ export default function AdminAuditPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by email..."
+            placeholder="Search by user email..."
             className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
           />
           <select
@@ -127,7 +128,7 @@ export default function AdminAuditPage() {
           <input
             value={action}
             onChange={(e) => setAction(e.target.value)}
-            placeholder="Filter by action..."
+            placeholder="Filter by action code (e.g. LOGIN_SUCCESS)..."
             className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
           />
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
@@ -155,19 +156,19 @@ export default function AdminAuditPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Timestamp</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Target</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">IP</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date & Time</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User Email</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User Role</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action Code</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Target Record ID</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Source IP</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">Loading logs...</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">Loading audit log entries...</td></tr>
               ) : logs.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No log entries found.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No audit entries found for the selected filters.</td></tr>
               ) : logs.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{formatTs(log.timestamp)}</td>

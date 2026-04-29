@@ -22,9 +22,14 @@ function normalizeBaseUrl(value: string): string {
 const configuredBase = normalizeBaseUrl(
   process.env.NEXT_PUBLIC_BACKEND_URL
   ?? process.env.NEXT_PUBLIC_API_URL
-  ?? 'http://localhost:5000'
+  ?? ''
 );
-const effectiveBase = configuredBase || 'http://localhost:5000';
+
+const defaultBase = process.env.NODE_ENV === 'production'
+  ? ''
+  : 'http://localhost:5000';
+
+const effectiveBase = configuredBase || defaultBase;
 const alreadyIncludesPrefix = effectiveBase.toLowerCase().endsWith(API_PREFIX);
 
 export const API_BASE = alreadyIncludesPrefix
@@ -33,7 +38,7 @@ export const API_BASE = alreadyIncludesPrefix
 
 function buildApiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${API_BASE}${API_PREFIX}${normalizedPath}`;
+  return `${API_BASE || ''}${API_PREFIX}${normalizedPath}`;
 }
 
 // ── Error class ─────────────────────────────────────────────────

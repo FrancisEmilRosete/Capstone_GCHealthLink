@@ -29,7 +29,7 @@ function deriveStatus(item: ProjectedSupplyRisk): 'critical' | 'warning' {
 
 export default function ResourcePredictionPanel({
   title = 'Resource Prediction',
-  subtitle = 'Medical supplies projected to run out soon',
+  subtitle = 'Medical supplies projected to run out soon (based on current stock and usage rate)',
   items,
   className,
 }: ResourcePredictionPanelProps) {
@@ -84,19 +84,19 @@ export default function ResourcePredictionPanel({
 
       {filteredRows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
-          No projected stockout items in the selected filter.
+          No supply items match the selected risk filter.
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                <th className="px-3 py-2 font-semibold">Item</th>
-                <th className="px-3 py-2 font-semibold">Stock</th>
-                <th className="px-3 py-2 font-semibold">Days Left</th>
-                <th className="px-3 py-2 font-semibold">Daily Usage</th>
-                <th className="px-3 py-2 font-semibold">Restock</th>
-                <th className="px-3 py-2 font-semibold">Status</th>
+                <th className="px-3 py-2 font-semibold">Supply Item</th>
+                <th className="px-3 py-2 font-semibold">Current Stock</th>
+                <th className="px-3 py-2 font-semibold">Projected Days Remaining</th>
+                <th className="px-3 py-2 font-semibold">Avg Daily Usage</th>
+                <th className="px-3 py-2 font-semibold">Suggested Restock Qty</th>
+                <th className="px-3 py-2 font-semibold">Risk Status</th>
               </tr>
             </thead>
             <tbody>
@@ -115,7 +115,7 @@ export default function ResourcePredictionPanel({
                           : 'bg-amber-100 text-amber-700'
                       }`}
                     >
-                      {item.resolvedStatus}
+                      {item.resolvedStatus === 'critical' ? 'Critical' : 'Warning'}
                     </span>
                   </td>
                 </tr>

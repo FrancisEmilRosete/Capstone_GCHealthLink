@@ -232,7 +232,7 @@ export default function CertificateApprovalTable({
       <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Medical Certificate Requests</h2>
-          <p className="mt-1 text-xs text-gray-500">Select pending requests and send them for doctor approval in bulk.</p>
+          <p className="mt-1 text-xs text-gray-500">Review student requests, verify reason/proof, and route pending requests for doctor approval.</p>
         </div>
 
         <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 flex-wrap gap-0.5">
@@ -255,21 +255,21 @@ export default function CertificateApprovalTable({
 
       <div className="mb-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-gray-500">{selectedIds.length} selected</p>
+          <p className="text-xs text-gray-500">{selectedIds.length} request(s) selected</p>
           <button
             type="button"
             onClick={handleBulkRequestDoctorApproval}
             disabled={selectedIds.length === 0}
             className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
           >
-            Bulk Request Doctor Approval
+            Send Selected to Doctor Approval
           </button>
         </div>
 
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by student name, ID, or reason..."
+          placeholder="Search by student name, student number, or request reason..."
           className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
         />
 
@@ -342,18 +342,18 @@ export default function CertificateApprovalTable({
                   disabled={visiblePendingIds.length === 0}
                 />
               </th>
-              <th className="px-3 py-2 font-semibold">Student</th>
-              <th className="px-3 py-2 font-semibold">Reason</th>
-              <th className="px-3 py-2 font-semibold">Requested</th>
-              <th className="px-3 py-2 font-semibold">Proof</th>
-              <th className="px-3 py-2 font-semibold">Status</th>
+              <th className="px-3 py-2 font-semibold">Student Details</th>
+              <th className="px-3 py-2 font-semibold">Request Reason</th>
+              <th className="px-3 py-2 font-semibold">Date Requested</th>
+              <th className="px-3 py-2 font-semibold">Supporting Proof</th>
+              <th className="px-3 py-2 font-semibold">Approval Status</th>
             </tr>
           </thead>
           <tbody>
             {visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-3 py-10 text-center text-sm text-gray-400">
-                  No certificate requests found.
+                  No certificate requests match the current filters.
                 </td>
               </tr>
             ) : (

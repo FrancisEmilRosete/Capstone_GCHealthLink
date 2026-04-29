@@ -267,23 +267,27 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [isDark,      setIsDark]      = useState(false);
   const [displayName, setDisplayName] = useState('Admin User');
   const [roleLabel, setRoleLabel] = useState('Admin');
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const router = useRouter();
-  const token = getToken();
-  const role = getNormalizedUserRole();
-  const isAuthorized = !!token && role === 'ADMIN';
 
   useEffect(() => {
     let mounted = true;
+    const token = getToken();
+    const role = getNormalizedUserRole();
 
     if (!token || !role) {
+      if (mounted) setIsAuthorized(false);
       router.replace('/login');
       return;
     }
 
     if (role !== 'ADMIN') {
+      if (mounted) setIsAuthorized(false);
       router.replace(getDashboardRouteForRole(role));
       return;
     }
+
+    if (mounted) setIsAuthorized(true);
 
     const authToken = token;
 
@@ -315,9 +319,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     return () => {
       mounted = false;
     };
-  }, [role, router, token]);
+  }, [router]);
 
-  if (!isAuthorized) {
+  if (isAuthorized !== true) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
         <p className="text-sm text-gray-500 dark:text-gray-400">Checking session...</p>
