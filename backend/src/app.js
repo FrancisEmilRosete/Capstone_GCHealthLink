@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const compression = require("compression");
 
 require("dotenv").config({
   path: path.resolve(__dirname, "..", ".env"),
@@ -8,6 +9,8 @@ require("dotenv").config({
 
 // 1. Initialize the app FIRST
 const app = express();
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
 
 function normalizeOrigin(value) {
   return typeof value === "string"
@@ -59,7 +62,9 @@ app.use(
   })
 );
 
+app.use(compression());
 app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 if (process.env.LOG_REQUESTS === "true") {
   app.use((req, res, next) => {
@@ -89,6 +94,10 @@ const debugRoutes = require("./routes/debug.routes");
 // 5. Base Route
 app.get("/", (req, res) => {
   res.json({ message: "Backend is running successfully!" });
+});
+
+app.get("/healthz", (req, res) => {
+  res.status(200).json({ ok: true });
 });
 
 // 6. API Routes

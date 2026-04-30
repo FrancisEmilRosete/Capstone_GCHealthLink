@@ -51,11 +51,6 @@ interface AnalyticsResponse {
   };
 }
 
-interface BroadcastResponse {
-  success: boolean;
-  message: string;
-}
-
 const TABS = [
   { id: 'all', label: 'All', cat: null },
   { id: 'health', label: 'Health Trends', cat: 'health' },
@@ -92,19 +87,6 @@ export default function AdminNotifications() {
   const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [broadcastTitle, setBroadcastTitle] = useState('');
-  const [broadcastMessage, setBroadcastMessage] = useState('');
-  const [broadcastDept, setBroadcastDept] = useState('ALL');
-  const [broadcastSeverity, setBroadcastSeverity] = useState<'INFO' | 'WARNING' | 'CRITICAL'>('INFO');
-  const [sendingBroadcast, setSendingBroadcast] = useState(false);
-  const [broadcastFeedback, setBroadcastFeedback] = useState('');
-  const [broadcastConfirmOpen, setBroadcastConfirmOpen] = useState(false);
-  const [pendingBroadcastPayload, setPendingBroadcastPayload] = useState<{
-    title: string;
-    message: string;
-    targetDept: string;
-    severity: 'INFO' | 'WARNING' | 'CRITICAL';
-  } | null>(null);
 
   async function loadAlerts() {
     const token = getToken();
@@ -203,78 +185,6 @@ export default function AdminNotifications() {
     void loadAlerts();
   }, []);
 
-  function handleBroadcastSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const title = broadcastTitle.trim();
-    const message = broadcastMessage.trim();
-    const targetDept = broadcastDept.trim() || 'ALL';
-
-    if (!title || !message) {
-      setBroadcastFeedback('Title and message are required before broadcasting.');
-      return;
-    }
-
-    setBroadcastFeedback('');
-    setPendingBroadcastPayload({
-      title,
-      message,
-      targetDept,
-      severity: broadcastSeverity,
-    });
-    setBroadcastConfirmOpen(true);
-  }
-
-  function closeBroadcastModal() {
-    if (sendingBroadcast) return;
-    setBroadcastConfirmOpen(false);
-    setPendingBroadcastPayload(null);
-  }
-
-  async function handleBroadcastConfirm() {
-    const token = getToken();
-    if (!token) {
-      setError('You are not logged in. Please sign in again.');
-      setBroadcastConfirmOpen(false);
-      setPendingBroadcastPayload(null);
-      return;
-    }
-
-    if (!pendingBroadcastPayload) {
-      setBroadcastConfirmOpen(false);
-      return;
-    }
-
-    try {
-      setSendingBroadcast(true);
-      setBroadcastFeedback('');
-      setError('');
-
-      const response = await api.post<BroadcastResponse>(
-        '/advisories/broadcast',
-        pendingBroadcastPayload,
-        token,
-      );
-
-      setBroadcastTitle('');
-      setBroadcastMessage('');
-      setBroadcastDept('ALL');
-      setBroadcastSeverity('INFO');
-      setPendingBroadcastPayload(null);
-      setBroadcastConfirmOpen(false);
-      setBroadcastFeedback(response.message || 'Advisory broadcast sent successfully.');
-      await loadAlerts();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setBroadcastFeedback(err.message);
-      } else {
-        setBroadcastFeedback('Failed to send advisory broadcast.');
-      }
-    } finally {
-      setSendingBroadcast(false);
-    }
-  }
-
   const filtered = useMemo(() => {
     if (activeTab === 'all') return alerts;
     return alerts.filter((item) => item.category === TABS.find((tab) => tab.id === activeTab)?.cat);
@@ -318,96 +228,6 @@ export default function AdminNotifications() {
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
-        </div>
-      )}
-
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
-        <div>
-          <h2 className="text-sm font-bold text-gray-900">Broadcast Health Advisory</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Phase 6 intervention: push alerts to all users or a specific department.</p>
-        </div>
-
-        <form onSubmit={(event) => { void handleBroadcastSubmit(event); }} className="space-y-2.5">
-          <input
-            type="text"
-            value={broadcastTitle}
-            onChange={(event) => setBroadcastTitle(event.target.value)}
-            placeholder="Advisory title"
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input
-              type="text"
-              value={broadcastDept}
-              onChange={(event) => setBroadcastDept(event.target.value.toUpperCase())}
-              placeholder="Target department (ALL, BSCS, BSIT...)"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-            />
-            <select
-              value={broadcastSeverity}
-              onChange={(event) => setBroadcastSeverity(event.target.value as 'INFO' | 'WARNING' | 'CRITICAL')}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
-            >
-              <option value="INFO">INFO</option>
-              <option value="WARNING">WARNING</option>
-              <option value="CRITICAL">CRITICAL</option>
-            </select>
-          </div>
-
-          <textarea
-            rows={3}
-            value={broadcastMessage}
-            onChange={(event) => setBroadcastMessage(event.target.value)}
-            placeholder="Advisory message to students and staff"
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-400"
-          />
-
-          <div className="flex items-center justify-between gap-3">
-            {broadcastFeedback ? (
-              <p className={`text-xs ${broadcastFeedback.toLowerCase().includes('failed') || broadcastFeedback.toLowerCase().includes('required') ? 'text-red-600' : 'text-teal-600'}`}>
-                {broadcastFeedback}
-              </p>
-            ) : <span className="text-xs text-gray-400">Broadcasts are audit-tracked in the backend.</span>}
-
-            <button
-              type="submit"
-              disabled={sendingBroadcast}
-              className="text-xs font-semibold px-3.5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-70"
-            >
-              {sendingBroadcast ? 'Sending...' : 'Broadcast Advisory'}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {broadcastConfirmOpen && pendingBroadcastPayload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl border border-gray-100">
-            <h3 className="text-base font-bold text-gray-900">Confirm Broadcast</h3>
-            <p className="mt-2 text-sm text-gray-600 leading-relaxed">
-              Are you sure you want to broadcast this [{pendingBroadcastPayload.severity}] advisory to [{pendingBroadcastPayload.targetDept === 'ALL' ? 'All' : pendingBroadcastPayload.targetDept}]?
-            </p>
-
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeBroadcastModal}
-                disabled={sendingBroadcast}
-                className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => { void handleBroadcastConfirm(); }}
-                disabled={sendingBroadcast}
-                className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 rounded-xl hover:bg-teal-700 disabled:opacity-60"
-              >
-                {sendingBroadcast ? 'Sending...' : 'Confirm'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

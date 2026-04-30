@@ -105,7 +105,7 @@ export default function StaffRecordPage() {
         {results.map((student) => (
           <Link
             key={student.studentNumber}
-            href={`/dashboard/staff/record/${encodeURIComponent(student.studentNumber)}`}
+            href={`/dashboard/staff/record/${encodeURIComponent(student.studentNumber)}?returnTo=${encodeURIComponent('/dashboard/staff/record')}`}
             className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4 hover:border-teal-300 hover:bg-teal-50 transition-colors group"
           >
             <div className="min-w-0 flex-1">

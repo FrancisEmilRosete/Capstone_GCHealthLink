@@ -21,8 +21,6 @@ import React from 'react';
 import { NavGroup } from '@/types/navigation';
 import {
   DashboardIcon,
-  PhysicalExamIcon,
-  ConsultationsIcon,
   ScannerIcon,
   InventoryIcon,
   CertificatesIcon,
@@ -46,7 +44,6 @@ export interface StaffNavGroup {
 
 export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
   {
-    groupLabel: 'MAIN',
     items: [
       {
         id:    'dashboard',
@@ -55,48 +52,26 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
         icon:  DashboardIcon,
       },
       {
+        id:    'students',
+        label: 'Student',
+        href:  '/dashboard/staff/students',
+        icon:  UsersIcon,
+      },
+      {
         id:    'scanner',
         label: 'QR Scanner',
         href:  '/dashboard/staff/scanner',
         icon:  ScannerIcon,
       },
       {
-        id:    'students',
-        label: 'Students',
-        href:  '/dashboard/staff/students',
-        icon:  UsersIcon,
+        id:    'logs',
+        label: 'Logs',
+        href:  '/dashboard/staff/logs',
+        icon:  CertificatesIcon,
       },
-      {
-        id:    'notifications',
-        label: 'Notifications',
-        href:  '/dashboard/staff/notifications',
-        icon:  NotificationsIcon,
-      },
-    ],
-  },
-  {
-    groupLabel: 'MEDICAL RECORDS',
-    items: [
-      {
-        id:    'consultations',
-        label: 'Consultations',
-        href:  '/dashboard/staff/consultations',
-        icon:  ConsultationsIcon,
-      },
-      {
-        id:    'physical-examination',
-        label: 'Physical Examination',
-        href:  '/dashboard/staff/physical-examination',
-        icon:  PhysicalExamIcon,
-      },
-    ],
-  },
-  {
-    groupLabel: 'CLINIC OPERATIONS',
-    items: [
       {
         id:    'inventory',
-        label: 'Medicine Inventory',
+        label: 'Medical Inventory',
         href:  '/dashboard/staff/inventory',
         icon:  InventoryIcon,
       },
@@ -105,6 +80,12 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
         label: 'Certificates',
         href:  '/dashboard/staff/certificates',
         icon:  CertificatesIcon,
+      },
+      {
+        id:    'notifications',
+        label: 'Notification',
+        href:  '/dashboard/staff/notifications',
+        icon:  NotificationsIcon,
       },
     ],
   },

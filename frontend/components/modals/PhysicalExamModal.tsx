@@ -206,7 +206,6 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const PHYSICAL_REQUIRED_FIELDS: Array<keyof PhysicalExamRecordFormData> = [
-  'allergy',
   'bp',
   'cr',
   'rr',

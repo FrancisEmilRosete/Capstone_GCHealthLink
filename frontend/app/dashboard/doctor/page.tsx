@@ -2,12 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserPlus, Clock, Activity, Search, ChevronRight } from 'lucide-react';
+import { UserPlus, Clock, Activity, Search } from 'lucide-react';
 
 import Toast from '@/components/ui/Toast';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
+import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
+import ConsultationModal, {
+  type ConsultationForm,
+  type InventoryOption,
+  type ConsultationPatient,
+} from '@/components/modals/ConsultationModal';
 
 interface QueueItem {
   id: string;
@@ -15,12 +21,17 @@ interface QueueItem {
   preferredTime: string;
   serviceType: string;
   symptoms: string;
-  status: 'WAITING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  status: 'WAITING' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   studentProfile: {
+    id: string;
     studentNumber: string;
     firstName: string;
     lastName: string;
     courseDept: string;
+    course?: string | null;
+    yearLevel?: 'YR_1' | 'YR_2' | 'YR_3' | 'YR_4' | string | null;
+    age?: number | null;
+    sex?: string | null;
   };
 }
 
@@ -29,14 +40,63 @@ interface QueueResponse {
   data: QueueItem[];
 }
 
+interface CreateVisitResponse {
+  success: boolean;
+  message: string;
+}
+
+interface InventoryResponse {
+  success: boolean;
+  data: InventoryOption[];
+}
+
+type LiveQueueFilter = 'all' | 'incoming' | 'waiting' | 'pending';
+
+function isFollowUpAppointment(item: QueueItem) {
+  const service = (item.serviceType || '').toLowerCase();
+  const reason = (item.symptoms || '').toLowerCase();
+  return (
+    service.includes('follow up')
+    || service.includes('follow-up')
+    || reason.includes('follow up')
+    || reason.includes('follow-up')
+    || reason.includes('recheck')
+    || reason.includes('re-check')
+    || reason.includes('revisit')
+  );
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatYearLevel(value?: string | null) {
+  if (!value) return '';
+  switch (value) {
+    case 'YR_1': return 'Yr. 1';
+    case 'YR_2': return 'Yr. 2';
+    case 'YR_3': return 'Yr. 3';
+    case 'YR_4': return 'Yr. 4';
+    default: return value;
+  }
+}
+
 export default function DoctorDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState('');
   const [error, setError] = useState('');
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [toastConfig, setToastConfig] = useState({ isVisible: false, message: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [liveQueueFilter, setLiveQueueFilter] = useState<LiveQueueFilter>('all');
+  const [consultModalOpen, setConsultModalOpen] = useState(false);
+  const [consultingPatient, setConsultingPatient] = useState<QueueItem | null>(null);
+  const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
 
   function showToast(message: string) {
     setToastConfig({ isVisible: true, message });
@@ -54,7 +114,7 @@ export default function DoctorDashboardPage() {
     try {
       setLoading(true);
       setError('');
-      const response = await api.get<QueueResponse>('/appointments/queue?limit=500', token);
+      const response = await api.get<QueueResponse>('/appointments/queue?limit=500&status=WAITING,PENDING,IN_PROGRESS,COMPLETED', token);
       setQueue(response.data || []);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -71,29 +131,21 @@ export default function DoctorDashboardPage() {
     void loadQueue();
   }, []);
 
-  async function handleStatusChange(appointmentId: string, status: QueueItem['status']) {
-    const token = getToken();
-    if (!token) {
-      setError('You are not logged in. Please sign in again.');
-      return;
+  useEffect(() => {
+    async function loadInventoryLookup() {
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        const response = await api.get<InventoryResponse>('/inventory', token);
+        setInventoryOptions(response.data || []);
+      } catch {
+        // Keep consult flow usable even when inventory lookup fails.
+      }
     }
 
-    try {
-      setUpdatingId(appointmentId);
-      setError('');
-      await api.put(`/appointments/queue/${appointmentId}`, { status }, token);
-      await loadQueue();
-      showToast(`Queue item moved to ${status.replace('_', ' ')}`);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Failed to update queue status.');
-      }
-    } finally {
-      setUpdatingId('');
-    }
-  }
+    void loadInventoryLookup();
+  }, []);
 
   const filteredQueue = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -109,8 +161,153 @@ export default function DoctorDashboardPage() {
     });
   }, [queue, searchQuery]);
 
-  const waitingCount = queue.filter((item) => item.status === 'WAITING').length;
-  const inProgressCount = queue.filter((item) => item.status === 'IN_PROGRESS').length;
+  const liveQueueCandidates = filteredQueue.filter(
+    (item) =>
+      (item.status === 'WAITING' || item.status === 'PENDING')
+      && (!isFollowUpAppointment(item) || !isFutureFollowUp(item))
+  );
+
+  const incomingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'INCOMING').length;
+  const waitingQueueCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'WAITING').length;
+  const pendingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'PENDING').length;
+  const allPatientsCount = liveQueueCandidates.length;
+
+  const liveQueue = liveQueueCandidates.filter((item) => {
+    const status = resolveLiveQueueStatus(item);
+    if (liveQueueFilter === 'all') return true;
+    if (liveQueueFilter === 'incoming') return status === 'INCOMING';
+    if (liveQueueFilter === 'waiting') return status === 'WAITING';
+    return status === 'PENDING';
+  });
+
+  const waitingCount = waitingQueueCount;
+  const followUps = filteredQueue
+    .filter((item) => (item.status === 'WAITING' || item.status === 'PENDING') && isFutureFollowUp(item))
+    .slice(0, 10);
+
+  function parseScheduleDateTime(item: QueueItem): Date | null {
+    const datePart = new Date(item.preferredDate);
+    if (Number.isNaN(datePart.getTime())) return null;
+
+    const raw = (item.preferredTime || '').trim();
+    if (!raw) {
+      return new Date(datePart.getFullYear(), datePart.getMonth(), datePart.getDate(), 0, 0, 0, 0);
+    }
+
+    const twelveHour = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (twelveHour) {
+      let hour = Number.parseInt(twelveHour[1], 10);
+      const minute = Number.parseInt(twelveHour[2], 10);
+      const meridiem = twelveHour[3].toUpperCase();
+      if (meridiem === 'PM' && hour < 12) hour += 12;
+      if (meridiem === 'AM' && hour === 12) hour = 0;
+      return new Date(datePart.getFullYear(), datePart.getMonth(), datePart.getDate(), hour, minute, 0, 0);
+    }
+
+    const twentyFourHour = raw.match(/^(\d{1,2}):(\d{2})$/);
+    if (twentyFourHour) {
+      const hour = Number.parseInt(twentyFourHour[1], 10);
+      const minute = Number.parseInt(twentyFourHour[2], 10);
+      return new Date(datePart.getFullYear(), datePart.getMonth(), datePart.getDate(), hour, minute, 0, 0);
+    }
+
+    return new Date(datePart.getFullYear(), datePart.getMonth(), datePart.getDate(), 0, 0, 0, 0);
+  }
+
+  function getDisplayQueueStatus(item: QueueItem): 'INCOMING' | 'WAITING' {
+    const scheduled = parseScheduleDateTime(item);
+    if (!scheduled) return 'WAITING';
+    return scheduled.getTime() > Date.now() ? 'INCOMING' : 'WAITING';
+  }
+
+  function resolveLiveQueueStatus(item: QueueItem): 'INCOMING' | 'WAITING' | 'PENDING' {
+    if (item.status === 'PENDING') return 'PENDING';
+    return getDisplayQueueStatus(item);
+  }
+
+  function isFutureFollowUp(item: QueueItem): boolean {
+    if (!isFollowUpAppointment(item)) return false;
+    const scheduled = parseScheduleDateTime(item);
+    if (!scheduled) return false;
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const scheduledDay = new Date(scheduled);
+    scheduledDay.setHours(0, 0, 0, 0);
+
+    return scheduledDay.getTime() > todayStart.getTime();
+  }
+
+  function openConsultModal(patient: QueueItem) {
+    setConsultingPatient(patient);
+    setConsultModalOpen(true);
+  }
+
+  async function handleConsultSave(
+    form: ConsultationForm,
+    medicines: Array<{ inventoryId: string; medicine: string; qty: string }>,
+  ) {
+    if (!consultingPatient) return;
+
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    const normalizedTag = 'General Consultation';
+    const normalizedChiefComplaint = form.chiefComplaint?.trim() || '';
+    const normalizedVisitDate = form.visitDate?.trim() || new Date().toISOString();
+
+    const structuredComplaint = {
+      concernTag: normalizedTag,
+      symptoms: normalizedChiefComplaint,
+      chiefComplaint: normalizedChiefComplaint || normalizedTag,
+      diagnosis: null,
+      treatmentProvided: null,
+      treatmentManagement: null,
+      age: form.age?.trim() || null,
+      sex: form.sex?.trim() || null,
+      vitals: {
+        bp: form.bp?.trim() || null,
+        temperature: form.temperature?.trim() || null,
+      },
+      notes: [normalizedTag, normalizedChiefComplaint]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(' | ') || 'General consultation',
+    };
+
+    try {
+      setError('');
+
+      await api.post<CreateVisitResponse>(
+        '/clinic/visits',
+        {
+          studentProfileId: consultingPatient.studentProfile.id,
+          visitDate: normalizedVisitDate,
+          visitTime: form.visitTime?.trim() || consultingPatient.preferredTime || undefined,
+          chiefComplaintEnc: JSON.stringify(structuredComplaint),
+          dispensedMedicines: [],
+        },
+        token,
+      );
+
+      await api.put(`/appointments/queue/${consultingPatient.id}`, { status: 'PENDING' }, token);
+
+      setConsultModalOpen(false);
+      setConsultingPatient(null);
+      showToast('Consultation saved and sent to doctor.');
+      await loadQueue();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to save consultation.');
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -137,15 +334,26 @@ export default function DoctorDashboardPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
                   <UserPlus size={24} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total In Queue</p>
-                  <p className="text-2xl font-black text-slate-800">{queue.length}</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">All Patients</p>
+                  <p className="text-2xl font-black text-slate-800">{allPatientsCount}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="p-4 bg-sky-50 text-sky-600 rounded-2xl">
+                  <Clock size={24} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Incoming</p>
+                  <p className="text-2xl font-black text-slate-800">{incomingCount}</p>
                 </div>
               </div>
             </div>
@@ -166,98 +374,173 @@ export default function DoctorDashboardPage() {
                   <Activity size={24} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Progress</p>
-                  <p className="text-2xl font-black text-slate-800">{inProgressCount}</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pending</p>
+                  <p className="text-2xl font-black text-slate-800">{pendingCount}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h2 className="text-lg font-black text-slate-800 tracking-tight">Active Medical Queue</h2>
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search queue..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 w-64 transition-all"
-                />
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-white">
+                <h2 className="text-sm font-bold text-gray-800">Live Patient Queue</h2>
+                <div className="flex items-center gap-3">
+                  <div className="inline-flex items-center rounded-2xl border border-gray-200 bg-gray-100 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setLiveQueueFilter('all')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                        liveQueueFilter === 'all' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-white'
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLiveQueueFilter('incoming')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                        liveQueueFilter === 'incoming' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-white'
+                      }`}
+                    >
+                      Incoming
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLiveQueueFilter('waiting')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                        liveQueueFilter === 'waiting' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-white'
+                      }`}
+                    >
+                      Waiting
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLiveQueueFilter('pending')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                        liveQueueFilter === 'pending' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-white'
+                      }`}
+                    >
+                      Pending
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search queue..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 w-64 transition-all"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setQrModalOpen(true)}
+                    className="text-xs font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-2 rounded-xl transition-colors"
+                  >
+                    Use QR
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto">
+                {loading ? (
+                  <div className="px-4 py-10 text-center text-gray-400 text-sm">Loading queue...</div>
+                ) : (
+                  <table className="w-full table-fixed text-sm">
+                    <thead>
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Student</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Department</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Preferred Slot</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Reason</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Status</th>
+                        <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {liveQueue.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No patients found.</td>
+                        </tr>
+                      ) : (
+                        liveQueue.map((patient) => (
+                          <tr
+                            key={patient.id}
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="px-4 py-3 text-left">
+                              <div>
+                                <p className="font-semibold text-gray-800">{patient.studentProfile.lastName}, {patient.studentProfile.firstName}</p>
+                                <p className="text-xs text-teal-600 font-semibold mt-0.5">{patient.studentProfile.studentNumber}</p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-left text-gray-600">{patient.studentProfile.courseDept || 'N/A'}</td>
+                            <td className="px-4 py-3 text-left text-gray-600">
+                              {formatDate(patient.preferredDate)} at {patient.preferredTime}
+                            </td>
+                            <td className="px-4 py-3 text-left">
+                              <p className="text-xs font-semibold text-teal-600">{patient.serviceType}</p>
+                              <p className="text-gray-700 break-words leading-snug">{patient.symptoms || 'N/A'}</p>
+                            </td>
+                            <td className="px-4 py-3 text-left">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                resolveLiveQueueStatus(patient) === 'INCOMING'
+                                  ? 'bg-slate-100 text-slate-700'
+                                  : resolveLiveQueueStatus(patient) === 'PENDING'
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : 'bg-amber-100 text-amber-700'
+                              }`}>
+                                {resolveLiveQueueStatus(patient) === 'INCOMING'
+                                  ? 'Incoming'
+                                  : resolveLiveQueueStatus(patient) === 'PENDING'
+                                    ? 'Pending'
+                                    : 'Waiting'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => openConsultModal(patient)}
+                                disabled={resolveLiveQueueStatus(patient) === 'PENDING'}
+                                className="text-xs font-semibold bg-teal-500 hover:bg-teal-600 text-white px-2.5 py-1.5 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                {resolveLiveQueueStatus(patient) === 'PENDING' ? 'Sent' : 'Consult'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
 
-            <div className="flex-1 overflow-auto">
-              {loading ? (
-                <div className="px-6 py-12 text-center text-slate-400 font-bold">Loading queue...</div>
-              ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-white shadow-sm z-10">
-                    <tr>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Schedule</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Patient</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Department</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Reason</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Status</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {filteredQueue.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold">No patients found.</td>
-                      </tr>
-                    ) : (
-                      filteredQueue.map((patient) => (
-                        <tr key={patient.id} className="hover:bg-slate-50/50 transition-colors group">
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-bold text-slate-600">{new Date(patient.preferredDate).toLocaleDateString()} {patient.preferredTime}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div>
-                              <p className="text-sm font-black text-slate-800">{patient.studentProfile.firstName} {patient.studentProfile.lastName}</p>
-                              <p className="text-xs font-semibold text-slate-400">{patient.studentProfile.studentNumber}</p>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-xs font-semibold text-slate-500">{patient.studentProfile.courseDept || 'N/A'}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-bold text-slate-600">{patient.symptoms || 'N/A'}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <select
-                              value={patient.status}
-                              disabled={updatingId === patient.id}
-                              onChange={(e) => handleStatusChange(patient.id, e.target.value as QueueItem['status'])}
-                              className={`text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border-0 cursor-pointer appearance-none ${
-                                patient.status === 'WAITING' ? 'bg-amber-100 text-amber-700'
-                                  : patient.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700'
-                                    : patient.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700'
-                                      : 'bg-slate-200 text-slate-700'
-                              }`}
-                            >
-                              <option value="WAITING">Waiting</option>
-                              <option value="IN_PROGRESS">In Progress</option>
-                              <option value="COMPLETED">Completed</option>
-                              <option value="CANCELLED">Cancelled</option>
-                            </select>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <button
-                              onClick={() => router.push(`/dashboard/doctor/records/${encodeURIComponent(patient.studentProfile.studentNumber)}`)}
-                              className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider"
-                            >
-                              Open <ChevronRight size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              )}
+            <div className="xl:col-span-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
+              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+                <h2 className="text-lg font-black text-slate-800 tracking-tight">Follow Ups</h2>
+                <p className="text-xs font-semibold text-slate-500 mt-1">Patients with follow-up appointments</p>
+              </div>
+
+              <div className="flex-1 overflow-auto divide-y divide-slate-50">
+                {loading ? (
+                  <div className="px-6 py-8 text-center text-slate-400 font-bold">Loading follow ups...</div>
+                ) : followUps.length === 0 ? (
+                  <div className="px-6 py-8 text-center text-slate-400 font-bold">No follow ups yet.</div>
+                ) : (
+                  followUps.map((item) => (
+                    <div key={`followup-${item.id}`} className="px-6 py-4 hover:bg-slate-50/60 transition-colors">
+                      <p className="text-sm font-black text-slate-800">{item.studentProfile.firstName} {item.studentProfile.lastName}</p>
+                      <p className="text-xs font-semibold text-slate-400 mt-0.5">{item.studentProfile.studentNumber}</p>
+                      <p className="text-xs text-slate-500 mt-2">Follow-up Date: {formatDate(item.preferredDate)}</p>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -267,6 +550,40 @@ export default function DoctorDashboardPage() {
         isVisible={toastConfig.isVisible}
         message={toastConfig.message}
         onClose={() => setToastConfig({ isVisible: false, message: '' })}
+      />
+
+      {consultModalOpen && consultingPatient && (
+        <ConsultationModal
+          patient={{
+            firstName: consultingPatient.studentProfile.firstName,
+            middleName: '',
+            lastName: consultingPatient.studentProfile.lastName,
+            department: consultingPatient.studentProfile.courseDept,
+            course: consultingPatient.studentProfile.course || consultingPatient.studentProfile.courseDept,
+            yearLevel: formatYearLevel(consultingPatient.studentProfile.yearLevel),
+            age: consultingPatient.studentProfile.age ? String(consultingPatient.studentProfile.age) : '',
+            sex: consultingPatient.studentProfile.sex || '',
+          } as ConsultationPatient}
+          inventoryOptions={inventoryOptions}
+          mode="nurse-triage"
+          saveLabel="Send to Doctor"
+          onClose={() => setConsultModalOpen(false)}
+          onSave={(data, medicines) => {
+            void handleConsultSave(data, medicines);
+          }}
+        />
+      )}
+
+      <UseQrLookupModal
+        open={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        onResolved={(student: QrResolvedStudent) => {
+          setSearchQuery(student.studentNumber);
+          showToast(`Found ${student.lastName}, ${student.firstName}`);
+        }}
+        onNotFound={() => {
+          showToast('Student not found.');
+        }}
       />
 
       <PredictiveInsightsCard role="doctor" className="mx-8 mb-8" />

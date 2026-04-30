@@ -22,8 +22,8 @@ export default function DoctorLayout({ children }: DoctorLayoutProps) {
     const token = getToken();
     const role = getNormalizedUserRole();
 
-    // Allow DOCTOR and ADMIN only
-    if (!token || (role !== 'DOCTOR' && role !== 'ADMIN')) {
+    // Side switch: allow CLINIC_STAFF (nurse) and ADMIN on this dashboard side.
+    if (!token || (role !== 'CLINIC_STAFF' && role !== 'ADMIN')) {
       router.replace('/login');
       return;
     }
@@ -44,16 +44,16 @@ export default function DoctorLayout({ children }: DoctorLayoutProps) {
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        userName="Doctor"
-        userRole="doctor"
-        brandSubtitle="Doctor Portal"
+        userName="Nurse"
+        userRole="nurse"
+        brandSubtitle="Nurse Portal"
         navGroups={DOCTOR_NAV_GROUPS}
       />
 
       <div className="flex flex-col flex-1 min-w-0 bg-gray-50">
         <TopBar
           onMenuOpen={() => setSidebarOpen(true)}
-          userName="Doctor"
+          userName="Nurse"
         />
         <main className="flex-1 overflow-auto">
           {children}

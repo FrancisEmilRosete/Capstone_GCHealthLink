@@ -2,7 +2,7 @@ const { PrismaClient } = require("@prisma/client");
 const { decryptStringSafe } = require("../utils/encryption.util");
 const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 const prisma = new PrismaClient();
-const ALLOWED_APPOINTMENT_STATUSES = new Set(["WAITING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
+const ALLOWED_APPOINTMENT_STATUSES = new Set(["WAITING", "PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
 const SERVICE_TYPE_OPTIONS = [
   "Medical Consultation",
   "Dental Check-up",
@@ -158,7 +158,21 @@ const getLiveQueue = async (req, res, next) => {
     });
     const rawServiceType = typeof req.query?.serviceType === "string" ? req.query.serviceType.trim() : "";
     const normalizedServiceType = normalizeServiceType(rawServiceType);
+    const rawStatusFilter = typeof req.query?.status === "string" ? req.query.status.trim() : "";
+    const requestedStatuses = rawStatusFilter
+      ? rawStatusFilter
+        .split(',')
+        .map((value) => value.trim().toUpperCase())
+        .filter(Boolean)
+      : ["WAITING"];
     const allowedServiceTypes = resolveAllowedServiceTypes(req);
+
+    if (requestedStatuses.some((status) => !ALLOWED_APPOINTMENT_STATUSES.has(status))) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status filter. Allowed values: WAITING, PENDING, IN_PROGRESS, COMPLETED, CANCELLED.",
+      });
+    }
 
     if (rawServiceType && !normalizedServiceType) {
       return res.status(400).json({
@@ -175,7 +189,7 @@ const getLiveQueue = async (req, res, next) => {
     }
 
     const whereClause = {
-      status: "WAITING",
+      status: requestedStatuses.length === 1 ? requestedStatuses[0] : { in: requestedStatuses },
       preferredDate: { gte: startOfDay },
       serviceType: { in: allowedServiceTypes },
     };
@@ -198,6 +212,10 @@ const getLiveQueue = async (req, res, next) => {
               firstName: true,
               lastName: true,
               courseDept: true,
+              course: true,
+              yearLevel: true,
+              age: true,
+              sex: true,
               medicalHistory: true // Instantly pull history so nurse can see risks
             }
           }
@@ -252,7 +270,7 @@ const updateAppointmentStatus = async (req, res, next) => {
     if (!status || !ALLOWED_APPOINTMENT_STATUSES.has(status)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid status. Allowed values: WAITING, IN_PROGRESS, COMPLETED, CANCELLED.",
+        message: "Invalid status. Allowed values: WAITING, PENDING, IN_PROGRESS, COMPLETED, CANCELLED.",
       });
     }
 
@@ -289,4 +307,74 @@ const updateAppointmentStatus = async (req, res, next) => {
   }
 };
 
-module.exports = { bookAppointment, getLiveQueue, updateAppointmentStatus };
+const createQueueAppointment = async (req, res, next) => {
+  try {
+    const {
+      studentProfileId,
+      preferredDate,
+      preferredTime,
+      symptoms,
+      serviceType,
+    } = req.body;
+
+    const normalizedStudentProfileId = typeof studentProfileId === "string" ? studentProfileId.trim() : "";
+    const parsedPreferredDate = parseValidDate(preferredDate);
+    const normalizedPreferredTime = typeof preferredTime === "string" ? preferredTime.trim() : "";
+    const normalizedSymptoms = typeof symptoms === "string" ? symptoms.trim() : "";
+    const normalizedProvidedServiceType = normalizeServiceType(typeof serviceType === "string" ? serviceType.trim() : "") || "Medical Consultation";
+
+    if (!normalizedStudentProfileId) {
+      return res.status(400).json({ success: false, message: "studentProfileId is required." });
+    }
+
+    if (!parsedPreferredDate) {
+      return res.status(400).json({ success: false, message: "preferredDate must be a valid date." });
+    }
+
+    if (!normalizedPreferredTime) {
+      return res.status(400).json({ success: false, message: "preferredTime is required." });
+    }
+
+    if (!normalizedSymptoms) {
+      return res.status(400).json({ success: false, message: "symptoms are required." });
+    }
+
+    const studentProfile = await prisma.studentProfile.findUnique({
+      where: { id: normalizedStudentProfileId },
+      select: { id: true },
+    });
+
+    if (!studentProfile) {
+      return res.status(404).json({ success: false, message: "Student profile not found." });
+    }
+
+    const allowedServiceTypes = resolveAllowedServiceTypes(req);
+    if (!allowedServiceTypes.includes(normalizedProvidedServiceType)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to create this service queue item.",
+      });
+    }
+
+    const appointment = await prisma.appointment.create({
+      data: {
+        studentProfileId: normalizedStudentProfileId,
+        preferredDate: parsedPreferredDate,
+        preferredTime: normalizedPreferredTime,
+        serviceType: normalizedProvidedServiceType,
+        symptoms: normalizedSymptoms,
+        status: "WAITING",
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Appointment added to queue.",
+      data: appointment,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { bookAppointment, getLiveQueue, updateAppointmentStatus, createQueueAppointment };

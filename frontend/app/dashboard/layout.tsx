@@ -54,12 +54,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       return;
     }
 
-    if (role !== 'CLINIC_STAFF') {
+    if (role !== 'DOCTOR') {
       router.replace(getDashboardRouteForRole(role));
     }
   }, [hasDedicatedRoleLayout, role, router, token]);
 
-  const isAuthorized = !!token && role === 'CLINIC_STAFF';
+  const isAuthorized = !!token && role === 'DOCTOR';
 
   // Student and admin pages use their own self-contained layouts
   if (hasDedicatedRoleLayout) {
@@ -81,6 +81,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        userName="Doctor"
+        userRole="doctor"
+        brandSubtitle="Doctor Portal"
       />
 
       {/* Right side: TopBar + page content */}
@@ -89,6 +92,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Sticky top header — hamburger opens sidebar on mobile */}
         <TopBar
           onMenuOpen={() => setSidebarOpen(true)}
+          userName="Doctor"
         />
 
         {/* Scrollable page content */}

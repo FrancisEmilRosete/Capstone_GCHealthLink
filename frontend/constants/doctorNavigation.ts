@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { CertificatesIcon, ConsultationsIcon, DashboardIcon, NotificationsIcon, ScannerIcon, UsersIcon } from '@/components/icons/NavIcons';
+import { CertificatesIcon, DashboardIcon, InventoryIcon, NotificationsIcon, ScannerIcon, UsersIcon } from '@/components/icons/NavIcons';
 
 export interface DoctorNavItem {
   id:     string;
@@ -22,7 +22,6 @@ export interface DoctorNavGroup {
 
 export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
   {
-    groupLabel: 'MAIN',
     items: [
       {
         id:    'dashboard',
@@ -31,16 +30,10 @@ export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
         icon:  DashboardIcon,
       },
       {
-        id:    'consultations',
-        label: 'Consultations',
-        href:  '/dashboard/doctor/consultations',
-        icon:  ConsultationsIcon,
-      },
-      {
-        id:    'records',
-        label: 'Medical Records',
-        href:  '/dashboard/doctor/records',
-        icon:  CertificatesIcon,
+        id:    'students',
+        label: 'Students',
+        href:  '/dashboard/doctor/students',
+        icon:  UsersIcon,
       },
       {
         id:    'scanner',
@@ -49,10 +42,16 @@ export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
         icon:  ScannerIcon,
       },
       {
-        id:    'students',
-        label: 'Students',
-        href:  '/dashboard/doctor/students',
-        icon:  UsersIcon,
+        id:    'records',
+        label: 'Logs',
+        href:  '/dashboard/doctor/records',
+        icon:  CertificatesIcon,
+      },
+      {
+        id:    'inventory',
+        label: 'Medical Inventory',
+        href:  '/dashboard/doctor/inventory',
+        icon:  InventoryIcon,
       },
       {
         id:    'notifications',

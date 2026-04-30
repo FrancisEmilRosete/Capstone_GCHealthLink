@@ -28,8 +28,11 @@ type StudentBlueprint = {
 };
 
 type CreatedStudent = {
+  userId: string;
   profileId: string;
   studentNumber: string;
+  firstName: string;
+  lastName: string;
   fullName: string;
   courseDept: string;
 };
@@ -462,8 +465,11 @@ async function seedStudentsAndMedicalFlags(): Promise<CreatedStudent[]> {
     }
 
     created.push({
+      userId: record.id,
       profileId: record.studentProfile.id,
       studentNumber: record.studentProfile.studentNumber,
+      firstName: record.studentProfile.firstName,
+      lastName: record.studentProfile.lastName,
       fullName: `${record.studentProfile.firstName} ${record.studentProfile.lastName}`,
       courseDept: record.studentProfile.courseDept,
     });
@@ -588,7 +594,94 @@ async function seedAdvisories(staffId: string) {
   });
 }
 
-async function seedCertificates(staffId: string, students: any[]) {
+async function seedClinicalRecords(students: CreatedStudent[]) {
+  console.log("\n6) Seeding physical exams, lab results, appointments, and medical documents...");
+
+  const examRows = students.slice(0, 10).map((student, index) => {
+    const examDate = daysAgo(45 - index * 2, 9);
+    return {
+      studentProfileId: student.profileId,
+      yearLevel: index % 4 === 0 ? "YR_1" : index % 4 === 1 ? "YR_2" : index % 4 === 2 ? "YR_3" : "YR_4",
+      examDate,
+      bp: "120/80",
+      cr: "78 bpm",
+      rr: "18 cpm",
+      temp: "36.7 C",
+      weight: `${50 + index} kg`,
+      height: `${155 + index} cm`,
+      bmi: "22.1",
+      visualAcuity: "20/20",
+      skin: "Normal",
+      heent: "Normal",
+      chestLungs: "Clear",
+      heart: "Normal S1/S2",
+      abdomen: "Soft, non-tender",
+      extremities: "No edema",
+      others: "Fit for school activities",
+      examinedBy: "Campus Clinic",
+    };
+  });
+
+  const labRows = students.slice(0, 8).map((student, index) => {
+    const labDate = daysAgo(35 - index * 2, 10);
+    return {
+      studentProfileId: student.profileId,
+      date: labDate,
+      dateReceived: daysAgo(34 - index * 2, 13),
+      hgb: "13.8",
+      hct: "41",
+      wbc: "7.5",
+      pltCt: "280",
+      bloodType: index % 2 === 0 ? "O+" : "A+",
+      glucoseSugar: "Negative",
+      protein: "Negative",
+      xrayResult: "NORMAL",
+      xrayFindingsEnc: "No active pulmonary infiltrates",
+      othersEnc: "Routine wellness panel",
+    };
+  });
+
+  const appointmentRows = students.slice(0, 12).map((student, index) => {
+    const preferredDate = daysAgo(-(index % 4), 8 + (index % 6));
+    const status = index < 5
+      ? "WAITING"
+      : index < 8
+        ? "IN_PROGRESS"
+        : index < 10
+          ? "COMPLETED"
+          : "CANCELLED";
+
+    return {
+      studentProfileId: student.profileId,
+      preferredDate,
+      preferredTime: `${String(8 + (index % 6)).padStart(2, "0")}:00`,
+      serviceType: index % 3 === 0 ? "Dental Check-up" : "Medical Consultation",
+      symptoms: index % 3 === 0 ? "Tooth sensitivity" : "Headache and mild fever",
+      status,
+    };
+  });
+
+  const medicalDocumentRows = students.slice(0, 6).map((student, index) => ({
+    studentProfileId: student.profileId,
+    fileName: `physical-exam-${student.studentNumber}.pdf`,
+    fileUrl: `/uploads/seed/physical-exam-${student.studentNumber}.pdf`,
+    documentType: index % 2 === 0 ? "PHYSICAL_EXAM" : "LAB_RESULT",
+  }));
+
+  await prisma.$transaction([
+    prisma.physicalExamination.createMany({ data: examRows }),
+    prisma.labResult.createMany({ data: labRows }),
+    prisma.appointment.createMany({ data: appointmentRows }),
+    prisma.medicalDocument.createMany({ data: medicalDocumentRows }),
+  ]);
+
+  console.log(`   Physical examinations seeded: ${examRows.length}`);
+  console.log(`   Lab results seeded: ${labRows.length}`);
+  console.log(`   Appointments seeded: ${appointmentRows.length}`);
+  console.log(`   Medical documents seeded: ${medicalDocumentRows.length}`);
+}
+
+async function seedCertificates(staffId: string, students: CreatedStudent[]) {
   console.log("\n-> Seeding Medical Certificates...");
   const recentDays = [1, 2, 3];
   let issuedCount = 0;
@@ -601,12 +694,12 @@ async function seedCertificates(staffId: string, students: any[]) {
       data: {
         userId: staffId,
         action: "ISSUED_MED_CERTIFICATE",
-        targetId: student.id,
+        targetId: student.profileId,
         ipAddress: "127.0.0.1",
         timestamp: dateIssued,
         metadata: {
           certificateId: "CERT-SEED-" + Date.now() + "-" + issuedCount,
-          studentProfileId: student.id,
+          studentProfileId: student.profileId,
           studentNumber: student.studentNumber,
           studentName: student.firstName + " " + student.lastName,
           courseDept: student.courseDept,
@@ -628,6 +721,7 @@ async function main(): Promise<void> {
   const clinicStaffId = await fetchClinicStaffId();
   const inventoryMap = await seedInventory();
   const students = await seedStudentsAndMedicalFlags();
+  await seedClinicalRecords(students);
   
   await seedAdvisories(clinicStaffId);
   await seedCertificates(clinicStaffId, students);

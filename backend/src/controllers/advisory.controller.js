@@ -12,6 +12,80 @@ function normalizeDept(value) {
   return dept ? dept.toUpperCase() : "";
 }
 
+function normalizeAudienceList(value) {
+  if (Array.isArray(value)) {
+    const unique = [];
+    const seen = new Set();
+
+    for (const raw of value) {
+      const normalized = normalizeDept(raw);
+      if (!normalized) continue;
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        unique.push(normalized);
+      }
+    }
+
+    return unique;
+  }
+
+  const single = normalizeDept(value);
+  return single ? [single] : [];
+}
+
+function serializeAudienceTargets(targets) {
+  if (!targets.length || targets.includes("ALL")) {
+    return "ALL";
+  }
+
+  return targets.join(",");
+}
+
+function parseAudienceTargets(value) {
+  const normalized = normalizeDept(value);
+  if (!normalized || normalized === "ALL") {
+    return ["ALL"];
+  }
+
+  return normalized
+    .split(",")
+    .map((entry) => normalizeDept(entry))
+    .filter(Boolean);
+}
+
+function buildTargetDeptWhere(tokens) {
+  if (!tokens.length || tokens.includes("ALL")) {
+    return {};
+  }
+
+  const clauses = [];
+
+  for (const token of tokens) {
+    clauses.push({
+      targetDept: {
+        equals: token,
+        mode: "insensitive",
+      },
+    });
+
+    clauses.push({
+      targetDept: {
+        contains: token,
+        mode: "insensitive",
+      },
+    });
+  }
+
+  clauses.push({
+    targetDept: {
+      equals: "ALL",
+      mode: "insensitive",
+    },
+  });
+
+  return { OR: clauses };
+}
+
 function normalizeStringArray(value, fieldName) {
   if (value === undefined) {
     return { ok: true, value: [] };
@@ -129,7 +203,10 @@ const createAdvisory = async (req, res, next) => {
   try {
     const title = normalizeText(req.body?.title);
     const message = normalizeText(req.body?.message);
-    const targetDept = normalizeDept(req.body?.targetDept) || "ALL";
+    const rawTargets = normalizeAudienceList(req.body?.targetDepts);
+    const fallbackTarget = normalizeDept(req.body?.targetDept);
+    const targets = rawTargets.length ? rawTargets : (fallbackTarget ? [fallbackTarget] : ["ALL"]);
+    const targetDept = serializeAudienceTargets(targets);
     const severity = normalizeText(req.body?.severity).toUpperCase() || "INFO";
     const adminId = req.user.userId;
 
@@ -201,12 +278,7 @@ const getAdvisories = async (req, res, next) => {
       const studentDept = normalizeDept(student?.studentProfile?.courseDept);
 
       if (!studentDept) {
-        whereClause = {
-          targetDept: {
-            equals: "ALL",
-            mode: "insensitive",
-          },
-        };
+        whereClause = buildTargetDeptWhere(["ALL", "STUDENT"]);
       } else {
         if (requestedDept && requestedDept !== "ALL" && requestedDept !== studentDept) {
           return res.status(403).json({
@@ -216,55 +288,23 @@ const getAdvisories = async (req, res, next) => {
         }
 
         if (requestedDept === "ALL") {
-          whereClause = {
-            targetDept: {
-              equals: "ALL",
-              mode: "insensitive",
-            },
-          };
+          whereClause = buildTargetDeptWhere(["ALL", "STUDENT"]);
         } else {
-          whereClause = {
-            OR: [
-              {
-                targetDept: {
-                  equals: "ALL",
-                  mode: "insensitive",
-                },
-              },
-              {
-                targetDept: {
-                  equals: studentDept,
-                  mode: "insensitive",
-                },
-              },
-            ],
-          };
+          whereClause = buildTargetDeptWhere(["ALL", "STUDENT", studentDept]);
         }
       }
     } else if (requestedDept) {
       whereClause = requestedDept === "ALL"
-        ? {
-          targetDept: {
-            equals: "ALL",
-            mode: "insensitive",
-          },
-        }
-        : {
-          OR: [
-            {
-              targetDept: {
-                equals: requestedDept,
-                mode: "insensitive",
-              },
-            },
-            {
-              targetDept: {
-                equals: "ALL",
-                mode: "insensitive",
-              },
-            },
-          ],
-        };
+        ? buildTargetDeptWhere(["ALL"])
+        : buildTargetDeptWhere(["ALL", requestedDept]);
+    } else if (role === "DOCTOR") {
+      whereClause = buildTargetDeptWhere(["ALL", "DOCTOR"]);
+    } else if (role === "DENTAL") {
+      whereClause = buildTargetDeptWhere(["ALL", "DENTAL"]);
+    } else if (role === "CLINIC_STAFF") {
+      whereClause = buildTargetDeptWhere(["ALL", "NURSE", "CLINIC_STAFF"]);
+    } else if (role === "ADMIN") {
+      whereClause = buildTargetDeptWhere(["ALL", "ADMIN"]);
     }
 
     const advisories = await prisma.healthAdvisory.findMany({
@@ -273,10 +313,15 @@ const getAdvisories = async (req, res, next) => {
       take: 30,
     });
 
+    const normalizedAdvisories = advisories.map((advisory) => ({
+      ...advisory,
+      targetDept: serializeAudienceTargets(parseAudienceTargets(advisory.targetDept)),
+    }));
+
     res.json({
       success: true,
       message: "Advisories retrieved successfully.",
-      data: advisories
+      data: normalizedAdvisories
     });
   } catch (error) {
     next(error);

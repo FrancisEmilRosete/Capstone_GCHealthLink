@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { 
   User, Activity, FileText, Pill, Clock, 
   ChevronLeft, Printer, Save, Plus, ShieldAlert, Stethoscope, Heart, Smile
@@ -40,8 +40,20 @@ interface ScanProfile {
 
 export default function DoctorRecordPage() {
   const params = useParams();
+  const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isNurseSideRecord = pathname?.startsWith('/dashboard/doctor/') ?? false;
+  const isDoctorSideRecord = pathname?.startsWith('/dashboard/staff/') ?? false;
+  const shouldShowDentalRecordsTab = !isNurseSideRecord && !isDoctorSideRecord;
   const studentNumberParam = typeof params.studentId === 'string' ? decodeURIComponent(params.studentId) : '';
+  const backRoute = pathname?.startsWith('/dashboard/doctor/students/')
+    ? '/dashboard/doctor/students'
+    : pathname?.startsWith('/dashboard/staff/')
+      ? '/dashboard/staff/record'
+      : '/dashboard/doctor/records';
+  const returnTo = searchParams.get('returnTo') || '';
+  const resolvedBackRoute = returnTo.startsWith('/dashboard/') ? returnTo : backRoute;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -167,9 +179,9 @@ export default function DoctorRecordPage() {
     { id: 'overview', label: 'Overview', icon: <User size={18} /> },
     { id: 'laboratory-results', label: 'Laboratory Results', icon: <Activity size={18} /> },
     { id: 'clinical-history', label: 'Clinical History', icon: <FileText size={18} /> },
-    { id: 'dental-records', label: 'Dental Records', icon: <Smile size={18} /> },
+    ...(shouldShowDentalRecordsTab ? [{ id: 'dental-records', label: 'Dental Records', icon: <Smile size={18} /> }] : []),
     { id: 'medical-consultation', label: 'Medical Consultation', icon: <Stethoscope size={18} /> },
-    { id: 'prescriptions', label: 'Prescriptions', icon: <Pill size={18} /> },
+    ...(!isNurseSideRecord ? [{ id: 'prescriptions', label: 'Prescriptions', icon: <Pill size={18} /> }] : []),
   ];
 
   if (loading) return (
@@ -190,7 +202,7 @@ export default function DoctorRecordPage() {
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => router.push('/dashboard/doctor/records')}
+              onClick={() => router.push(resolvedBackRoute)}
               className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 print:hidden"
             >
               <ChevronLeft size={20} />
@@ -315,7 +327,7 @@ export default function DoctorRecordPage() {
           )}
 
           {/* DENTAL RECORDS TAB - Coming Soon */}
-          {activeTab === 'dental-records' && (
+          {shouldShowDentalRecordsTab && activeTab === 'dental-records' && (
             <div className="bg-white p-12 rounded-2xl border border-slate-100 text-center">
               <Smile size={48} className="mx-auto text-slate-300 mb-4" />
               <h3 className="text-xl font-bold text-slate-800 mb-2">Dental Records</h3>
@@ -332,7 +344,7 @@ export default function DoctorRecordPage() {
           )}
 
           {/* PRESCRIPTIONS TAB */}
-          {activeTab === 'prescriptions' && (
+          {!isNurseSideRecord && activeTab === 'prescriptions' && (
             <div className="max-w-4xl mx-auto">
               <PrescriptionPad 
                 patient={{

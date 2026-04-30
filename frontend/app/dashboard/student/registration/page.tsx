@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -123,6 +123,7 @@ interface PersonalData {
 function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof PersonalData, v: string) => void }) {
   const selectedDepartment = data.department;
   const availableCourses = getCoursesByDepartmentCode(selectedDepartment);
+  const birthdayInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <div>
@@ -203,7 +204,33 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
             </div>
           </div>
           <Field label="Birthday">
-            <input type="date" className={inputCls} placeholder="mm/dd/yyyy" value={data.birthday} onChange={e => set('birthday', e.target.value)} />
+            <div className="relative">
+              <input
+                ref={birthdayInputRef}
+                type="date"
+                className={`${inputCls} pr-10`}
+                placeholder="mm/dd/yyyy"
+                value={data.birthday}
+                onChange={e => set('birthday', e.target.value)}
+                onFocus={(event) => {
+                  const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                  input.showPicker?.();
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const input = birthdayInputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+                  input?.showPicker?.();
+                  input?.focus();
+                }}
+                className="absolute inset-y-0 right-2 my-auto h-7 w-7 rounded-md border border-gray-200 text-gray-500 hover:text-teal-600 hover:border-teal-300 bg-white text-sm"
+                aria-label="Open birthday calendar"
+              >
+                📅
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-gray-500 sm:hidden">Tap the calendar icon to pick your birthday faster.</p>
           </Field>
         </div>
 

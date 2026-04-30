@@ -341,7 +341,7 @@ export default function MedicalTrackingPage() {
                 )}
 
                 <Link
-                  href={`/dashboard/staff/record/${encodeURIComponent(selectedVisit.studentProfile.studentNumber)}`}
+                  href={`/dashboard/staff/record/${encodeURIComponent(selectedVisit.studentProfile.studentNumber)}?returnTo=${encodeURIComponent('/dashboard/staff/medical-tracking')}`}
                   className="block w-full text-center px-3 py-2.5 mt-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors"
                 >
                   Open Full Record

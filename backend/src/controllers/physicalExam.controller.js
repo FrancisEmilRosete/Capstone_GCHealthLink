@@ -264,6 +264,7 @@ function toExamRow(exam) {
     courseDept: exam.studentProfile.courseDept,
     yearLevel: YEAR_LEVEL_LABEL[exam.yearLevel] || exam.yearLevel,
     examDate: exam.examDate,
+    createdAt: exam.createdAt,
     bmi: exam.bmi || "",
     bp: exam.bp || "",
     examinedBy: exam.examinedBy || "",

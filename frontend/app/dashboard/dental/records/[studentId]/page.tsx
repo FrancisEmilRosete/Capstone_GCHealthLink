@@ -135,22 +135,21 @@ const DentalRecordPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // MOCK DATA
   const [patient, setPatient] = useState<DentalPatientState>({
     id: studentNumber,
-    firstName: 'Francis Emil',
-    lastName: 'Rosete',
-    middleInitial: 'P.',
-    dob: '2002-10-12',
-    sex: 'Male',
-    address: '123 Health St., Olongapo City',
-    courseYear: 'BSIT 4A',
-    contact: '0912-345-6789',
+    firstName: '',
+    lastName: '',
+    middleInitial: '',
+    dob: '',
+    sex: '',
+    address: '',
+    courseYear: '',
+    contact: '',
     history: {
       Diabetes: false,
       'Heart Disease': false,
-      Allergies: true,
-      Hygiene: true,
+      Allergies: false,
+      Hygiene: false,
     },
     chartData: {},
     treatmentEntries: [],
@@ -247,6 +246,12 @@ const DentalRecordPage = () => {
     setPatient(prev => ({ ...prev, treatmentEntries: [entry, ...prev.treatmentEntries] }));
   };
 
+  const displayName = loading
+    ? 'Loading student record...'
+    : `${patient.lastName}, ${patient.firstName} ${patient.middleInitial}`.trim() || 'Student Record';
+
+  const resolvedPatientAge = patient.resolvedAge ?? computeAgeFromBirthday(patient.dob) ?? null;
+
   const menuItems = [
     { id: 'profile', label: 'Profiling & History', icon: <User size={18} />, color: 'emerald' },
     { id: 'charting', label: 'Dental Charting', icon: <Activity size={18} />, color: 'emerald' },
@@ -279,14 +284,14 @@ const DentalRecordPage = () => {
           <div className="hidden sm:block h-8 w-px bg-slate-200"></div>
           <div>
             <h2 className="text-xl font-black text-slate-800 tracking-tight">
-              {patient.lastName}, {patient.firstName} {patient.middleInitial}
+              {displayName}
             </h2>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2 mt-0.5">
-              <span>{patient.courseYear}</span>
+              <span>{patient.courseYear || 'N/A'}</span>
               <span className="w-1 h-1 rounded-full bg-slate-300"></span>
               <span>ID: {patient.id || studentNumber}</span>
               <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-              <span>{patient.sex || 'N/A'}, {patient.resolvedAge ?? 'N/A'} YRS</span>
+              <span>{patient.sex || 'N/A'}, {resolvedPatientAge ?? 'N/A'} YRS</span>
             </p>
           </div>
         </div>
@@ -342,7 +347,7 @@ const DentalRecordPage = () => {
             {activeTab === 'log' && <DentalTreatmentLog entries={patient.treatmentEntries} onAdd={handleAddTreatment} />}
             {activeTab === 'prescription' && (
               <DentalPrescription 
-                patient={{ fullName: `${patient.lastName}, ${patient.firstName}`, age: 21, date: new Date().toLocaleDateString() }}
+                patient={{ fullName: `${patient.lastName}, ${patient.firstName}`.trim(), age: resolvedPatientAge ?? 0, date: new Date().toLocaleDateString() }}
                 content={patient.prescription}
                 onChange={(v) => handlePatientUpdate('prescription', v)}
                 onPrint={() => window.print()}
@@ -351,7 +356,7 @@ const DentalRecordPage = () => {
             )}
             {activeTab === 'clearance' && (
               <DentalClearance 
-                patient={{ fullName: `${patient.lastName}, ${patient.firstName}`, age: 21, courseYear: patient.courseYear, date: new Date().toLocaleDateString() }}
+                patient={{ fullName: `${patient.lastName}, ${patient.firstName}`.trim(), age: resolvedPatientAge ?? 0, courseYear: patient.courseYear, date: new Date().toLocaleDateString() }}
                 clearanceData={patient.clearance}
                 onUpdate={(f, v) => setPatient(prev => ({ ...prev, clearance: { ...prev.clearance, [f]: v } }))}
                 onPrint={() => window.print()}

@@ -22,17 +22,40 @@ interface AuditLogsResponse {
   };
 }
 
-const ROLE_OPTIONS = ['ALL', 'STUDENT', 'CLINIC_STAFF', 'ADMIN'];
-
-const ACTION_BADGE: Record<string, string> = {
-  LOGIN_SUCCESS:    'bg-green-100 text-green-700',
-  LOGIN_FAILED:     'bg-red-100 text-red-700',
-  LOGOUT:           'bg-gray-100 text-gray-600',
-  DEFAULT:          'bg-blue-100 text-blue-700',
+const ACTION_LABELS: Record<string, string> = {
+  LOGIN_SUCCESS: 'Signed in successfully',
+  LOGIN_FAILED: 'Failed sign-in attempt',
+  LOGOUT: 'Signed out',
+  VIEWED_ADMIN_PROFILE: 'Viewed admin profile',
+  VIEWED_HEALTH_ANALYTICS: 'Viewed health analytics dashboard',
+  EXPORTED_MONTHLY_REPORT_PDF: 'Exported monthly report (PDF)',
+  ADMIN_VIEWED_USERS: 'Viewed user accounts list',
+  ADMIN_VIEWED_AUDIT_LOGS: 'Viewed activity logs',
+  ADMIN_VIEWED_RECORDS_LIST: 'Viewed student health records list',
+  ADMIN_VIEWED_STUDENT_DETAIL: 'Viewed student health record details',
+  VIEWED_INVENTORY: 'Viewed medicine inventory',
+  ADDED_INVENTORY_ITEM: 'Added inventory item',
+  REMOVED_INVENTORY_ITEM: 'Removed inventory item',
+  BOOKED_APPOINTMENT: 'Booked consultation appointment',
+  UPDATED_APPOINTMENT_STATUS: 'Updated appointment status',
+  RECORDED_CLINIC_VISIT: 'Recorded clinic consultation',
+  RECORDED_PHYSICAL_EXAM: 'Recorded physical examination',
+  SUBMITTED_HEALTH_REGISTRATION: 'Submitted student health registration',
+  GENERATED_QR_CODE: 'Generated personal QR code',
+  VIEWED_MEDICAL_RECORD: 'Viewed medical record',
+  SENT_EMERGENCY_ALERT: 'Sent emergency clinic alert',
+  SENT_EMERGENCY_SMS: 'Sent emergency SMS alert',
+  UPDATED_NOTIFICATION_STATE: 'Updated notification read/dismiss status',
 };
 
-function actionBadgeClass(action: string) {
-  return ACTION_BADGE[action] ?? ACTION_BADGE.DEFAULT;
+function toActionLabel(action: string) {
+  if (ACTION_LABELS[action]) return ACTION_LABELS[action];
+  return action
+    .toLowerCase()
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function formatTs(ts: string) {
@@ -47,12 +70,7 @@ export default function AdminAuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
-  // Filters
-  const [search,   setSearch]   = useState('');
-  const [role,     setRole]     = useState('ALL');
-  const [action,   setAction]   = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo,   setDateTo]   = useState('');
+  const [search, setSearch] = useState('');
 
   // Pagination
   const [page,       setPage]       = useState(1);
@@ -70,10 +88,6 @@ export default function AdminAuditPage() {
     try {
       const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
       if (search.trim())  params.set('search',   search.trim());
-      if (role !== 'ALL') params.set('role',     role);
-      if (action.trim())  params.set('action',   action.trim());
-      if (dateFrom)       params.set('dateFrom', dateFrom);
-      if (dateTo)         params.set('dateTo',   dateTo);
 
       const res = await api.get<AuditLogsResponse>(`/admin/audit-logs?${params.toString()}`, token);
       setLogs(res.data.logs);
@@ -85,7 +99,7 @@ export default function AdminAuditPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, role, action, dateFrom, dateTo]);
+  }, [search]);
 
   useEffect(() => { void loadLogs(1); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,54 +108,35 @@ export default function AdminAuditPage() {
     void loadLogs(1);
   }
 
-  function handleClear() {
-    setSearch(''); setRole('ALL'); setAction(''); setDateFrom(''); setDateTo('');
-    setTimeout(() => void loadLogs(1), 0);
-  }
-
   return (
-    <div className="p-6 space-y-5 max-w-7xl mx-auto">
+    <div className="p-6 space-y-4 max-w-6xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Activity Logs</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Comprehensive audit trail of all user actions — {total.toLocaleString()} entries
+          Audit log monitoring view - {total.toLocaleString()} entries
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">Tracks sign-ins, system actions, and affected entities for accountability and review.</p>
       </div>
 
-      {/* Filter bar */}
-      <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <form onSubmit={handleSearch} className="bg-white rounded-xl border border-gray-100 p-3">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by user email..."
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            placeholder="Search by user email"
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
           />
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-          >
-            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r === 'ALL' ? 'All Roles' : r.replace('_', ' ')}</option>)}
-          </select>
-          <input
-            value={action}
-            onChange={(e) => setAction(e.target.value)}
-            placeholder="Filter by action code (e.g. LOGIN_SUCCESS)..."
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-          />
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
-        </div>
-        <div className="flex gap-2 mt-3">
-          <button type="submit" className="px-4 py-2 text-sm font-semibold rounded-xl bg-teal-500 text-white hover:bg-teal-600">
-            Apply Filters
+          <button type="submit" className="px-4 py-2 text-sm font-semibold rounded-lg bg-teal-500 text-white hover:bg-teal-600">
+            Search
           </button>
-          <button type="button" onClick={handleClear} className="px-4 py-2 text-sm font-semibold rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
-            Clear
+          <button
+            type="button"
+            onClick={() => {
+              setSearch('');
+              void loadLogs(1);
+            }}
+            className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+          >
+            Reset
           </button>
         </div>
       </form>
@@ -150,8 +145,7 @@ export default function AdminAuditPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -159,16 +153,14 @@ export default function AdminAuditPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date & Time</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User Email</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User Role</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action Code</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Target Record ID</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Source IP</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">Loading audit log entries...</td></tr>
+                <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400 text-sm">Loading audit logs...</td></tr>
               ) : logs.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No audit entries found for the selected filters.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400 text-sm">No audit entries found.</td></tr>
               ) : logs.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{formatTs(log.timestamp)}</td>
@@ -184,22 +176,13 @@ export default function AdminAuditPage() {
                       <span className="text-gray-400 text-xs">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${actionBadgeClass(log.action)}`}>
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs truncate max-w-[120px]">
-                    {log.targetId ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">{log.ipAddress ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-700 text-sm">{toActionLabel(log.action)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
             <p className="text-xs text-gray-500">

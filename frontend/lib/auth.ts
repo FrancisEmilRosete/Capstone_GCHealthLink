@@ -203,9 +203,11 @@ export function getDashboardRouteForRole(role: string | null | undefined): strin
   const normalized = normalizeRole(role || null);
 
   if (normalized === 'ADMIN') return '/dashboard/admin';
-  if (normalized === 'CLINIC_STAFF') return '/dashboard/staff';
+  // Side switch: CLINIC_STAFF (nurse) now uses the doctor dashboard side.
+  if (normalized === 'CLINIC_STAFF') return '/dashboard/doctor';
   if (normalized === 'STUDENT') return '/dashboard/student';
-  if (normalized === 'DOCTOR') return '/dashboard/doctor';
+  // Side switch: DOCTOR now uses the staff dashboard side.
+  if (normalized === 'DOCTOR') return '/dashboard/staff';
   if (normalized === 'DENTAL') return '/dashboard/dental';
   return '/login';
 }

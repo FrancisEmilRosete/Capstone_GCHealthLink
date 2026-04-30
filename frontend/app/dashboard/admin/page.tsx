@@ -54,6 +54,33 @@ interface AnalyticsResponse {
   data: AnalyticsData;
 }
 
+function downloadAdminAnalyticsCsv(
+  monthly: Array<{ month: string; count: number }>,
+  weekly: Array<{ day: string; count: number }>,
+  concerns: Array<{ tag: string; count: number }>,
+  departments: Array<[string, number]>,
+) {
+  const rows: string[][] = [
+    ['Section', 'Label', 'Value'],
+    ...monthly.map((item) => ['Monthly Visits', item.month, String(item.count)]),
+    ...weekly.map((item) => ['Weekly Visits', item.day, String(item.count)]),
+    ...concerns.map((item) => ['Top Concerns', item.tag || 'General Consultation', String(item.count)]),
+    ...departments.map(([department, count]) => ['Department Heatmap', department, String(count)]),
+  ];
+
+  const csv = rows
+    .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = window.document.createElement('a');
+  anchor.href = url;
+  anchor.download = `admin_dashboard_export_${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  window.URL.revokeObjectURL(url);
+}
+
 function mapTopConcernTags(items: TopConcern[]) {
   return items.map((item) => ({
     tag: toDisplayConcernTag(item.tag),
@@ -271,9 +298,19 @@ export default function AdminDashboard() {
   const outbreakCount = Array.isArray(data?.outbreakWatch) ? data?.outbreakWatch.length : 0;
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Department Health Overview</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Live analytics from backend records</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Department Health Overview</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Live analytics from backend records</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => downloadAdminAnalyticsCsv(data?.monthlyVisits || [], data?.weeklyVisits || [], topConcerns, departmentRows)}
+          disabled={loading}
+          className="shrink-0 rounded-xl bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Preparing...' : 'Export'}
+        </button>
       </div>
 
       {error && (

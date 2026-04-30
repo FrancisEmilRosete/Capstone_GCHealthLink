@@ -58,7 +58,7 @@ router.get(
 router.get(
   "/visits",
   protect,
-  authorize("CLINIC_STAFF"),
+  authorize("CLINIC_STAFF", "DOCTOR", "ADMIN"),
   auditLogger("VIEWED_CLINIC_VISITS"),
   getVisits
 );
@@ -66,7 +66,7 @@ router.get(
 router.post(
   "/visits",
   protect,
-  authorize("CLINIC_STAFF"),
+  authorize("CLINIC_STAFF", "DOCTOR", "ADMIN"),
   auditLogger("RECORDED_CLINIC_VISIT"),
   recordVisit
 );

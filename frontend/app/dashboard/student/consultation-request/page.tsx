@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Clock3 } from 'lucide-react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -29,7 +30,7 @@ function todayDateString() {
 export default function ConsultationRequestPage() {
   const [serviceType, setServiceType] = useState<ServiceType>('Medical Consultation');
   const [preferredDate, setPreferredDate] = useState(todayDateString());
-  const [preferredTime, setPreferredTime] = useState('09:00 AM');
+  const [preferredTime, setPreferredTime] = useState('09:00');
   const [symptoms, setSymptoms] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
@@ -128,13 +129,16 @@ export default function ConsultationRequestPage() {
 
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Preferred Time</label>
-            <input
-              type="text"
-              placeholder="e.g. 09:00 AM"
-              value={preferredTime}
-              onChange={(event) => setPreferredTime(event.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
-            />
+            <div className="relative">
+              <Clock3 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="time"
+                step={300}
+                value={preferredTime}
+                onChange={(event) => setPreferredTime(event.target.value)}
+                className="w-full border border-gray-200 rounded-xl pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+              />
+            </div>
           </div>
         </div>
 

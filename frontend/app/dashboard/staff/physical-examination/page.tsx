@@ -320,7 +320,7 @@ export default function PhysicalExaminationPage() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
-                        onClick={() => router.push(`/dashboard/staff/record/${record.studentNumber}`)}
+                        onClick={() => router.push(`/dashboard/staff/record/${record.studentNumber}?returnTo=${encodeURIComponent('/dashboard/staff/physical-examination')}`)}
                         className="p-2 rounded-lg text-gray-400 hover:text-teal-500 hover:bg-teal-50 transition-colors"
                         aria-label="View record"
                       >

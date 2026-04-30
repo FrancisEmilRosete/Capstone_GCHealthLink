@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 
 interface InventoryItem {
   id: string;
@@ -213,6 +216,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 }
 
 export default function InventoryPage() {
+  const pathname = usePathname();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -222,6 +226,8 @@ export default function InventoryPage() {
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [scannedStudent, setScannedStudent] = useState<QrResolvedStudent | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('itemName');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -414,19 +420,38 @@ export default function InventoryPage() {
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-gray-50">
-          <div className="relative max-w-xs">
-            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-            </svg>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search item name or unit..."
-              className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative max-w-xs flex-1">
+              <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search item name or unit..."
+                className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 placeholder-gray-300"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setQrModalOpen(true)}
+              className="text-xs font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-2 rounded-xl transition-colors"
+            >
+              Use QR
+            </button>
           </div>
         </div>
+
+        {scannedStudent && (
+          <div className="px-4 pb-3">
+            <div className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
+              <p className="text-xs font-bold text-teal-700">Scanned Student</p>
+              <p className="text-sm font-semibold text-slate-800 mt-1">{scannedStudent.lastName}, {scannedStudent.firstName}</p>
+              <p className="text-xs text-slate-600">{scannedStudent.studentNumber}</p>
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -506,6 +531,19 @@ export default function InventoryPage() {
           </table>
         </div>
       </div>
+
+      <UseQrLookupModal
+        open={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        onResolved={(student: QrResolvedStudent) => {
+          setScannedStudent(student);
+          setError('');
+        }}
+        onNotFound={() => {
+          setScannedStudent(null);
+          setError('Student not found. Please try another QR.');
+        }}
+      />
     </div>
   );
 }

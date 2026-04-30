@@ -33,9 +33,13 @@ export interface ConsultationForm {
   age: string;
   sex: string;
   chiefComplaint: string;
+  diagnosis: string;
   bp: string;
   temperature: string;
   treatmentProvided: string;
+  addFollowUp: boolean;
+  followUpDate: string;
+  followUpTime: string;
 }
 
 interface ConsultationModalProps {
@@ -43,6 +47,10 @@ interface ConsultationModalProps {
   inventoryOptions: InventoryOption[];
   onClose: () => void;
   onSave: (data: ConsultationForm, medicines: MedicineRow[]) => void;
+  mode?: 'full' | 'nurse-triage' | 'dental';
+  saveLabel?: string;
+  requireDoctorFields?: boolean;
+  initialValues?: Partial<ConsultationForm>;
 }
 
 const INPUT_CLASS = 'w-full border border-gray-300 rounded p-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500';
@@ -101,16 +109,23 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function ConsultationModal({ patient, inventoryOptions, onClose, onSave }: ConsultationModalProps) {
+export default function ConsultationModal({ patient, inventoryOptions, onClose, onSave, mode = 'full', saveLabel, requireDoctorFields = false, initialValues }: ConsultationModalProps) {
+  const isNurseTriage = mode === 'nurse-triage';
+  const isDentalMode = mode === 'dental';
   const [form, setForm] = useState<ConsultationForm>({
     visitDate: new Date().toISOString().slice(0, 10),
     visitTime: new Date().toTimeString().slice(0, 5),
     age: patient.age ?? '',
     sex: patient.sex ?? '',
     chiefComplaint: '',
+    diagnosis: '',
     bp: '',
     temperature: '',
     treatmentProvided: '',
+    addFollowUp: false,
+    followUpDate: '',
+    followUpTime: '',
+    ...initialValues,
   });
   const [medicines, setMedicines] = useState<MedicineRow[]>([]);
   const [newMedicineId, setNewMedicineId] = useState('');
@@ -151,6 +166,11 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
     };
   }, [onClose]);
 
+  useEffect(() => {
+    if (!initialValues) return;
+    setForm((current) => ({ ...current, ...initialValues }));
+  }, [initialValues]);
+
   function set(field: keyof ConsultationForm) {
     return (value: string) => setForm((current) => ({ ...current, [field]: value }));
   }
@@ -179,7 +199,14 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
   function handleSave() {
     if (!form.visitDate) { setValidationError('Date is required.'); return; }
     if (!form.chiefComplaint.trim()) { setValidationError('Chief Complaint is required.'); return; }
-    if (!form.treatmentProvided.trim()) { setValidationError('Treatment provided is required.'); return; }
+    if (!isDentalMode && !form.bp.trim()) { setValidationError('Blood Pressure is required.'); return; }
+    if (!isDentalMode && !form.temperature.trim()) { setValidationError('Temperature is required.'); return; }
+    if (!isNurseTriage && requireDoctorFields && !form.diagnosis.trim()) { setValidationError('Diagnosis is required.'); return; }
+    if (!isNurseTriage && !form.treatmentProvided.trim()) { setValidationError('Treatment provided is required.'); return; }
+    if (!isNurseTriage && requireDoctorFields && form.addFollowUp && (!form.followUpDate || !form.followUpTime)) {
+      setValidationError('Follow-up date and time are required when follow-up is enabled.');
+      return;
+    }
     setValidationError('');
     onSave(form, medicines);
     onClose();
@@ -199,7 +226,13 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
         <div className="mb-6 flex items-start justify-between gap-3">
           <div>
             <h2 id="consult-modal-title" className="text-xl font-bold text-teal-800">Add New Consult</h2>
-            <p className="mt-1 text-xs text-gray-500">Record consultation details and dispensed medicine.</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {isNurseTriage
+                ? 'Record nurse triage details and send to doctor for diagnosis and treatment.'
+                : isDentalMode
+                  ? 'Record dental consultation details.'
+                  : 'Record consultation details and dispensed medicine.'}
+            </p>
           </div>
           <button ref={closeButtonRef} type="button" onClick={onClose} aria-label="Close consult modal" className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -258,57 +291,88 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
           {/* Chief Complaint */}
           <Field label="Chief Complaint" placeholder="Describe the patient's primary complaint" value={form.chiefComplaint} onChange={set('chiefComplaint')} as="textarea" rows={3} />
 
-          {/* Blood Pressure & Temperature */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Blood Pressure" placeholder="120/80" value={form.bp} onChange={set('bp')} />
-            <Field label="Temperature (°C)" placeholder="36.8" value={form.temperature} onChange={set('temperature')} />
-          </div>
+          {!isDentalMode && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Blood Pressure" placeholder="120/80" value={form.bp} onChange={set('bp')} />
+              <Field label="Temperature (°C)" placeholder="36.8" value={form.temperature} onChange={set('temperature')} />
+            </div>
+          )}
 
-          {/* Treatment Provided */}
-          <Field label="Treatment Provided" placeholder="Document treatment, care advice, and follow-up" value={form.treatmentProvided} onChange={set('treatmentProvided')} as="textarea" rows={3} />
-
-          {/* Medicine Dispensed */}
-          <div>
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <p className="block text-xs font-semibold text-gray-600">Medicine Dispensed</p>
-              {medicines.length > 0 && (
-                <button type="button" onClick={() => setMedicines([])} className="text-[11px] font-semibold text-red-600 hover:text-red-700">
-                  Clear all
-                </button>
+          {!isNurseTriage && (
+            <>
+              {requireDoctorFields && (
+                <Field label="Diagnosis" placeholder="Document diagnosis assessment" value={form.diagnosis} onChange={set('diagnosis')} as="textarea" rows={3} />
               )}
-            </div>
 
-            {medicines.length > 0 && (
-              <div className="mb-3 space-y-2">
-                {medicines.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between rounded border border-teal-100 bg-teal-50 px-3 py-2 text-sm">
-                    <span className="text-gray-700">{item.medicine}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="font-semibold text-teal-700">x{item.qty}</span>
-                      <button type="button" onClick={() => removeMedicine(item.id)} className="rounded border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 transition-colors" aria-label="Remove dispensed medicine">
-                        Remove
+              {/* Treatment Provided */}
+              <Field label={requireDoctorFields ? 'Treatment Given' : 'Treatment Provided'} placeholder="Document treatment, care advice, and follow-up" value={form.treatmentProvided} onChange={set('treatmentProvided')} as="textarea" rows={3} />
+
+              {!isDentalMode && (
+                <div>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="block text-xs font-semibold text-gray-600">Medicine Dispensed (Inventory)</p>
+                    {medicines.length > 0 && (
+                      <button type="button" onClick={() => setMedicines([])} className="text-[11px] font-semibold text-red-600 hover:text-red-700">
+                        Clear all
                       </button>
-                    </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-3">
-              <select value={newMedicineId} onChange={(event) => setNewMedicineId(event.target.value)} className={INPUT_CLASS}>
-                <option value="">Select medicine from inventory</option>
-                {inventoryOptions.map((item) => (
-                  <option key={item.id} value={item.id} disabled={item.currentStock <= 0}>
-                    {item.itemName} ({item.currentStock} {item.unit})
-                  </option>
-                ))}
-              </select>
-              <input type="number" min={1} value={newQty} onChange={(event) => setNewQty(event.target.value)} className={INPUT_CLASS} placeholder="Quantity" />
-              <button type="button" onClick={addMedicine} className="rounded border border-teal-300 px-4 py-2.5 text-sm font-semibold text-teal-700 hover:bg-teal-50 transition-colors">
-                Add
-              </button>
-            </div>
-          </div>
+                  {medicines.length > 0 && (
+                    <div className="mb-3 space-y-2">
+                      {medicines.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between rounded border border-teal-100 bg-teal-50 px-3 py-2 text-sm">
+                          <span className="text-gray-700">{item.medicine}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="font-semibold text-teal-700">x{item.qty}</span>
+                            <button type="button" onClick={() => removeMedicine(item.id)} className="rounded border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 transition-colors" aria-label="Remove dispensed medicine">
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-3">
+                    <select value={newMedicineId} onChange={(event) => setNewMedicineId(event.target.value)} className={INPUT_CLASS}>
+                      <option value="">Select medicine from inventory</option>
+                      {inventoryOptions.map((item) => (
+                        <option key={item.id} value={item.id} disabled={item.currentStock <= 0}>
+                          {item.itemName} ({item.currentStock} {item.unit})
+                        </option>
+                      ))}
+                    </select>
+                    <input type="number" min={1} value={newQty} onChange={(event) => setNewQty(event.target.value)} className={INPUT_CLASS} placeholder="Quantity" />
+                    <button type="button" onClick={addMedicine} className="rounded border border-teal-300 px-4 py-2.5 text-sm font-semibold text-teal-700 hover:bg-teal-50 transition-colors">
+                      Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {requireDoctorFields && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={form.addFollowUp}
+                      onChange={(event) => setForm((current) => ({ ...current, addFollowUp: event.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    Add Follow Up Appointment
+                  </label>
+
+                  {form.addFollowUp && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Field label="Follow Up Date" type="date" value={form.followUpDate} onChange={set('followUpDate')} />
+                      <Field label="Follow Up Time" type="time" value={form.followUpTime} onChange={set('followUpTime')} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {validationError && (
@@ -320,7 +384,7 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
             Cancel
           </button>
           <button type="button" onClick={handleSave} className="rounded-md bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors">
-            Save Consult
+            {saveLabel || (isNurseTriage ? 'Send to Doctor' : 'Save Consult')}
           </button>
         </div>
       </div>

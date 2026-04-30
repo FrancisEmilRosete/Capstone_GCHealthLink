@@ -6,6 +6,7 @@ import { Search } from 'lucide-react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 
 interface StudentDirectoryItem {
   id: string;
@@ -22,6 +23,8 @@ interface StudentDirectoryResponse {
 
 export default function DentalStudentsPage() {
   const [query, setQuery] = useState('');
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrMessage, setQrMessage] = useState('');
   const [students, setStudents] = useState<StudentDirectoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -59,6 +62,9 @@ export default function DentalStudentsPage() {
 
   function onSearch(value: string) {
     setQuery(value);
+    if (!value.trim()) {
+      setQrMessage('');
+    }
     void loadStudents(value);
   }
 
@@ -69,16 +75,31 @@ export default function DentalStudentsPage() {
         <p className="text-sm text-gray-500 mt-1">Browse all registered students without using QR scan.</p>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          value={query}
-          onChange={(event) => onSearch(event.target.value)}
-          placeholder="Search by student number, name, or department"
-          className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-        />
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="Search by student number, name, or department"
+            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setQrModalOpen(true)}
+          className="text-xs font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-3 rounded-xl transition-colors"
+        >
+          Use QR
+        </button>
       </div>
+
+      {qrMessage && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs font-semibold text-teal-700">
+          {qrMessage}
+        </div>
+      )}
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
 
@@ -117,6 +138,18 @@ export default function DentalStudentsPage() {
           </table>
         </div>
       </div>
+
+      <UseQrLookupModal
+        open={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        onResolved={(student: QrResolvedStudent) => {
+          setQrMessage(`Found ${student.lastName}, ${student.firstName} (${student.studentNumber})`);
+          onSearch(student.studentNumber);
+        }}
+        onNotFound={() => {
+          setQrMessage('Student not found. Please try another QR.');
+        }}
+      />
     </div>
   );
 }

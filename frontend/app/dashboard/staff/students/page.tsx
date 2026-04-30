@@ -6,6 +6,7 @@ import { Search } from 'lucide-react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 
 interface SearchStudent {
   id: string;
@@ -35,7 +36,12 @@ function formatYearLevel(value?: string | null) {
 
 export default function StaffStudentsPage() {
   const [query, setQuery] = useState('');
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrMessage, setQrMessage] = useState('');
   const [results, setResults] = useState<SearchStudent[]>([]);
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [courseFilter, setCourseFilter] = useState('all');
+  const [yearLevelFilter, setYearLevelFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -73,10 +79,37 @@ export default function StaffStudentsPage() {
 
   function handleSearch(value: string) {
     setQuery(value);
+    if (!value.trim()) {
+      setQrMessage('');
+    }
     void loadStudents(value);
   }
 
   const rows = useMemo(() => results, [results]);
+  const departmentOptions = useMemo(
+    () => Array.from(new Set(rows.map((student) => student.courseDept).filter(Boolean))).sort(),
+    [rows],
+  );
+
+  const courseOptions = useMemo(
+    () => Array.from(new Set(rows.map((student) => student.course || 'N/A'))).sort(),
+    [rows],
+  );
+
+  const yearLevelOptions = useMemo(
+    () => Array.from(new Set(rows.map((student) => formatYearLevel(student.yearLevel)))).sort(),
+    [rows],
+  );
+
+  const filteredRows = useMemo(
+    () => rows.filter((student) => {
+      const matchesDepartment = departmentFilter === 'all' || student.courseDept === departmentFilter;
+      const matchesCourse = courseFilter === 'all' || (student.course || 'N/A') === courseFilter;
+      const matchesYear = yearLevelFilter === 'all' || formatYearLevel(student.yearLevel) === yearLevelFilter;
+      return matchesDepartment && matchesCourse && matchesYear;
+    }),
+    [rows, departmentFilter, courseFilter, yearLevelFilter],
+  );
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
@@ -85,15 +118,68 @@ export default function StaffStudentsPage() {
         <p className="text-sm text-gray-500 mt-1">Search and open student records without scanning a QR code.</p>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          value={query}
-          onChange={(event) => { void handleSearch(event.target.value); }}
-          placeholder="Search by student number, name, course, department, or year level"
-          className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-        />
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => { void handleSearch(event.target.value); }}
+            placeholder="Search by student number, name, course, department, or year level"
+            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setQrModalOpen(true)}
+          className="text-xs font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-3 rounded-xl transition-colors"
+        >
+          Use QR
+        </button>
+      </div>
+
+      {qrMessage && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs font-semibold text-teal-700">
+          {qrMessage}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <select
+          value={departmentFilter}
+          onChange={(event) => setDepartmentFilter(event.target.value)}
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          aria-label="Filter by department"
+        >
+          <option value="all">All Departments</option>
+          {departmentOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+
+        <select
+          value={courseFilter}
+          onChange={(event) => setCourseFilter(event.target.value)}
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          aria-label="Filter by course"
+        >
+          <option value="all">All Courses</option>
+          {courseOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+
+        <select
+          value={yearLevelFilter}
+          onChange={(event) => setYearLevelFilter(event.target.value)}
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          aria-label="Filter by year level"
+        >
+          <option value="all">All Year Levels</option>
+          {yearLevelOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
@@ -114,9 +200,9 @@ export default function StaffStudentsPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">Searching students...</td></tr>
-              ) : rows.length === 0 ? (
+              ) : filteredRows.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">No students found.</td></tr>
-              ) : rows.map((student) => (
+              ) : filteredRows.map((student) => (
                 <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50/70">
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{student.studentNumber}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{student.lastName}, {student.firstName}</td>
@@ -125,7 +211,7 @@ export default function StaffStudentsPage() {
                   <td className="px-4 py-3 text-gray-700">{formatYearLevel(student.yearLevel)}</td>
                   <td className="px-4 py-3 text-right">
                     <Link
-                      href={`/dashboard/staff/record/${encodeURIComponent(student.studentNumber)}`}
+                      href={`/dashboard/staff/record/${encodeURIComponent(student.studentNumber)}?returnTo=${encodeURIComponent('/dashboard/staff/students')}`}
                       className="inline-flex rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-teal-300 hover:text-teal-700"
                     >
                       Open Record
@@ -137,6 +223,18 @@ export default function StaffStudentsPage() {
           </table>
         </div>
       </div>
+
+      <UseQrLookupModal
+        open={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        onResolved={(student: QrResolvedStudent) => {
+          setQrMessage(`Found ${student.lastName}, ${student.firstName} (${student.studentNumber})`);
+          void handleSearch(student.studentNumber);
+        }}
+        onNotFound={() => {
+          setQrMessage('Student not found. Please try another QR.');
+        }}
+      />
     </div>
   );
 }

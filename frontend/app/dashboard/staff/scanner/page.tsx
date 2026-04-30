@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import PhysicalExamModal, { type PhysicalExamRecordFormData } from '@/components/modals/PhysicalExamModal';
-import ConsultationModal, { type InventoryOption } from '@/components/modals/ConsultationModal';
+import ConsultationModal, { type ConsultationForm, type InventoryOption } from '@/components/modals/ConsultationModal';
 
 const QrScannerInput = dynamic(() => import('@/components/scanner/QrCameraScanner'), {
   ssr: false,
@@ -39,6 +39,8 @@ interface ScanProfile {
   lastName: string;
   mi?: string | null;
   courseDept: string;
+  course?: string | null;
+  yearLevel?: 'YR_1' | 'YR_2' | 'YR_3' | 'YR_4' | string | null;
   age: number | null;
   sex: string | null;
   physicalExaminations?: { yearLevel?: string | null }[];
@@ -60,6 +62,13 @@ interface ScanResponse {
 interface InventoryResponse {
   success: boolean;
   data: InventoryOption[];
+}
+
+interface QueueCreateResponse {
+  success: boolean;
+  data: {
+    id: string;
+  };
 }
 
 interface EmergencySmsResponse {
@@ -210,6 +219,16 @@ function parseQrPayload(raw: string): {
 }
 
 function mapProfileToStudent(userId: string, profile: ScanProfile): UiStudent {
+  const resolvedYearLevel = profile.yearLevel
+    || profile.physicalExaminations?.[0]?.yearLevel
+    || '';
+
+  const formattedYearLevel = resolvedYearLevel
+    .replace('YR_1', 'Yr. 1')
+    .replace('YR_2', 'Yr. 2')
+    .replace('YR_3', 'Yr. 3')
+    .replace('YR_4', 'Yr. 4');
+
   return {
     userId,
     studentProfileId: profile.id,
@@ -217,9 +236,9 @@ function mapProfileToStudent(userId: string, profile: ScanProfile): UiStudent {
     firstName: profile.firstName,
     lastName: profile.lastName,
     mi: profile.mi?.trim() || '',
-    course: profile.courseDept || 'N/A',
+    course: profile.course || profile.courseDept || 'N/A',
     college: profile.courseDept || 'N/A',
-    yearLevel: profile.physicalExaminations?.[0]?.yearLevel?.replace('YR_', 'Year ') || '',
+    yearLevel: formattedYearLevel,
     age: profile.age ? String(profile.age) : '',
     sex: profile.sex || '',
     allergies: parseAllergies(profile.medicalHistory?.allergyEnc),
@@ -285,6 +304,8 @@ export default function ScannerPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const roleSegment = pathname.split('/')[2] || 'staff';
+  const isNurseScanner = roleSegment === 'doctor';
+  const isDentalScanner = roleSegment === 'dental';
   const recordBasePath = roleSegment === 'staff' ? '/dashboard/staff/record' : `/dashboard/${roleSegment}/records`;
   const studentIdParam = (searchParams.get('studentId') || '').trim();
 
@@ -400,15 +421,11 @@ export default function ScannerPage() {
       return;
     }
 
-    if (foundStudent?.studentNumber.toLowerCase() === studentIdParam.toLowerCase()) {
-      return;
-    }
-
     setCameraActive(false);
     setStudentInput(studentIdParam);
     void resolveLookup(studentIdParam);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentIdParam, foundStudent?.studentNumber]);
+  }, [studentIdParam]);
 
   async function fetchStudentByUserId(userId: string) {
     const token = getToken();
@@ -540,16 +557,7 @@ export default function ScannerPage() {
   }
 
   async function handleConsultSave(
-    form: {
-      visitDate: string;
-      visitTime: string;
-      age: string;
-      sex: string;
-      chiefComplaint: string;
-      bp: string;
-      temperature: string;
-      treatmentProvided: string;
-    },
+    form: ConsultationForm,
     medicines: Array<{ inventoryId: string; medicine: string; qty: string }>,
   ) {
     if (!foundStudent) return;
@@ -572,35 +580,84 @@ export default function ScannerPage() {
       })
       .filter((entry): entry is { inventoryId: string; quantity: number } => entry !== null);
 
-    const normalizedTag = 'General Consultation';
+    const normalizedTag = isDentalScanner ? 'Dental Consultation' : 'General Consultation';
     const normalizedChiefComplaint = form.chiefComplaint?.trim() || '';
+    const normalizedDiagnosis = form.diagnosis?.trim() || '';
     const normalizedTreatment = form.treatmentProvided?.trim() || '';
     const normalizedVisitDate = form.visitDate?.trim() || new Date().toISOString();
+    const normalizedFollowUpDate = form.followUpDate?.trim() || '';
+    const normalizedFollowUpTime = form.followUpTime?.trim() || '';
 
-    const structuredComplaint = {
+    const structuredComplaint = isNurseScanner
+      ? {
+          concernTag: normalizedTag,
+          symptoms: normalizedChiefComplaint,
+          chiefComplaint: normalizedChiefComplaint || normalizedTag,
+          diagnosis: null,
+          treatmentProvided: null,
+          treatmentManagement: null,
+          age: form.age?.trim() || null,
+          sex: form.sex?.trim() || null,
+          vitals: {
+            bp: form.bp?.trim() || null,
+            temperature: form.temperature?.trim() || null,
+          },
+          notes: [normalizedTag, normalizedChiefComplaint]
+            .map((part) => part?.trim())
+            .filter(Boolean)
+            .join(' | ') || 'General consultation',
+        }
+      : {
+          concernTag: normalizedTag,
+          symptoms: normalizedChiefComplaint,
+          chiefComplaint: normalizedChiefComplaint || normalizedTag,
+          diagnosis: normalizedDiagnosis,
+          treatmentProvided: normalizedTreatment,
+          treatmentManagement: normalizedTreatment,
+          age: form.age?.trim() || null,
+          sex: form.sex?.trim() || null,
+          vitals: {
+            bp: form.bp?.trim() || null,
+            temperature: form.temperature?.trim() || null,
+          },
+          notes: [normalizedTag, normalizedChiefComplaint, normalizedDiagnosis, normalizedTreatment]
+            .map((part) => part?.trim())
+            .filter(Boolean)
+            .join(' | ') || 'General consultation',
+          followUp: form.addFollowUp
+            ? {
+                date: normalizedFollowUpDate,
+                time: normalizedFollowUpTime,
+              }
+            : null,
+        };
+
+    const dentalStructuredComplaint = {
       concernTag: normalizedTag,
       symptoms: normalizedChiefComplaint,
       chiefComplaint: normalizedChiefComplaint || normalizedTag,
-      diagnosis: normalizedTag,
-      treatmentProvided: normalizedTreatment,
-      treatmentManagement: normalizedTreatment,
+      diagnosis: normalizedDiagnosis || null,
+      treatmentProvided: normalizedTreatment || null,
+      treatmentManagement: normalizedTreatment || null,
       age: form.age?.trim() || null,
       sex: form.sex?.trim() || null,
-      vitals: {
-        bp: form.bp?.trim() || null,
-        temperature: form.temperature?.trim() || null,
-      },
-      notes: [normalizedTag, normalizedChiefComplaint, normalizedTreatment]
+      notes: [normalizedTag, normalizedChiefComplaint, normalizedDiagnosis, normalizedTreatment]
         .map((part) => part?.trim())
         .filter(Boolean)
-        .join(' | ') || 'General consultation',
+        .join(' | ') || normalizedTag,
+      followUp: form.addFollowUp
+        ? {
+            date: normalizedFollowUpDate,
+            time: normalizedFollowUpTime,
+          }
+        : null,
     };
 
     const requestPayload = {
       studentProfileId: foundStudent.studentProfileId,
       visitDate: normalizedVisitDate,
       visitTime: form.visitTime?.trim() || new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-      chiefComplaintEnc: JSON.stringify(structuredComplaint),
+      chiefComplaintEnc: JSON.stringify(isDentalScanner ? dentalStructuredComplaint : structuredComplaint),
       dispensedMedicines,
     };
 
@@ -623,11 +680,75 @@ export default function ScannerPage() {
         token,
       );
 
+      if (isNurseScanner) {
+        const queueDate = new Date().toISOString();
+        const queueTime = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const queueResponse = await api.post<QueueCreateResponse>(
+          '/appointments/queue',
+          {
+            studentProfileId: foundStudent.studentProfileId,
+            preferredDate: queueDate,
+            preferredTime: form.visitTime?.trim() || queueTime,
+            serviceType: 'Medical Consultation',
+            symptoms: normalizedChiefComplaint || 'Nurse triage via QR scanner',
+          },
+          token,
+        );
+
+        if (queueResponse.data?.id) {
+          await api.put(`/appointments/queue/${queueResponse.data.id}`, { status: 'PENDING' }, token);
+        }
+
+        setActionMessage('Consultation saved and sent to doctor.');
+        return;
+      }
+
+      if (isDentalScanner) {
+        if (form.addFollowUp && normalizedFollowUpDate && normalizedFollowUpTime) {
+          await api.post(
+            '/appointments/queue',
+            {
+              studentProfileId: foundStudent.studentProfileId,
+              preferredDate: normalizedFollowUpDate,
+              preferredTime: normalizedFollowUpTime,
+              serviceType: 'Dental Check-up',
+              symptoms: `Follow Up: ${normalizedDiagnosis || normalizedChiefComplaint || 'Dental follow-up review'}`,
+            },
+            token,
+          );
+        }
+
+        setActionMessage(
+          form.addFollowUp
+            ? 'Dental consultation completed and follow-up appointment scheduled.'
+            : 'Dental consultation completed and saved to logs.'
+        );
+        return;
+      }
+
+      if (form.addFollowUp && normalizedFollowUpDate && normalizedFollowUpTime) {
+        await api.post(
+          '/appointments/queue',
+          {
+            studentProfileId: foundStudent.studentProfileId,
+            preferredDate: normalizedFollowUpDate,
+            preferredTime: normalizedFollowUpTime,
+            serviceType: 'Medical Consultation',
+            symptoms: `Follow Up: ${normalizedDiagnosis || normalizedChiefComplaint || 'Post consultation review'}`,
+          },
+          token,
+        );
+      }
+
       const skipped = medicines.length - dispensedMedicines.length;
       if (skipped > 0) {
         setActionMessage(`Consultation saved. ${skipped} medicine item(s) were not in inventory and were skipped.`);
       } else {
-        setActionMessage('Consultation saved successfully and inventory levels were updated.');
+        setActionMessage(
+          form.addFollowUp
+            ? 'Consultation completed and follow-up appointment scheduled.'
+            : 'Consultation completed and saved to logs.'
+        );
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -758,7 +879,10 @@ export default function ScannerPage() {
             age: foundStudent.age,
             sex: foundStudent.sex,
           }}
-          inventoryOptions={inventoryOptions}
+          inventoryOptions={isDentalScanner ? [] : inventoryOptions}
+          mode={isNurseScanner ? 'nurse-triage' : isDentalScanner ? 'dental' : 'full'}
+          saveLabel={isNurseScanner ? 'Send to Doctor' : isDentalScanner ? 'Save Dental Consult' : 'Save Doctor Consult'}
+          requireDoctorFields={!isNurseScanner}
           onClose={() => setShowConsultModal(false)}
           onSave={(data, medicines) => {
             void handleConsultSave(data, medicines);
@@ -767,7 +891,7 @@ export default function ScannerPage() {
         />
       )}
 
-      {showExamModal && foundStudent && (
+      {!isDentalScanner && showExamModal && foundStudent && (
         <PhysicalExamModal
           studentName={`${foundStudent.firstName} ${foundStudent.lastName}`}
           onClose={() => setShowExamModal(false)}
@@ -851,12 +975,14 @@ export default function ScannerPage() {
               Consult
             </button>
 
-            <button
-              onClick={() => setShowExamModal(true)}
-              className="border-2 border-teal-500 text-teal-600 hover:bg-teal-50 font-semibold text-sm px-4 py-3 rounded-xl transition-colors bg-white"
-            >
-              Physical Exam
-            </button>
+            {!isDentalScanner && (
+              <button
+                onClick={() => setShowExamModal(true)}
+                className="border-2 border-teal-500 text-teal-600 hover:bg-teal-50 font-semibold text-sm px-4 py-3 rounded-xl transition-colors bg-white"
+              >
+                Physical Exam
+              </button>
+            )}
 
             <button
               onClick={() => { void handleEmergencyAlert(); }}
@@ -867,7 +993,12 @@ export default function ScannerPage() {
             </button>
 
             <button
-              onClick={() => router.push(`${recordBasePath}/${encodeURIComponent(foundStudent.studentNumber)}`)}
+              onClick={() => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.set('studentId', foundStudent.studentNumber);
+                const scannerReturnTo = `${pathname}?${params.toString()}`;
+                router.push(`${recordBasePath}/${encodeURIComponent(foundStudent.studentNumber)}?returnTo=${encodeURIComponent(scannerReturnTo)}`);
+              }}
               className="border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 font-semibold text-sm px-4 py-3 rounded-xl transition-colors bg-white"
             >
               View Record
