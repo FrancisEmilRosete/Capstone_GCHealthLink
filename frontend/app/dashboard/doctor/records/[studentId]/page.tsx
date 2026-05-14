@@ -180,7 +180,7 @@ export default function DoctorRecordPage() {
     { id: 'laboratory-results', label: 'Laboratory Results', icon: <Activity size={18} /> },
     { id: 'clinical-history', label: 'Clinical History', icon: <FileText size={18} /> },
     ...(shouldShowDentalRecordsTab ? [{ id: 'dental-records', label: 'Dental Records', icon: <Smile size={18} /> }] : []),
-    { id: 'medical-consultation', label: 'Medical Consultation', icon: <Stethoscope size={18} /> },
+    ...(!isNurseSideRecord ? [{ id: 'medical-consultation', label: 'Medical Consultation', icon: <Stethoscope size={18} /> }] : []),
     ...(!isNurseSideRecord ? [{ id: 'prescriptions', label: 'Prescriptions', icon: <Pill size={18} /> }] : []),
   ];
 
@@ -196,9 +196,15 @@ export default function DoctorRecordPage() {
   if (!record) return <div className="p-8 text-center text-red-500">{error || 'Record not found.'}</div>;
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-32 print:bg-white print:pb-0">
+    <div className="bg-slate-50 min-h-screen pb-32 print:bg-white print:pb-0 print:w-full print:m-0">
+      {/* Print-Only Header */}
+      <div className="hidden print:block mb-8 border-b-2 border-slate-200 pb-4 mx-8 mt-8">
+        <h1 className="text-2xl font-black text-slate-800">GC HealthLink | Campus Clinic Management System</h1>
+        <p className="text-sm text-slate-500">Official Medical Record Document</p>
+      </div>
+
       {/* NEW: Patient Info Card - STICKY AT TOP */}
-      <div className="sticky top-0 z-50 bg-white border-b border-slate-100 shadow-sm px-6 py-6 print:static print:shadow-none">
+      <div className="sticky top-0 z-50 bg-white border-b border-slate-100 shadow-sm px-6 py-6 print:static print:shadow-none print:border-none print:px-8 print:py-0">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4">
             <button 
@@ -215,7 +221,8 @@ export default function DoctorRecordPage() {
                   dob: record.birthday ? new Date(record.birthday).toLocaleDateString() : 'N/A',
                   address: record.presentAddress || 'N/A',
                   contactNumber: record.telNumber || 'N/A',
-                  department: record.courseDept, status: 'Student'
+                  department: record.courseDept, status: 'Student',
+                  patientStatus: 'Under Observation'
                 }} 
               />
             </div>
@@ -262,7 +269,7 @@ export default function DoctorRecordPage() {
         </div>
       </div>
 
-      <main className="max-w-6xl mx-auto px-6 mt-8 space-y-8 animate-in fade-in duration-500 print:px-0 print:mt-4">
+      <main className="max-w-6xl mx-auto px-6 mt-8 space-y-8 animate-in fade-in duration-500 print:px-8 print:mt-8 print:w-full print:max-w-none">
         {/* Tab Content */}
         <div className="min-h-[60vh] pb-20">
           {/* OVERVIEW TAB - PHASE 3.1: Vitals at top, then System-Specific Notes with Allergies moved to right */}

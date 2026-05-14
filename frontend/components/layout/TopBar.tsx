@@ -92,7 +92,7 @@ export default function TopBar({
     .toUpperCase();
 
   return (
-    <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-white border-b border-gray-100 sticky top-0 z-10">
+    <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-white border-b border-gray-100 sticky top-0 z-10 print:hidden">
 
       {/* Left: Hamburger (mobile) + Page title */}
       <div className="flex items-center gap-3 min-w-0">

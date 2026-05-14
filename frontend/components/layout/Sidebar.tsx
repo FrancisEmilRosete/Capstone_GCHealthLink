@@ -227,7 +227,7 @@ export default function Sidebar({
       {/* Desktop: always-visible static column (lg and up) */}
       {/* h-screen + sticky top-0 keeps the sidebar exactly viewport-tall   */}
       {/* so the bottom buttons never scroll off screen.                      */}
-      <div className="hidden lg:flex shrink-0 h-screen sticky top-0">
+      <div className="hidden lg:flex shrink-0 h-screen sticky top-0 print:hidden">
         {panel}
       </div>
 
@@ -239,7 +239,7 @@ export default function Sidebar({
         aria-hidden="true"
         className={`
           lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm
-          transition-opacity duration-300
+          transition-opacity duration-300 print:hidden
           ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
         `}
       />
@@ -248,7 +248,7 @@ export default function Sidebar({
       <div
         className={`
           lg:hidden fixed inset-y-0 left-0 z-50
-          transition-transform duration-300 ease-in-out
+          transition-transform duration-300 ease-in-out print:hidden
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >

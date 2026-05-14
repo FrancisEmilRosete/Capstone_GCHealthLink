@@ -212,7 +212,6 @@ const getLiveQueue = async (req, res, next) => {
               firstName: true,
               lastName: true,
               courseDept: true,
-              course: true,
               yearLevel: true,
               age: true,
               sex: true,

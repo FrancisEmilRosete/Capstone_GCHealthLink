@@ -13,6 +13,7 @@ interface PatientHeaderProps {
     contactNumber: string;
     department: string;
     status: 'Student' | 'Personnel';
+    patientStatus?: 'Admitted' | 'Discharged' | 'Under Observation' | string;
   };
 }
 
@@ -25,8 +26,17 @@ const PatientHeader: React.FC<PatientHeaderProps> = ({ patient }) => {
             <User size={32} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">
+            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
               {patient.lastName}, {patient.firstName}
+              {patient.patientStatus && (
+                <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${
+                  patient.patientStatus === 'Admitted' ? 'bg-red-100 text-red-700 border border-red-200' :
+                  patient.patientStatus === 'Discharged' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                  'bg-amber-100 text-amber-700 border border-amber-200'
+                }`}>
+                  {patient.patientStatus}
+                </span>
+              )}
             </h1>
             <div className="flex flex-wrap gap-3 mt-2">
               <span className="flex items-center gap-1 text-slate-500 text-sm">

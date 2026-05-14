@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { Plus, History } from 'lucide-react';
+import { Plus, History, Edit2, Save, X } from 'lucide-react';
 import RecordHistoryModal from './RecordHistoryModal';
 
 interface MedicalConsultationProps {
@@ -16,6 +16,26 @@ interface MedicalConsultationProps {
 
 const MedicalConsultation: React.FC<MedicalConsultationProps> = ({ data, onChange }) => {
   const [showHistory, setShowHistory] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [snapshot, setSnapshot] = useState<typeof data | null>(null);
+
+  const handleUpdateClick = () => {
+    setSnapshot(data);
+    setIsEditing(true);
+  };
+
+  const handleCancelClick = () => {
+    if (snapshot) {
+      Object.keys(snapshot).forEach(key => {
+        onChange(key, snapshot[key as keyof typeof data]);
+      });
+    }
+    setIsEditing(false);
+  };
+
+  const handleSaveClick = () => {
+    setIsEditing(false);
+  };
 
   const mockHistory = [
     {
@@ -34,19 +54,44 @@ const MedicalConsultation: React.FC<MedicalConsultationProps> = ({ data, onChang
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800 border-b pb-2">Medical Consultation</h2>
+          <h2 className="text-lg font-semibold text-slate-800 border-b pb-2 inline-block border-slate-200">Medical Consultation</h2>
           <div className="text-xs text-slate-400 italic mt-2">
             Last Updated: {new Date().toLocaleDateString()} by Current Staff
           </div>
         </div>
-        <button
-          onClick={() => setShowHistory(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-        >
-          <History size={16} /> History
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowHistory(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <History size={16} /> History
+          </button>
+          {!isEditing ? (
+            <button 
+              onClick={handleUpdateClick}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <Edit2 size={16} /> Update
+            </button>
+          ) : (
+            <>
+              <button 
+                onClick={handleCancelClick}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={16} /> Cancel
+              </button>
+              <button 
+                onClick={handleSaveClick}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+              >
+                <Save size={16} /> Save
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Findings Card */}
@@ -57,8 +102,13 @@ const MedicalConsultation: React.FC<MedicalConsultationProps> = ({ data, onChang
         <textarea
           value={data.findings}
           onChange={(e) => onChange('findings', e.target.value)}
-          placeholder="Enter clinical observations and findings..."
-          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none min-h-[120px] resize-none text-sm"
+          placeholder={isEditing ? "Enter clinical observations and findings..." : ""}
+          readOnly={!isEditing}
+          className={`w-full px-4 py-3 rounded-md focus:outline-none min-h-[120px] resize-none text-sm transition-all ${
+            isEditing 
+              ? 'bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500' 
+              : 'bg-transparent border-transparent cursor-default px-0'
+          }`}
         />
       </div>
 
@@ -70,8 +120,13 @@ const MedicalConsultation: React.FC<MedicalConsultationProps> = ({ data, onChang
         <textarea
           value={data.diagnosis}
           onChange={(e) => onChange('diagnosis', e.target.value)}
-          placeholder="Enter professional evaluation and diagnosis..."
-          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none min-h-[120px] resize-none text-sm"
+          placeholder={isEditing ? "Enter professional evaluation and diagnosis..." : ""}
+          readOnly={!isEditing}
+          className={`w-full px-4 py-3 rounded-md focus:outline-none min-h-[120px] resize-none text-sm transition-all ${
+            isEditing 
+              ? 'bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500' 
+              : 'bg-transparent border-transparent cursor-default px-0'
+          }`}
         />
       </div>
 
@@ -85,9 +140,14 @@ const MedicalConsultation: React.FC<MedicalConsultationProps> = ({ data, onChang
                   type="checkbox"
                   checked={data.noFollowUp}
                   onChange={(e) => onChange('noFollowUp', e.target.checked)}
+                  disabled={!isEditing}
                   className="sr-only"
                 />
-                <div className={`w-5 h-5 rounded border transition-all flex items-center justify-center ${data.noFollowUp ? 'bg-green-500 border-green-500' : 'bg-white border-slate-300'}`}>
+                <div className={`w-5 h-5 rounded border transition-all flex items-center justify-center ${
+                  data.noFollowUp 
+                    ? `bg-green-500 border-green-500 ${!isEditing && 'opacity-80'}` 
+                    : `bg-white border-slate-300 ${!isEditing && 'opacity-60'}`
+                }`}>
                   {data.noFollowUp && <div className="w-2 h-2 bg-white rounded-full" />}
                 </div>
               </div>
@@ -106,7 +166,12 @@ const MedicalConsultation: React.FC<MedicalConsultationProps> = ({ data, onChang
                 type="date"
                 value={data.followUpDate}
                 onChange={(e) => onChange('followUpDate', e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                readOnly={!isEditing}
+                className={`w-full px-4 py-2 rounded-md focus:outline-none text-sm transition-all ${
+                  isEditing 
+                    ? 'bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500' 
+                    : 'bg-transparent border-transparent cursor-default px-0 appearance-none'
+                }`}
               />
             </div>
           )}

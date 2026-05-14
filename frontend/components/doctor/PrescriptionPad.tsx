@@ -30,7 +30,7 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-4 print:hidden">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Prescription Pad</h2>
           <p className="text-sm text-slate-400 font-medium">Create and manage patient prescriptions.</p>
@@ -51,9 +51,9 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden max-w-3xl mx-auto ring-1 ring-slate-100">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden max-w-3xl mx-auto ring-1 ring-slate-100 print:shadow-none print:border-0 print:ring-0 print:rounded-none print:max-w-none print:w-full">
         {/* Rx Header */}
-        <div className="p-10 border-b-2 border-dashed border-slate-200 bg-slate-50/30">
+        <div className="p-10 border-b-2 border-dashed border-slate-200 bg-slate-50/30 print:bg-white print:border-slate-800">
           <div className="flex justify-between items-start mb-12">
             <div className="space-y-1">
               <h3 className="text-3xl font-black text-blue-900 tracking-tighter">GC-HEALTHLINK</h3>
@@ -111,7 +111,7 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
                     value={med.name}
                     onChange={(e) => onUpdateMedicine(med.id, 'name', e.target.value)}
                     placeholder="Amoxicillin..."
-                    className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none print:bg-transparent print:p-0 print:text-black"
                   />
                 </div>
                 <div className="col-span-2">
@@ -120,7 +120,7 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
                     value={med.dosage}
                     onChange={(e) => onUpdateMedicine(med.id, 'dosage', e.target.value)}
                     placeholder="500mg"
-                    className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none print:bg-transparent print:p-0 print:text-black"
                   />
                 </div>
                 <div className="col-span-2">
@@ -129,7 +129,7 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
                     value={med.frequency}
                     onChange={(e) => onUpdateMedicine(med.id, 'frequency', e.target.value)}
                     placeholder="TID"
-                    className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none print:bg-transparent print:p-0 print:text-black"
                   />
                 </div>
                 <div className="col-span-2">
@@ -138,13 +138,13 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
                     value={med.duration}
                     onChange={(e) => onUpdateMedicine(med.id, 'duration', e.target.value)}
                     placeholder="7 Days"
-                    className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none print:bg-transparent print:p-0 print:text-black"
                   />
                 </div>
                 <div className="col-span-1 text-center">
                   <button
                     onClick={() => onDeleteMedicine(med.id)}
-                    className="p-2 text-slate-200 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                    className="p-2 text-slate-200 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 print:hidden"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -154,7 +154,7 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
 
             <button
               onClick={onAddMedicine}
-              className="flex items-center gap-2 px-6 py-3 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 font-bold text-sm hover:border-blue-200 hover:text-blue-500 hover:bg-blue-50 transition-all w-full justify-center group"
+              className="flex items-center gap-2 px-6 py-3 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 font-bold text-sm hover:border-blue-200 hover:text-blue-500 hover:bg-blue-50 transition-all w-full justify-center group print:hidden"
             >
               <Plus size={18} className="group-hover:scale-110 transition-transform" /> Add Medicine
             </button>
@@ -162,7 +162,7 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
         </div>
 
         {/* Rx Footer */}
-        <div className="px-10 py-8 bg-slate-50/30 border-t-2 border-dashed border-slate-200 flex justify-between items-center">
+        <div className="px-10 py-8 bg-slate-50/30 border-t-2 border-dashed border-slate-200 flex justify-between items-center print:bg-white print:border-slate-800">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest max-w-[200px]">
             * VALID FOR 30 DAYS FROM DATE OF ISSUE. KEEP FOR YOUR RECORDS.
           </div>

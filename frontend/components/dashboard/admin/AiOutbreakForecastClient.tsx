@@ -77,6 +77,8 @@ export default function AiOutbreakForecastClient() {
   const [generatedAt, setGeneratedAt] = useState('');
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
     async function fetchForecast() {
       const token = getToken();
       if (!token) {
@@ -94,10 +96,17 @@ export default function AiOutbreakForecastClient() {
         setModelName(payload.model || 'N/A');
         setGeneratedAt(payload.generated_at || '');
       } catch (err) {
+        let isServiceUnavailable = false;
         if (err instanceof ApiError) {
           setError(err.message);
+          isServiceUnavailable = err.status === 502 || err.status === 503;
         } else {
           setError('Failed to load AI outbreak forecast.');
+        }
+
+        // Graceful retry mechanism
+        if (isServiceUnavailable) {
+          timeoutId = setTimeout(fetchForecast, 5000);
         }
       } finally {
         setLoading(false);
@@ -105,6 +114,7 @@ export default function AiOutbreakForecastClient() {
     }
 
     void fetchForecast();
+    return () => clearTimeout(timeoutId);
   }, []);
 
   const chartData = useMemo(() => mapAiForecastToChartData(forecastRows), [forecastRows]);
@@ -125,11 +135,21 @@ export default function AiOutbreakForecastClient() {
         )}
       </div>
 
-      {error && (
+      {error && error.includes('502') || error.includes('503') || error.includes('unavailable') ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-6 flex flex-col items-center justify-center space-y-3">
+          <div className="flex items-center gap-2 font-bold text-amber-700 text-sm">
+            <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            AI Service Temporarily Unavailable
+          </div>
+          <p className="text-amber-600 text-xs text-center max-w-sm">
+            Attempting to re-establish connection to the forecasting microservice. Please wait or ensure the backend AI server is running...
+          </p>
+        </div>
+      ) : error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
         </div>
-      )}
+      ) : null}
 
       {loading ? (
         <div className="rounded-2xl border border-gray-100 bg-white px-4 py-10 text-center text-sm text-gray-400 shadow-sm">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History } from 'lucide-react';
+import { History, Edit2, Save, X } from 'lucide-react';
 import RecordHistoryModal from './RecordHistoryModal';
 
 interface MedicalHistoryFormProps {
@@ -14,6 +14,26 @@ interface MedicalHistoryFormProps {
 
 const MedicalHistoryForm: React.FC<MedicalHistoryFormProps> = ({ data, onChange }) => {
   const [showHistory, setShowHistory] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [snapshot, setSnapshot] = useState<typeof data | null>(null);
+
+  const handleUpdateClick = () => {
+    setSnapshot(data);
+    setIsEditing(true);
+  };
+
+  const handleCancelClick = () => {
+    if (snapshot) {
+      Object.keys(snapshot).forEach(key => {
+        onChange(key, snapshot[key as keyof typeof data]);
+      });
+    }
+    setIsEditing(false);
+  };
+
+  const handleSaveClick = () => {
+    setIsEditing(false);
+  };
 
   const mockHistory = [
     {
@@ -39,20 +59,45 @@ const MedicalHistoryForm: React.FC<MedicalHistoryFormProps> = ({ data, onChange 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800 border-b pb-2">Medical History</h2>
+          <h2 className="text-lg font-semibold text-slate-800 border-b pb-2 inline-block border-slate-200">Medical History</h2>
           {/* PHASE 5: Last Updated Indicator */}
           <div className="text-xs text-slate-400 italic mt-2">
             Last Updated: {new Date().toLocaleDateString()} by Current Staff
           </div>
         </div>
-        <button
-          onClick={() => setShowHistory(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-        >
-          <History size={16} /> History
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowHistory(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <History size={16} /> History
+          </button>
+          {!isEditing ? (
+            <button 
+              onClick={handleUpdateClick}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <Edit2 size={16} /> Update
+            </button>
+          ) : (
+            <>
+              <button 
+                onClick={handleCancelClick}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={16} /> Cancel
+              </button>
+              <button 
+                onClick={handleSaveClick}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+              >
+                <Save size={16} /> Save
+              </button>
+            </>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-6">
         {sections.map((section) => (
@@ -66,8 +111,13 @@ const MedicalHistoryForm: React.FC<MedicalHistoryFormProps> = ({ data, onChange 
                 id={section.id}
                 value={data[section.id as keyof typeof data]}
                 onChange={(e) => onChange(section.id, e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                placeholder={section.placeholder}
+                readOnly={!isEditing}
+                className={`w-full px-4 py-2 rounded-md focus:outline-none transition-all ${
+                  isEditing 
+                    ? 'bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent' 
+                    : 'bg-transparent border-transparent cursor-default px-0'
+                }`}
+                placeholder={isEditing ? section.placeholder : ''}
               />
             ) : (
               <textarea
@@ -75,8 +125,13 @@ const MedicalHistoryForm: React.FC<MedicalHistoryFormProps> = ({ data, onChange 
                 rows={4}
                 value={data[section.id as keyof typeof data]}
                 onChange={(e) => onChange(section.id, e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
-                placeholder={section.placeholder}
+                readOnly={!isEditing}
+                className={`w-full px-4 py-2 rounded-md focus:outline-none transition-all resize-none ${
+                  isEditing 
+                    ? 'bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent' 
+                    : 'bg-transparent border-transparent cursor-default px-0'
+                }`}
+                placeholder={isEditing ? section.placeholder : ''}
               />
             )}
           </div>
