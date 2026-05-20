@@ -1,3 +1,3 @@
 'use client';
 
-export { default } from '@/app/dashboard/doctor/records/[studentId]/page';
+export { default } from '@/app/dashboard/staff/records/[studentId]/page';

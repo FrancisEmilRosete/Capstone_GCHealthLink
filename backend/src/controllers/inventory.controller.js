@@ -33,9 +33,25 @@ const getInventory = async (req, res, next) => {
       orderBy: { itemName: "asc" } // Alphabetical order
     });
     
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+    
+    const mapped = items.map(item => {
+      let status = "NORMAL";
+      if (item.currentStock === 0) status = "OUT_OF_STOCK";
+      else if (item.currentStock <= item.reorderThreshold) status = "LOW_STOCK";
+      
+      let expiryStatus = "GOOD";
+      if (item.expirationDate) {
+        if (item.expirationDate < now) expiryStatus = "EXPIRED";
+        else if (item.expirationDate <= thirtyDaysFromNow) expiryStatus = "EXPIRING_SOON";
+      }
+      return { ...item, status, expiryStatus };
+    });
+
     res.json({
       success: true,
-      data: items
+      data: mapped
     });
   } catch (error) {
     next(error);
@@ -49,6 +65,24 @@ const addInventoryItem = async (req, res, next) => {
     const unit = normalizeText(req.body?.unit);
     const currentStockValidation = parsePositiveInteger(req.body?.currentStock, "currentStock");
     const reorderThresholdValidation = parsePositiveInteger(req.body?.reorderThreshold, "reorderThreshold");
+    
+    const expirationDateStr = normalizeText(req.body?.expirationDate);
+    let expirationDate = null;
+    if (expirationDateStr) {
+      expirationDate = new Date(expirationDateStr);
+      if (isNaN(expirationDate.getTime())) {
+        return res.status(400).json({ success: false, message: "Invalid expirationDate format." });
+      }
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (expirationDate < today) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Expiration date cannot be in the past." 
+        });
+      }
+    }
 
     // Basic validation
     if (!itemName || !unit || req.body?.currentStock === undefined || req.body?.reorderThreshold === undefined) {
@@ -80,7 +114,8 @@ const addInventoryItem = async (req, res, next) => {
         itemName,
         currentStock: currentStockValidation.value,
         reorderThreshold: reorderThresholdValidation.value, // The alert level (e.g., warn when below 20)
-        unit // e.g., "pcs", "mg", "bottles"
+        unit, // e.g., "pcs", "mg", "bottles"
+        expirationDate
       }
     });
 

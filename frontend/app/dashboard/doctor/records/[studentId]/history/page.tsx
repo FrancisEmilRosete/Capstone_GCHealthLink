@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
-import MedicalTrackingTimeline, { type MedicalTrackingEvent } from '@/components/dashboard/staff/MedicalTrackingTimeline';
+import MedicalTrackingTimeline, { type MedicalTrackingEvent } from '@/components/dashboard/doctor/MedicalTrackingTimeline';
 
 interface StudentProfile {
   studentNumber: string;

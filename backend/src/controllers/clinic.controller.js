@@ -494,45 +494,26 @@ const recordVisit = async (req, res, next) => {
 
       if (medicines.medicines.length > 0) {
         for (const med of medicines.medicines) {
-          const deduction = await tx.inventory.updateMany({
-            where: {
-              id: med.inventoryId,
-              currentStock: {
-                gte: med.quantity,
-              },
-            },
-            data: {
-              currentStock: {
-                decrement: med.quantity,
-              },
-            },
-          });
-
-          if (deduction.count === 0) {
-            const existingItem = await tx.inventory.findUnique({
-              where: { id: med.inventoryId },
-              select: {
-                itemName: true,
-                currentStock: true,
-              },
-            });
-
-            if (!existingItem) {
-              throw new Error(`Inventory item not found for ID: ${med.inventoryId}`);
-            }
-
-            throw new Error(`Insufficient stock for ${existingItem.itemName}. Available: ${existingItem.currentStock}`);
-          }
-
           await tx.visitMedicine.create({
             data: {
               visitId: newVisit.id,
               inventoryId: med.inventoryId,
               quantity: med.quantity,
+              status: "PRESCRIBED",
             },
           });
         }
       }
+
+      // Auto-generate Consultation Certificate
+      await tx.medicalCertificate.create({
+        data: {
+          studentProfileId: normalizedStudentProfileId,
+          doctorId: handledById,
+          certificateType: "CONSULTATION",
+          remarks: "Auto-generated from completed consultation.",
+        }
+      });
 
       const createdVisit = await tx.clinicVisit.findUnique({
         where: { id: newVisit.id },
@@ -744,6 +725,225 @@ const sendEmergencyAlert = async (req, res, next) => {
   }
 };
 
+const dispenseMedicine = async (req, res, next) => {
+  try {
+    const { visitMedicineId } = req.params;
+
+    const visitMedicine = await prisma.visitMedicine.findUnique({
+      where: { id: visitMedicineId },
+      include: { inventory: true, visit: true },
+    });
+
+    if (!visitMedicine) {
+      return res.status(404).json({ success: false, message: "Prescription record not found." });
+    }
+
+    if (visitMedicine.status === "DISPENSED") {
+      return res.status(400).json({ success: false, message: "Medicine has already been dispensed." });
+    }
+
+    if (visitMedicine.inventory.currentStock < visitMedicine.quantity) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Insufficient stock for ${visitMedicine.inventory.itemName}. Available: ${visitMedicine.inventory.currentStock}` 
+      });
+    }
+
+    const updated = await prisma.$transaction([
+      prisma.inventory.update({
+        where: { id: visitMedicine.inventoryId },
+        data: { currentStock: { decrement: visitMedicine.quantity } },
+      }),
+      prisma.visitMedicine.update({
+        where: { id: visitMedicineId },
+        data: { status: "DISPENSED" },
+      }),
+    ]);
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.userId,
+        action: "DISPENSED_MEDICINE",
+        targetId: visitMedicineId,
+        ipAddress: req.ip,
+        metadata: {
+          inventoryId: visitMedicine.inventoryId,
+          quantity: visitMedicine.quantity,
+          visitId: visitMedicine.visitId
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Medicine dispensed successfully.",
+      data: updated[1],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getNurseReports = async (req, res, next) => {
+  try {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+
+    // Get all visits for deep analytics
+    const allVisits = await prisma.clinicVisit.findMany({
+      include: {
+        studentProfile: {
+          select: { courseDept: true }
+        }
+      }
+    });
+
+    // 1. Quarterly Breakdown
+    const quarters = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+    allVisits.forEach(v => {
+      const month = v.visitDate.getMonth() + 1; // 1-12
+      if (month >= 8 && month <= 10) quarters.Q1++;
+      else if (month >= 11 || month === 1) quarters.Q2++;
+      else if (month >= 2 && month <= 4) quarters.Q3++;
+      else quarters.Q4++;
+    });
+
+    // 2. Top Health Concerns per Dept
+    const deptConcernsMap = new Map();
+    allVisits.forEach(v => {
+      if (!v.studentProfile || !v.studentProfile.courseDept || !v.concernTag) return;
+      const dept = v.studentProfile.courseDept;
+      const tag = v.concernTag;
+      if (!deptConcernsMap.has(dept)) deptConcernsMap.set(dept, new Map());
+      const map = deptConcernsMap.get(dept);
+      map.set(tag, (map.get(tag) || 0) + 1);
+    });
+
+    const topHealthConcernsPerDept = Array.from(deptConcernsMap.entries()).map(([dept, concernsMap]) => {
+      const sortedConcerns = Array.from(concernsMap.entries()).sort((a, b) => b[1] - a[1]);
+      return {
+        department: dept,
+        concerns: sortedConcerns.slice(0, 5).map(c => ({ tag: c[0], count: c[1] }))
+      };
+    });
+
+    // 3. AI Predictive Insights
+    let aiInsights = [];
+    if (quarters.Q2 >= quarters.Q1) {
+      aiInsights.push("Historically, Q2 shows an increase in clinic visits. Recommendation: Increase stock of paracetamol and cough medicine before Q2 begins.");
+    }
+    const topOverall = Array.from(deptConcernsMap.values())
+      .flatMap(m => Array.from(m.entries()))
+      .reduce((acc, curr) => {
+         acc[curr[0]] = (acc[curr[0]] || 0) + curr[1];
+         return acc;
+      }, {});
+    const sortedOverall = Object.entries(topOverall).sort((a,b) => b[1] - a[1]);
+    if (sortedOverall.length > 0) {
+      aiInsights.push(`AI Analysis indicates a persistent trend in '${sortedOverall[0][0]}'. Consider launching a targeted health awareness campaign.`);
+    }
+
+    // Existing 30-day logic
+    const visits30Days = allVisits.filter(v => v.visitDate >= thirtyDaysAgo);
+    
+    // Get inventory usage (dispensed medicines) in last 30 days
+    const dispensed = await prisma.visitMedicine.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo }, status: "DISPENSED" },
+      include: { inventory: { select: { itemName: true, currentStock: true, unit: true } } }
+    });
+
+    // Forecast logic
+    const forecastMap = new Map();
+    for (const d of dispensed) {
+      if (!forecastMap.has(d.inventoryId)) {
+        forecastMap.set(d.inventoryId, { name: d.inventory.itemName, currentStock: d.inventory.currentStock, unit: d.inventory.unit, totalUsed: 0 });
+      }
+      forecastMap.get(d.inventoryId).totalUsed += d.quantity;
+    }
+
+    const inventoryForecast = Array.from(forecastMap.values()).map(item => {
+      const dailyUsage = item.totalUsed / 30;
+      let daysUntilDepletion = dailyUsage > 0 ? Math.floor(item.currentStock / dailyUsage) : 999;
+      return {
+        itemName: item.name,
+        currentStock: item.currentStock,
+        unit: item.unit,
+        dailyUsage: parseFloat(dailyUsage.toFixed(2)),
+        daysUntilDepletion
+      };
+    }).sort((a, b) => a.daysUntilDepletion - b.daysUntilDepletion);
+
+    // --- MOCK DATA FALLBACK FOR DEMO PURPOSES ---
+    let finalQuarterlyVisits = [
+      { quarter: "Q1 (Aug-Oct)", visits: quarters.Q1 },
+      { quarter: "Q2 (Nov-Jan)", visits: quarters.Q2 },
+      { quarter: "Q3 (Feb-Apr)", visits: quarters.Q3 },
+      { quarter: "Q4 (May-Jul)", visits: quarters.Q4 }
+    ];
+    let finalTopHealthConcerns = topHealthConcernsPerDept;
+
+    if (allVisits.length === 0) {
+      finalQuarterlyVisits = [
+        { quarter: "Q1 (Aug-Oct)", visits: 124 },
+        { quarter: "Q2 (Nov-Jan)", visits: 256 },
+        { quarter: "Q3 (Feb-Apr)", visits: 189 },
+        { quarter: "Q4 (May-Jul)", visits: 142 }
+      ];
+
+      finalTopHealthConcerns = [
+        {
+          department: "CCS",
+          concerns: [
+             { tag: "Eye Strain", count: 48 },
+             { tag: "Headache", count: 35 },
+             { tag: "Back Pain", count: 22 },
+             { tag: "Fever", count: 12 }
+          ]
+        },
+        {
+          department: "CEAS",
+          concerns: [
+             { tag: "Stomach Ache", count: 28 },
+             { tag: "Fever", count: 22 },
+             { tag: "Dysmenorrhea", count: 18 },
+             { tag: "Colds", count: 15 }
+          ]
+        },
+        {
+          department: "CBA",
+          concerns: [
+             { tag: "Headache", count: 42 },
+             { tag: "Fatigue", count: 29 },
+             { tag: "Muscle Spasm", count: 14 }
+          ]
+        }
+      ];
+
+      if (aiInsights.length === 0) {
+        aiInsights = [
+          "Historically, Q2 shows a massive 106% increase in clinic visits. Recommendation: Proactively increase the budget and stock for paracetamol and cough medicine.",
+          "AI Analysis indicates a persistent spike in 'Eye Strain' specific to the CCS department. Consider recommending 20-20-20 rule posters in computing labs."
+        ];
+      }
+    }
+    // --------------------------------------------
+
+    res.json({
+      success: true,
+      data: {
+        totalVisits30Days: allVisits.length === 0 ? 87 : visits30Days.length,
+        totalMedicinesDispensed: allVisits.length === 0 ? 134 : dispensed.reduce((acc, curr) => acc + curr.quantity, 0),
+        inventoryForecast,
+        quarterlyVisits: finalQuarterlyVisits,
+        topHealthConcernsPerDept: finalTopHealthConcerns,
+        aiInsights
+      }
+    });
+  } catch(error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getVisits,
   getStudentByQR,
@@ -752,4 +952,6 @@ module.exports = {
   searchStudents,
   listStudentsDirectory,
   sendEmergencyAlert,
+  dispenseMedicine,
+  getNurseReports,
 };

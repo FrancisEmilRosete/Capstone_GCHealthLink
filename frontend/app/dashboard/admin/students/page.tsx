@@ -16,6 +16,8 @@ interface UserEntry {
 		lastName: string;
 		studentNumber: string;
 		courseDept: string;
+		course?: string | null;
+		yearLevel?: string | null;
 	} | null;
 }
 
@@ -80,7 +82,9 @@ export default function AdminStudentsPage() {
 			return user.email.toLowerCase().includes(q)
 				|| name.includes(q)
 				|| (user.studentProfile?.studentNumber ?? '').toLowerCase().includes(q)
-				|| (user.studentProfile?.courseDept ?? '').toLowerCase().includes(q);
+				|| (user.studentProfile?.courseDept ?? '').toLowerCase().includes(q)
+				|| (user.studentProfile?.course ?? '').toLowerCase().includes(q)
+				|| (user.studentProfile?.yearLevel ?? '').toLowerCase().includes(q);
 		});
 	}, [search, students]);
 
@@ -111,21 +115,25 @@ export default function AdminStudentsPage() {
 							<tr className="bg-gray-50 border-b border-gray-100">
 								<th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Student Number</th>
 								<th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Full Name</th>
-								<th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Department / Course</th>
+								<th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Department</th>
+								<th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Course</th>
+								<th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Year Level</th>
 								<th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
 								<th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Account Created</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-50">
 							{loading ? (
-								<tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400 text-sm">Loading students...</td></tr>
+								<tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">Loading students...</td></tr>
 							) : filteredStudents.length === 0 ? (
-								<tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400 text-sm">No students match your search.</td></tr>
+								<tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">No students match your search.</td></tr>
 							) : filteredStudents.map((student) => (
 								<tr key={student.id} className="hover:bg-gray-50 transition-colors">
 									<td className="px-4 py-3 text-gray-700">{student.studentProfile?.studentNumber ?? '—'}</td>
 									<td className="px-4 py-3 text-gray-800 font-medium">{fullName(student)}</td>
-									<td className="px-4 py-3 text-gray-500 text-xs">{student.studentProfile?.courseDept ?? '—'}</td>
+									<td className="px-4 py-3 text-gray-500 text-xs font-semibold">{student.studentProfile?.courseDept ?? '—'}</td>
+									<td className="px-4 py-3 text-gray-500 text-xs">{student.studentProfile?.course ?? '—'}</td>
+									<td className="px-4 py-3 text-gray-500 text-xs">{student.studentProfile?.yearLevel ? student.studentProfile.yearLevel.replace('_', ' ') : '—'}</td>
 									<td className="px-4 py-3 text-gray-700">{student.email}</td>
 									<td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
 										{new Date(student.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

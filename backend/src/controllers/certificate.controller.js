@@ -41,26 +41,17 @@ async function resolveStudentProfile(identifier) {
   });
 }
 
-function readMetadata(metadata) {
-  if (!metadata || typeof metadata !== "object") {
-    return {};
-  }
-
-  return metadata;
-}
-
-function mapAuditLogToCertificate(log) {
-  const metadata = readMetadata(log.metadata);
+function mapCertificateToDto(cert) {
   return {
-    id: metadata.certificateId || log.id,
-    studentProfileId: metadata.studentProfileId || "",
-    studentId: metadata.studentNumber || "",
-    student: metadata.studentName || "Unknown Student",
-    course: metadata.courseDept || "",
-    dateIso: metadata.dateIssued || log.timestamp,
-    reason: metadata.reason || "",
-    remarks: metadata.remarks || "",
-    issuedBy: metadata.issuedBy || log.user?.email || "Clinic Staff",
+    id: cert.id,
+    studentProfileId: cert.studentProfileId,
+    studentId: cert.studentProfile.studentNumber,
+    student: `${cert.studentProfile.firstName} ${cert.studentProfile.lastName}`,
+    course: cert.studentProfile.courseDept,
+    certificateType: cert.certificateType,
+    remarks: cert.remarks,
+    issuedAt: cert.issuedAt.toISOString(),
+    issuedBy: cert.doctor.email,
   };
 }
 
@@ -68,38 +59,28 @@ const listCertificates = async (req, res, next) => {
   try {
     const query = normalizeText(req.query.q).toLowerCase();
 
-    const logs = await prisma.auditLog.findMany({
-      where: {
-        action: "ISSUED_MED_CERTIFICATE",
-      },
-      orderBy: {
-        timestamp: "desc",
-      },
+    const where = {};
+    if (query) {
+      where.OR = [
+        { studentProfile: { studentNumber: { contains: query, mode: 'insensitive' } } },
+        { studentProfile: { firstName: { contains: query, mode: 'insensitive' } } },
+        { studentProfile: { lastName: { contains: query, mode: 'insensitive' } } },
+      ];
+    }
+
+    const certs = await prisma.medicalCertificate.findMany({
+      where,
+      orderBy: { issuedAt: "desc" },
       include: {
-        user: {
-          select: {
-            email: true,
-          },
-        },
+        studentProfile: { select: { studentNumber: true, firstName: true, lastName: true, courseDept: true } },
+        doctor: { select: { email: true } },
       },
     });
-
-    const certificates = logs
-      .map(mapAuditLogToCertificate)
-      .filter((certificate) => {
-        if (!query) return true;
-
-        return (
-          certificate.student.toLowerCase().includes(query)
-          || certificate.studentId.toLowerCase().includes(query)
-          || certificate.reason.toLowerCase().includes(query)
-        );
-      });
 
     return res.json({
       success: true,
       message: "Certificates retrieved successfully.",
-      data: certificates,
+      data: certs.map(mapCertificateToDto),
     });
   } catch (error) {
     return next(error);
@@ -141,40 +122,43 @@ const issueCertificate = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Student profile not found." });
     }
 
-    const certificateId = `CERT-${Date.now()}`;
-    const studentName = `${student.firstName} ${student.lastName}`;
+    const type = req.body?.certificateType === 'PHYSICAL_EXAM' ? 'PHYSICAL_EXAM' : 'CONSULTATION';
 
-    const auditLog = await prisma.auditLog.create({
-      data: {
-        userId: req.user.userId,
-        action: "ISSUED_MED_CERTIFICATE",
-        targetId: student.id,
-        ipAddress: req.ip,
-        metadata: {
-          certificateId,
+    const [cert] = await prisma.$transaction([
+      prisma.medicalCertificate.create({
+        data: {
           studentProfileId: student.id,
-          studentNumber: student.studentNumber,
-          studentName,
-          courseDept: student.courseDept,
-          reason,
+          doctorId: req.user.userId,
+          certificateType: type,
           remarks,
-          issuedBy,
-          dateIssued: dateIssued.toISOString(),
+          issuedAt: dateIssued,
         },
-      },
-      include: {
-        user: {
-          select: {
-            email: true,
+        include: {
+          studentProfile: { select: { studentNumber: true, firstName: true, lastName: true, courseDept: true } },
+          doctor: { select: { email: true } },
+        }
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: req.user.userId,
+          action: "ISSUED_MED_CERTIFICATE",
+          targetId: student.id,
+          ipAddress: req.ip,
+          metadata: {
+            studentName,
+            certificateType: type,
+            remarks,
+            issuedBy,
+            dateIssued: dateIssued.toISOString(),
           },
-        },
-      },
-    });
+        }
+      })
+    ]);
 
     return res.status(201).json({
       success: true,
       message: "Medical certificate issued successfully.",
-      data: mapAuditLogToCertificate(auditLog),
+      data: mapCertificateToDto(cert),
     });
   } catch (error) {
     return next(error);

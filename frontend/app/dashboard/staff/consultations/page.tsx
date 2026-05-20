@@ -119,7 +119,7 @@ function downloadCSV(rows: ConsultRow[]) {
   const link = document.createElement('a');
 
   link.href = url;
-  link.download = 'consultation_records.csv';
+  link.download = 'doctor_consultations.csv';
   link.click();
 
   URL.revokeObjectURL(url);
@@ -214,7 +214,7 @@ function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void })
   );
 }
 
-export default function ConsultationsPage() {
+export default function DoctorConsultationsPage() {
   const [records, setRecords] = useState<ConsultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -313,15 +313,15 @@ export default function ConsultationsPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Consultations</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Live records from clinic visits</p>
+          <h1 className="text-xl font-bold text-gray-900">Doctor Consultations</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Clinic visit records for medical review</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link
-            href="/dashboard/staff/scanner"
+            href="/dashboard/staff/records"
             className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600 px-3 py-2 rounded-xl transition-colors bg-white"
           >
-            Scan QR Code
+            Open Medical Records
           </Link>
           <button
             onClick={() => downloadCSV(filtered)}

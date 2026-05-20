@@ -406,6 +406,13 @@ const submitRegistration = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Please provide a valid email address." });
     }
 
+    if (!email.endsWith("@gordoncollege.edu.ph")) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Only @gordoncollege.edu.ph email addresses are allowed to register." 
+      });
+    }
+
     if (personal.age !== undefined && personal.age !== null && personal.age !== "" && age === null) {
       return res.status(400).json({ success: false, message: "age must be a whole number between 0 and 120." });
     }

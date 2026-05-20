@@ -50,18 +50,6 @@ interface InventoryResponse {
   data: InventoryOption[];
 }
 
-interface VisitRecordSummary {
-  id: string;
-  visitDate?: string;
-  createdAt?: string;
-  chiefComplaintEnc?: string;
-}
-
-interface VisitsResponse {
-  success: boolean;
-  data: VisitRecordSummary[];
-}
-
 type LiveQueueFilter = 'all' | 'incoming' | 'waiting' | 'pending';
 
 function isFollowUpAppointment(item: QueueItem) {
@@ -97,7 +85,7 @@ function formatYearLevel(value?: string | null) {
   }
 }
 
-export default function StaffCommandCenterPage() {
+export default function NurseDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -108,7 +96,6 @@ export default function StaffCommandCenterPage() {
   const [liveQueueFilter, setLiveQueueFilter] = useState<LiveQueueFilter>('all');
   const [consultModalOpen, setConsultModalOpen] = useState(false);
   const [consultingPatient, setConsultingPatient] = useState<QueueItem | null>(null);
-  const [consultInitialValues, setConsultInitialValues] = useState<Partial<ConsultationForm> | null>(null);
   const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
 
   function showToast(message: string) {
@@ -127,13 +114,13 @@ export default function StaffCommandCenterPage() {
     try {
       setLoading(true);
       setError('');
-      const response = await api.get<QueueResponse>('/appointments/queue?limit=500&status=WAITING,PENDING,IN_PROGRESS', token);
+      const response = await api.get<QueueResponse>('/appointments/queue?limit=500&status=WAITING,PENDING,IN_PROGRESS,COMPLETED', token);
       setQueue(response.data || []);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('Failed to load doctor queue.');
+        setError('Failed to load nurse queue.');
       }
     } finally {
       setLoading(false);
@@ -142,26 +129,6 @@ export default function StaffCommandCenterPage() {
 
   useEffect(() => {
     void loadQueue();
-  }, []);
-
-  useEffect(() => {
-    function handleWindowFocus() {
-      void loadQueue();
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
-        void loadQueue();
-      }
-    }
-
-    window.addEventListener('focus', handleWindowFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('focus', handleWindowFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
   }, []);
 
   useEffect(() => {
@@ -200,6 +167,11 @@ export default function StaffCommandCenterPage() {
       && (!isFollowUpAppointment(item) || !isFutureFollowUp(item))
   );
 
+  const incomingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'INCOMING').length;
+  const waitingQueueCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'WAITING').length;
+  const pendingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'PENDING').length;
+  const allPatientsCount = liveQueueCandidates.length;
+
   const liveQueue = liveQueueCandidates.filter((item) => {
     const status = resolveLiveQueueStatus(item);
     if (liveQueueFilter === 'all') return true;
@@ -208,10 +180,7 @@ export default function StaffCommandCenterPage() {
     return status === 'PENDING';
   });
 
-  const incomingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'INCOMING').length;
-  const waitingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'WAITING').length;
-  const pendingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'PENDING').length;
-  const allPatientsCount = liveQueueCandidates.length;
+  const waitingCount = waitingQueueCount;
   const followUps = filteredQueue
     .filter((item) => (item.status === 'WAITING' || item.status === 'PENDING') && isFutureFollowUp(item))
     .slice(0, 10);
@@ -270,63 +239,9 @@ export default function StaffCommandCenterPage() {
     return scheduledDay.getTime() > todayStart.getTime();
   }
 
-  async function loadLatestNurseTriage(patient: QueueItem) {
-    const token = getToken();
-    if (!token) return null;
-
-    const response = await api.get<VisitsResponse>(
-      `/clinic/visits?studentProfileId=${encodeURIComponent(patient.studentProfile.id)}&limit=20`,
-      token,
-    );
-
-    for (const visit of response.data || []) {
-      const raw = visit.chiefComplaintEnc || '';
-      if (!raw) continue;
-
-      try {
-        const parsed = JSON.parse(raw) as {
-          chiefComplaint?: string;
-          symptoms?: string;
-          vitals?: { bp?: string; temperature?: string };
-        };
-
-        const chiefComplaint = parsed.chiefComplaint || parsed.symptoms || '';
-        const bp = parsed.vitals?.bp || '';
-        const temperature = parsed.vitals?.temperature || '';
-
-        if (chiefComplaint || bp || temperature) {
-          return {
-            chiefComplaint,
-            bp,
-            temperature,
-          } as Partial<ConsultationForm>;
-        }
-      } catch {
-        // Older records may be plain text; use as fallback complaint.
-        if (raw.trim()) {
-          return {
-            chiefComplaint: raw.trim(),
-          } as Partial<ConsultationForm>;
-        }
-      }
-    }
-
-    return null;
-  }
-
-  async function openConsultModal(patient: QueueItem) {
-    setConsultInitialValues(null);
+  function openConsultModal(patient: QueueItem) {
     setConsultingPatient(patient);
     setConsultModalOpen(true);
-
-    try {
-      const triage = await loadLatestNurseTriage(patient);
-      if (triage) {
-        setConsultInitialValues(triage);
-      }
-    } catch {
-      // Keep consult accessible even when triage preload fails.
-    }
   }
 
   async function handleConsultSave(
@@ -343,46 +258,25 @@ export default function StaffCommandCenterPage() {
 
     const normalizedTag = 'General Consultation';
     const normalizedChiefComplaint = form.chiefComplaint?.trim() || '';
-    const normalizedDiagnosis = form.diagnosis?.trim() || '';
-    const normalizedTreatment = form.treatmentProvided?.trim() || '';
     const normalizedVisitDate = form.visitDate?.trim() || new Date().toISOString();
-    const normalizedFollowUpDate = form.followUpDate?.trim() || '';
-    const normalizedFollowUpTime = form.followUpTime?.trim() || '';
-
-    const dispensedMedicines = medicines
-      .map((medicine) => {
-        if (!medicine.inventoryId) return null;
-        const qty = Number(medicine.qty);
-        return {
-          inventoryId: medicine.inventoryId,
-          quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
-        };
-      })
-      .filter((entry): entry is { inventoryId: string; quantity: number } => entry !== null);
 
     const structuredComplaint = {
       concernTag: normalizedTag,
       symptoms: normalizedChiefComplaint,
       chiefComplaint: normalizedChiefComplaint || normalizedTag,
-      diagnosis: normalizedDiagnosis,
-      treatmentProvided: normalizedTreatment,
-      treatmentManagement: normalizedTreatment,
+      diagnosis: null,
+      treatmentProvided: null,
+      treatmentManagement: null,
       age: form.age?.trim() || null,
       sex: form.sex?.trim() || null,
       vitals: {
         bp: form.bp?.trim() || null,
         temperature: form.temperature?.trim() || null,
       },
-      notes: [normalizedTag, normalizedChiefComplaint, normalizedDiagnosis, normalizedTreatment]
+      notes: [normalizedTag, normalizedChiefComplaint]
         .map((part) => part?.trim())
         .filter(Boolean)
         .join(' | ') || 'General consultation',
-      followUp: form.addFollowUp
-        ? {
-            date: normalizedFollowUpDate,
-            time: normalizedFollowUpTime,
-          }
-        : null,
     };
 
     try {
@@ -395,40 +289,22 @@ export default function StaffCommandCenterPage() {
           visitDate: normalizedVisitDate,
           visitTime: form.visitTime?.trim() || consultingPatient.preferredTime || undefined,
           chiefComplaintEnc: JSON.stringify(structuredComplaint),
-          dispensedMedicines,
+          dispensedMedicines: [],
         },
         token,
       );
 
-      if (form.addFollowUp && normalizedFollowUpDate && normalizedFollowUpTime) {
-        await api.post(
-          '/appointments/queue',
-          {
-            studentProfileId: consultingPatient.studentProfile.id,
-            preferredDate: normalizedFollowUpDate,
-            preferredTime: normalizedFollowUpTime,
-            serviceType: 'Medical Consultation',
-            symptoms: `Follow Up: ${normalizedDiagnosis || normalizedChiefComplaint || 'Post consultation review'}`,
-          },
-          token,
-        );
-      }
-
-      await api.put(`/appointments/queue/${consultingPatient.id}`, { status: 'COMPLETED' }, token);
+      await api.put(`/appointments/queue/${consultingPatient.id}`, { status: 'PENDING' }, token);
 
       setConsultModalOpen(false);
       setConsultingPatient(null);
-      showToast(
-        form.addFollowUp
-          ? 'Consultation completed and follow-up appointment scheduled.'
-          : 'Consultation completed and saved to logs.'
-      );
+      showToast('Consultation saved and sent to doctor.');
       await loadQueue();
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('Failed to save doctor consultation.');
+        setError('Failed to save consultation.');
       }
     }
   }
@@ -437,8 +313,8 @@ export default function StaffCommandCenterPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <header className="bg-white border-b border-slate-200 px-8 py-5 sticky top-0 z-30 shadow-sm flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Doctor Dashboard</h1>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Live queue and follow-up management</p>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Medical Clinic Dashboard</h1>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Nurse queue from live backend data</p>
         </div>
 
         <button
@@ -629,10 +505,10 @@ export default function StaffCommandCenterPage() {
                               <button
                                 type="button"
                                 onClick={() => openConsultModal(patient)}
-                                disabled={patient.status === 'COMPLETED' || patient.status === 'CANCELLED'}
+                                disabled={resolveLiveQueueStatus(patient) === 'PENDING'}
                                 className="text-xs font-semibold bg-teal-500 hover:bg-teal-600 text-white px-2.5 py-1.5 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
                               >
-                                Consult
+                                {resolveLiveQueueStatus(patient) === 'PENDING' ? 'Sent' : 'Consult'}
                               </button>
                             </td>
                           </tr>
@@ -689,10 +565,8 @@ export default function StaffCommandCenterPage() {
             sex: consultingPatient.studentProfile.sex || '',
           } as ConsultationPatient}
           inventoryOptions={inventoryOptions}
-          mode="full"
-          saveLabel="Save Doctor Consult"
-          requireDoctorFields
-          initialValues={consultInitialValues || undefined}
+          mode="nurse-triage"
+          saveLabel="Send to Doctor"
           onClose={() => setConsultModalOpen(false)}
           onSave={(data, medicines) => {
             void handleConsultSave(data, medicines);
@@ -712,7 +586,7 @@ export default function StaffCommandCenterPage() {
         }}
       />
 
-      <PredictiveInsightsCard role="staff" className="mx-8 mb-8" />
+      <PredictiveInsightsCard role="doctor" className="mx-8 mb-8" />
     </div>
   );
 }

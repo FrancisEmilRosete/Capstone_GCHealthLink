@@ -9,6 +9,8 @@ const {
   searchStudents,
   listStudentsDirectory,
   getVisits,
+  dispenseMedicine,
+  getNurseReports,
 } = require("../controllers/clinic.controller");
 const { sendEmergencySmsToGuardian } = require("../controllers/emergency.controller");
 
@@ -69,6 +71,22 @@ router.post(
   authorize("CLINIC_STAFF", "DOCTOR", "ADMIN"),
   auditLogger("RECORDED_CLINIC_VISIT"),
   recordVisit
+);
+
+router.put(
+  "/visits/dispense/:visitMedicineId",
+  protect,
+  authorize("CLINIC_STAFF", "NURSE", "ADMIN"),
+  auditLogger("DISPENSED_MEDICINE"),
+  dispenseMedicine
+);
+
+router.get(
+  "/reports",
+  protect,
+  authorize("CLINIC_STAFF", "NURSE", "ADMIN"),
+  auditLogger("VIEWED_NURSE_REPORTS"),
+  getNurseReports
 );
 
 module.exports = router;

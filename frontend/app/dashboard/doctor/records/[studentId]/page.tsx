@@ -44,13 +44,13 @@ export default function DoctorRecordPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isNurseSideRecord = pathname?.startsWith('/dashboard/doctor/') ?? false;
-  const isDoctorSideRecord = pathname?.startsWith('/dashboard/staff/') ?? false;
+  const isDoctorSideRecord = pathname?.startsWith('/dashboard/doctor/') ?? false;
   const shouldShowDentalRecordsTab = !isNurseSideRecord && !isDoctorSideRecord;
   const studentNumberParam = typeof params.studentId === 'string' ? decodeURIComponent(params.studentId) : '';
   const backRoute = pathname?.startsWith('/dashboard/doctor/students/')
     ? '/dashboard/doctor/students'
-    : pathname?.startsWith('/dashboard/staff/')
-      ? '/dashboard/staff/record'
+    : pathname?.startsWith('/dashboard/doctor/')
+      ? '/dashboard/doctor/record'
       : '/dashboard/doctor/records';
   const returnTo = searchParams.get('returnTo') || '';
   const resolvedBackRoute = returnTo.startsWith('/dashboard/') ? returnTo : backRoute;

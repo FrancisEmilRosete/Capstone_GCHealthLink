@@ -32,6 +32,13 @@ interface AnalyticsResponse {
       expectedVisitsNext7Days: number;
       recommendedStaffing: string;
     };
+    inventoryForecast?: Array<{
+      itemName: string;
+      currentStock: number;
+      unit: string;
+      dailyUsage: number;
+      daysUntilDepletion: number;
+    }>;
   };
 }
 
@@ -316,6 +323,44 @@ export default function AdminReports() {
         <p className="text-sm text-gray-700">
           <span className="font-semibold">Suggested Staffing:</span> {analytics?.resourcePrediction.recommendedStaffing || '1 clinic staff on standby'}
         </p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2 lg:col-span-2">
+        <h2 className="text-sm font-semibold text-gray-800">Predictive Inventory Forecast</h2>
+        {analytics?.inventoryForecast && analytics.inventoryForecast.length > 0 ? (
+          <div className="overflow-x-auto mt-3">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400">
+                  <th className="text-left py-2 font-semibold">Medicine</th>
+                  <th className="text-left py-2 font-semibold">Current Stock</th>
+                  <th className="text-left py-2 font-semibold">Run Rate / Day</th>
+                  <th className="text-left py-2 font-semibold">Prediction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.inventoryForecast.map((item, i) => (
+                  <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60">
+                    <td className="py-2 text-gray-800 font-medium">{item.itemName}</td>
+                    <td className="py-2 text-gray-600">{item.currentStock} {item.unit}</td>
+                    <td className="py-2 text-gray-600">{item.dailyUsage.toFixed(1)} {item.unit}</td>
+                    <td className="py-2 text-gray-700">
+                      {item.daysUntilDepletion > 365 ? (
+                        'Ample Stock'
+                      ) : (
+                        <span className={item.daysUntilDepletion <= 14 ? 'text-red-500 font-bold' : item.daysUntilDepletion <= 30 ? 'text-amber-500 font-semibold' : 'text-teal-600 font-medium'}>
+                          Runs out in {item.daysUntilDepletion} days
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 mt-2">No inventory data to forecast.</p>
+        )}
       </div>
     </div>
   );

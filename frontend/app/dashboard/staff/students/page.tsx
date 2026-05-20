@@ -8,7 +8,7 @@ import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 
-interface SearchStudent {
+interface StudentDirectoryItem {
   id: string;
   studentNumber: string;
   firstName: string;
@@ -18,27 +18,16 @@ interface SearchStudent {
   yearLevel?: string | null;
 }
 
-interface SearchResponse {
+interface StudentDirectoryResponse {
   success: boolean;
-  data: SearchStudent[];
+  data: StudentDirectoryItem[];
 }
 
-function formatYearLevel(value?: string | null) {
-  if (!value) return 'N/A';
-  switch (value) {
-    case 'YR_1': return 'Yr. 1';
-    case 'YR_2': return 'Yr. 2';
-    case 'YR_3': return 'Yr. 3';
-    case 'YR_4': return 'Yr. 4';
-    default: return value;
-  }
-}
-
-export default function StaffStudentsPage() {
+export default function DoctorStudentsPage() {
   const [query, setQuery] = useState('');
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrMessage, setQrMessage] = useState('');
-  const [results, setResults] = useState<SearchStudent[]>([]);
+  const [students, setStudents] = useState<StudentDirectoryItem[]>([]);
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [courseFilter, setCourseFilter] = useState('all');
   const [yearLevelFilter, setYearLevelFilter] = useState('all');
@@ -46,8 +35,6 @@ export default function StaffStudentsPage() {
   const [error, setError] = useState('');
 
   async function loadStudents(value?: string) {
-    setError('');
-
     const token = getToken();
     if (!token) {
       setError('You are not logged in. Please sign in again.');
@@ -56,12 +43,13 @@ export default function StaffStudentsPage() {
 
     try {
       setLoading(true);
+      setError('');
       const trimmed = (value || '').trim();
       const path = trimmed
         ? `/clinic/students?limit=1000&q=${encodeURIComponent(trimmed)}`
         : '/clinic/students?limit=1000';
-      const response = await api.get<SearchResponse>(path, token);
-      setResults(response.data || []);
+      const response = await api.get<StudentDirectoryResponse>(path, token);
+      setStudents(response.data || []);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -77,7 +65,7 @@ export default function StaffStudentsPage() {
     void loadStudents();
   }, []);
 
-  function handleSearch(value: string) {
+  function onSearch(value: string) {
     setQuery(value);
     if (!value.trim()) {
       setQrMessage('');
@@ -85,37 +73,36 @@ export default function StaffStudentsPage() {
     void loadStudents(value);
   }
 
-  const rows = useMemo(() => results, [results]);
   const departmentOptions = useMemo(
-    () => Array.from(new Set(rows.map((student) => student.courseDept).filter(Boolean))).sort(),
-    [rows],
+    () => Array.from(new Set(students.map((student) => student.courseDept).filter(Boolean))).sort(),
+    [students],
   );
 
   const courseOptions = useMemo(
-    () => Array.from(new Set(rows.map((student) => student.course || 'N/A'))).sort(),
-    [rows],
+    () => Array.from(new Set(students.map((student) => student.course || 'N/A'))).sort(),
+    [students],
   );
 
   const yearLevelOptions = useMemo(
-    () => Array.from(new Set(rows.map((student) => formatYearLevel(student.yearLevel)))).sort(),
-    [rows],
+    () => Array.from(new Set(students.map((student) => student.yearLevel || 'N/A'))).sort(),
+    [students],
   );
 
-  const filteredRows = useMemo(
-    () => rows.filter((student) => {
+  const filteredStudents = useMemo(
+    () => students.filter((student) => {
       const matchesDepartment = departmentFilter === 'all' || student.courseDept === departmentFilter;
       const matchesCourse = courseFilter === 'all' || (student.course || 'N/A') === courseFilter;
-      const matchesYear = yearLevelFilter === 'all' || formatYearLevel(student.yearLevel) === yearLevelFilter;
+      const matchesYear = yearLevelFilter === 'all' || (student.yearLevel || 'N/A') === yearLevelFilter;
       return matchesDepartment && matchesCourse && matchesYear;
     }),
-    [rows, departmentFilter, courseFilter, yearLevelFilter],
+    [students, departmentFilter, courseFilter, yearLevelFilter],
   );
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Students</h1>
-        <p className="text-sm text-gray-500 mt-1">Search and open student records without scanning a QR code.</p>
+        <p className="text-sm text-gray-500 mt-1">Browse all registered students without using QR scan.</p>
       </div>
 
       <div className="flex items-center gap-2">
@@ -124,8 +111,8 @@ export default function StaffStudentsPage() {
           <input
             type="text"
             value={query}
-            onChange={(event) => { void handleSearch(event.target.value); }}
-            placeholder="Search by student number, name, course, department, or year level"
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="Search by student number, name, or department"
             className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
           />
         </div>
@@ -137,12 +124,6 @@ export default function StaffStudentsPage() {
           Use QR
         </button>
       </div>
-
-      {qrMessage && (
-        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs font-semibold text-teal-700">
-          {qrMessage}
-        </div>
-      )}
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <select
@@ -182,6 +163,12 @@ export default function StaffStudentsPage() {
         </select>
       </div>
 
+      {qrMessage && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs font-semibold text-teal-700">
+          {qrMessage}
+        </div>
+      )}
+
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -192,29 +179,25 @@ export default function StaffStudentsPage() {
                 <th className="px-4 py-3 text-left font-semibold">Student ID</th>
                 <th className="px-4 py-3 text-left font-semibold">Name</th>
                 <th className="px-4 py-3 text-left font-semibold">Department</th>
-                <th className="px-4 py-3 text-left font-semibold">Course</th>
-                <th className="px-4 py-3 text-left font-semibold">Year Level</th>
                 <th className="px-4 py-3 text-right font-semibold">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">Searching students...</td></tr>
-              ) : filteredRows.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">No students found.</td></tr>
-              ) : filteredRows.map((student) => (
+                <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400">Loading students...</td></tr>
+              ) : filteredStudents.length === 0 ? (
+                <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400">No students found.</td></tr>
+              ) : filteredStudents.map((student) => (
                 <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50/70">
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{student.studentNumber}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{student.lastName}, {student.firstName}</td>
                   <td className="px-4 py-3 text-gray-700">{student.courseDept || 'N/A'}</td>
-                  <td className="px-4 py-3 text-gray-700">{student.course || 'N/A'}</td>
-                  <td className="px-4 py-3 text-gray-700">{formatYearLevel(student.yearLevel)}</td>
                   <td className="px-4 py-3 text-right">
                     <Link
-                      href={`/dashboard/staff/record/${encodeURIComponent(student.studentNumber)}?returnTo=${encodeURIComponent('/dashboard/staff/students')}`}
+                      href={`/dashboard/staff/students/${encodeURIComponent(student.studentNumber)}?returnTo=${encodeURIComponent('/dashboard/staff/students')}`}
                       className="inline-flex rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-teal-300 hover:text-teal-700"
                     >
-                      Open Record
+                      View Record
                     </Link>
                   </td>
                 </tr>
@@ -229,7 +212,7 @@ export default function StaffStudentsPage() {
         onClose={() => setQrModalOpen(false)}
         onResolved={(student: QrResolvedStudent) => {
           setQrMessage(`Found ${student.lastName}, ${student.firstName} (${student.studentNumber})`);
-          void handleSearch(student.studentNumber);
+          onSearch(student.studentNumber);
         }}
         onNotFound={() => {
           setQrMessage('Student not found. Please try another QR.');

@@ -10,6 +10,8 @@ function resolveClientIp(req) {
   return req.ip || req.socket?.remoteAddress || null;
 }
 
+const actionDebounceMap = new Map();
+
 function auditLogger(actionOrResolver) {
   return (req, res, next) => {
     res.on("finish", async () => {
@@ -27,10 +29,26 @@ function auditLogger(actionOrResolver) {
           return;
         }
 
+        // Filter out low-value telemetry/navigation logs
+        if (action.startsWith("VIEWED_") || action.startsWith("ADMIN_VIEWED_")) {
+          return;
+        }
+
+        const candidateUserId = req.user?.userId || null;
+
+        // Prevent duplicate rapid-fire logging of the same action
+        if (candidateUserId) {
+          const debounceKey = `${candidateUserId}:${action}`;
+          if (actionDebounceMap.has(debounceKey)) {
+            return; // Ignore rapid succession
+          }
+          actionDebounceMap.set(debounceKey, true);
+          setTimeout(() => actionDebounceMap.delete(debounceKey), 2000);
+        }
+
         // Tokens can reference stale user IDs after DB reset/reseed.
         // Only persist userId if the account still exists.
         let safeUserId = null;
-        const candidateUserId = req.user?.userId || null;
         if (candidateUserId) {
           const existingUser = await prisma.user.findUnique({
             where: { id: candidateUserId },

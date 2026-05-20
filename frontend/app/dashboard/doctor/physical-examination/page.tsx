@@ -202,7 +202,7 @@ export default function PhysicalExaminationPage() {
         </div>
         <div className="flex gap-2 shrink-0 flex-wrap">
           <Link
-            href="/dashboard/staff/scanner"
+            href="/dashboard/doctor/scanner"
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border border-gray-200 text-gray-600 bg-white rounded-xl hover:border-teal-300 hover:text-teal-600 transition-colors"
           >
             Scan QR Code
@@ -320,7 +320,7 @@ export default function PhysicalExaminationPage() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
-                        onClick={() => router.push(`/dashboard/staff/record/${record.studentNumber}?returnTo=${encodeURIComponent('/dashboard/staff/physical-examination')}`)}
+                        onClick={() => router.push(`/dashboard/doctor/record/${record.studentNumber}?returnTo=${encodeURIComponent('/dashboard/doctor/physical-examination')}`)}
                         className="p-2 rounded-lg text-gray-400 hover:text-teal-500 hover:bg-teal-50 transition-colors"
                         aria-label="View record"
                       >

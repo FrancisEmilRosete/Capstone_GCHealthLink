@@ -88,6 +88,19 @@ const bookAppointment = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "preferredTime is required." });
     }
 
+    // Operating Hours Validation (08:00 to 17:00)
+    const timeMatch = normalizedPreferredTime.match(/^(\d{2}):(\d{2})$/);
+    if (!timeMatch) {
+      return res.status(400).json({ success: false, message: "preferredTime must be in HH:MM format." });
+    }
+    const hour = parseInt(timeMatch[1], 10);
+    if (hour < 8 || hour >= 17) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Clinic operating hours are from 08:00 AM to 05:00 PM. Please select a valid time." 
+      });
+    }
+
     if (providedServiceType && !normalizedProvidedServiceType) {
       return res.status(400).json({
         success: false,
@@ -334,6 +347,19 @@ const createQueueAppointment = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "preferredTime is required." });
     }
 
+    // Operating Hours Validation (08:00 to 17:00)
+    const timeMatch2 = normalizedPreferredTime.match(/^(\d{2}):(\d{2})$/);
+    if (!timeMatch2) {
+      return res.status(400).json({ success: false, message: "preferredTime must be in HH:MM format." });
+    }
+    const hour2 = parseInt(timeMatch2[1], 10);
+    if (hour2 < 8 || hour2 >= 17) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Clinic operating hours are from 08:00 AM to 05:00 PM. Please select a valid time." 
+      });
+    }
+
     if (!normalizedSymptoms) {
       return res.status(400).json({ success: false, message: "symptoms are required." });
     }
@@ -376,4 +402,43 @@ const createQueueAppointment = async (req, res, next) => {
   }
 };
 
-module.exports = { bookAppointment, getLiveQueue, updateAppointmentStatus, createQueueAppointment };
+const getAppointmentAvailability = async (req, res, next) => {
+  try {
+    const month = parseInt(req.query.month, 10);
+    const year = parseInt(req.query.year, 10);
+    
+    if (isNaN(month) || isNaN(year) || month < 1 || month > 12) {
+      return res.status(400).json({ success: false, message: "Valid month and year are required." });
+    }
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 1);
+
+    const appointments = await prisma.appointment.groupBy({
+      by: ['preferredDate'],
+      where: {
+        preferredDate: {
+          gte: startDate,
+          lt: endDate,
+        },
+        status: { in: ['WAITING', 'PENDING', 'IN_PROGRESS'] },
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    const availability = {};
+    for (const appt of appointments) {
+      const date = appt.preferredDate;
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      availability[key] = appt._count.id;
+    }
+
+    res.json({ success: true, data: availability });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { bookAppointment, getLiveQueue, updateAppointmentStatus, createQueueAppointment, getAppointmentAvailability };

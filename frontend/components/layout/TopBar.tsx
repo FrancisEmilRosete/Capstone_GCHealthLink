@@ -33,16 +33,7 @@ interface TopBarProps {
   notificationsHref?: string;
 }
 
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-      className="w-4 h-4 text-gray-400" aria-hidden="true">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
+// SearchIcon removed
 
 function BellIcon({ hasUnread }: { hasUnread?: boolean }) {
   return (
@@ -67,9 +58,6 @@ export default function TopBar({
   userAvatar,
   notificationsHref,
 }: TopBarProps) {
-  const [search,       setSearch      ] = useState('');
-  // Controls whether the search box is expanded on mobile
-  const [searchOpen,   setSearchOpen  ] = useState(false);
   const pathname = usePathname();
 
   // Auto-derive notifications path from current route if not explicitly provided
@@ -118,31 +106,8 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* Center: Search — full width on desktop, icon-toggle on mobile */}
-      <div className="flex-1 hidden lg:flex justify-center">
-        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-64">
-          <SearchIcon />
-          <input
-            type="text"
-            placeholder="Search..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none w-full"
-          />
-        </div>
-      </div>
-
-      {/* Right: Mobile search toggle + Bell + Avatar */}
+      {/* Right: Bell + Avatar */}
       <div className="flex items-center gap-1 sm:gap-3 shrink-0">
-
-        {/* Mobile: search icon that expands an overlay input */}
-        <button
-          onClick={() => setSearchOpen(true)}
-          className="lg:hidden p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
-          aria-label="Search"
-        >
-          <SearchIcon />
-        </button>
 
         {/* Notification Bell — links to the role-specific notifications page */}
         {resolvedNotifHref ? (
@@ -177,31 +142,7 @@ export default function TopBar({
 
       </div>
 
-      {/* Mobile search overlay — slides down from top when searchOpen */}
-      {searchOpen && (
-        <div className="lg:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 px-4 py-3 shadow-md z-20">
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-            <SearchIcon />
-            <input
-              autoFocus
-              type="text"
-              placeholder="Search..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none w-full"
-            />
-            <button
-              onClick={() => setSearchOpen(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Close search"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Mobile search overlay removed */}
 
     </header>
   );

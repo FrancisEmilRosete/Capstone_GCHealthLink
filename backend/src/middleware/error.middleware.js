@@ -62,6 +62,11 @@ function errorHandler(error, req, res, next) {
   let status = error.status || 500;
   let message = error.message || "Internal Server Error";
 
+  // Log all unhandled or Prisma errors for tracing
+  if (status >= 500 || error?.name?.startsWith("PrismaClient")) {
+    console.error(`[DB Error Handler] ${new Date().toISOString()} - Root cause trace:`, error);
+  }
+
   if (error.name === "MulterError") {
     status = 400;
     message = mapMulterErrorMessage(error);

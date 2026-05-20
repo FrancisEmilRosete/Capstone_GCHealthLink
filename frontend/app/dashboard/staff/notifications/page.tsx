@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import type { PendingCertificateRequest } from '@/components/dashboard/staff/CertificateApprovalTable';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 
 type Level = 'critical' | 'warning' | 'info';
-type Category = 'appointments' | 'stock';
+type Category = 'appointments' | 'stock' | 'certificates';
 
 interface Alert {
   id: string;
@@ -66,9 +67,11 @@ const LEVEL_STYLE: Record<Level, { badge: string; icon: string; border: string }
 const CATEGORY_LABEL: Record<Category, string> = {
   appointments: 'New Appointments',
   stock: 'Low Inventory',
+  certificates: 'Certificate Approvals',
 };
 
-const CATEGORY_ORDER: Category[] = ['appointments', 'stock'];
+const CATEGORY_ORDER: Category[] = ['certificates', 'appointments', 'stock'];
+const CERT_STORAGE_KEY = 'gchl_cert_requests';
 
 function formatDateTime(dateIso: string, preferredTime?: string) {
   const date = new Date(dateIso);
@@ -99,7 +102,7 @@ function AlertIcon({ level }: { level: Level }) {
   );
 }
 
-export default function NotificationsPage() {
+export default function DoctorNotificationsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<'all' | Category>('all');
@@ -146,6 +149,9 @@ export default function NotificationsPage() {
       const readSet = new Set(stateResponse.data?.readIds || []);
       const dismissed = stateResponse.data?.dismissedIds || [];
       const dismissedSet = new Set(dismissed);
+      const rawCerts = localStorage.getItem(CERT_STORAGE_KEY);
+      const parsedCerts: PendingCertificateRequest[] = rawCerts ? JSON.parse(rawCerts) : [];
+      const pendingCerts = parsedCerts.filter((item) => item.status === 'pending_doctor');
 
       const appointmentAlerts: Alert[] = (queueResponse.data || []).map((item) => {
         const studentName = `${item.studentProfile.lastName}, ${item.studentProfile.firstName}`;
@@ -163,6 +169,16 @@ export default function NotificationsPage() {
         };
       });
 
+      const certificateAlerts: Alert[] = pendingCerts.map((cert) => ({
+        id: `certificate-${cert.id}`,
+        level: 'warning',
+        category: 'certificates',
+        title: `Certificate Approval Needed: ${cert.studentName}`,
+        message: `${cert.studentNumber} (${cert.courseDept || 'N/A'}) requested a medical certificate for ${cert.reason}.`,
+        time: formatDateTime(cert.requestedDateIso),
+        read: false,
+      }));
+
       const inventoryAlerts: Alert[] = (inventoryResponse.data || [])
         .filter((item) => item.currentStock <= item.reorderThreshold)
         .map((item) => ({
@@ -175,7 +191,7 @@ export default function NotificationsPage() {
           read: false,
         }));
 
-      const hydratedAlerts = [...appointmentAlerts, ...inventoryAlerts]
+      const hydratedAlerts = [...certificateAlerts, ...appointmentAlerts, ...inventoryAlerts]
         .filter((item) => !dismissedSet.has(item.id))
         .map((item) => ({
           ...item,
@@ -237,8 +253,8 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Notifications</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Inbound operational alerts: new appointments and low stock warnings</p>
+            <h1 className="text-xl font-bold text-gray-900">Doctor Notifications</h1>
+            <p className="text-xs text-gray-400 mt-0.5">Operational alerts for appointments and clinic readiness</p>
           </div>
           {unread > 0 && (
             <span className="text-xs font-bold bg-red-500 text-white w-5 h-5 rounded-full flex items-center justify-center shrink-0">

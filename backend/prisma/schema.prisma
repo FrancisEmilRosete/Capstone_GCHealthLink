@@ -45,6 +45,7 @@ model User {
   studentProfile StudentProfile?
   handledVisits  ClinicVisit[] @relation("HandledByUser")
   auditLogs      AuditLog[]
+  issuedCertificates MedicalCertificate[]
 
   @@index([role, clinicStaffType])
 
@@ -87,6 +88,7 @@ model StudentProfile {
   clinicVisits         ClinicVisit[]
   appointments         Appointment[]
   medicalDocuments     MedicalDocument[]
+  medicalCertificates  MedicalCertificate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -234,6 +236,7 @@ model VisitMedicine {
   visitId     String
   inventoryId String
   quantity    Int    @default(1)
+  status      String @default("PRESCRIBED") // PRESCRIBED, DISPENSED, CANCELLED
 
   visit      ClinicVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
   inventory  Inventory   @relation(fields: [inventoryId], references: [id], onDelete: Restrict)
@@ -250,6 +253,7 @@ model Inventory {
   currentStock     Int
   reorderThreshold Int
   unit             String
+  expirationDate   DateTime?
 
   dispensedIn VisitMedicine[]
 
@@ -297,4 +301,19 @@ model MedicalDocument {
   fileUrl          String         // The path to access the file
   documentType     String         @default("PHYSICAL_EXAM") // e.g., LAB_RESULT, MED_CERT
   uploadedAt       DateTime       @default(now())
+}
+
+// NEW MODEL: Medical Certificate Tracking
+model MedicalCertificate {
+  id               String         @id @default(cuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  doctorId         String
+  doctor           User           @relation(fields: [doctorId], references: [id])
+  certificateType  String         @default("CONSULTATION") // CONSULTATION, PHYSICAL_EXAM
+  remarks          String?        @db.Text
+  issuedAt         DateTime       @default(now())
+
+  @@index([studentProfileId, issuedAt])
+  @@index([doctorId, issuedAt])
 }

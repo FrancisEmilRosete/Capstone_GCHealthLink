@@ -22,7 +22,9 @@ interface VisitRecord {
     email: string;
   } | null;
   dispensedMedicines: Array<{
+    id: string;
     quantity: number;
+    status: string;
     inventory: {
       itemName: string;
       unit: string;
@@ -46,7 +48,7 @@ interface ConsultRow {
   diagnosis: string;
   treatment: string;
   staff: string;
-  medicines: string[];
+  medicines: Array<{ id: string, name: string, status: string }>;
   department: string;
   status: 'WITH_MEDS' | 'CONSULT_ONLY';
 }
@@ -59,7 +61,11 @@ function parseConsultationPayload(raw?: string | null) {
 
 function mapVisitToRow(visit: VisitRecord): ConsultRow {
   const parsed = parseConsultationPayload(visit.chiefComplaintEnc);
-  const medicines = visit.dispensedMedicines.map((med) => `${med.inventory.itemName} x${med.quantity}`);
+  const medicines = visit.dispensedMedicines.map((med) => ({
+    id: med.id,
+    name: `${med.inventory.itemName} x${med.quantity}`,
+    status: med.status
+  }));
 
   const treatment = parsed.treatment
     || (medicines.length > 0 ? 'Medicine dispensed during consultation.' : 'No medicine dispensed.');
@@ -110,7 +116,7 @@ function downloadCSV(rows: ConsultRow[]) {
     row.diagnosis,
     row.treatment,
     row.staff,
-    row.medicines.join(' | '),
+    row.medicines.map(m => `${m.name} (${m.status})`).join(' | '),
   ].map((value) => `"${value.replace(/"/g, '""')}"`).join(','));
 
   const csv = [headers.join(','), ...lines].join('\n');
@@ -119,7 +125,7 @@ function downloadCSV(rows: ConsultRow[]) {
   const link = document.createElement('a');
 
   link.href = url;
-  link.download = 'doctor_consultations.csv';
+  link.download = 'consultation_records.csv';
   link.click();
 
   URL.revokeObjectURL(url);
@@ -143,7 +149,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   );
 }
 
-function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void }) {
+function DetailModal({ row, onClose, onDispense }: { row: ConsultRow; onClose: () => void; onDispense: (medId: string) => void }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -198,12 +204,22 @@ function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void })
 
           {row.medicines.length > 0 && (
             <div>
-              <p className="text-[10px] font-semibold text-teal-500 uppercase tracking-wider mb-2">Medicine Dispensed</p>
-              <div className="flex flex-wrap gap-2">
+              <p className="text-[10px] font-semibold text-teal-500 uppercase tracking-wider mb-2">Medicine (Prescribed / Dispensed)</p>
+              <div className="flex flex-col gap-2">
                 {row.medicines.map((medicine, index) => (
-                  <span key={`${medicine}-${index}`} className="text-xs bg-teal-50 text-teal-700 font-medium border border-teal-100 px-3 py-1 rounded-full">
-                    {medicine}
-                  </span>
+                  <div key={`${medicine.id}-${index}`} className="flex items-center justify-between text-xs bg-teal-50 text-teal-700 font-medium border border-teal-100 px-3 py-2 rounded-xl">
+                    <span>{medicine.name}</span>
+                    {medicine.status === 'DISPENSED' ? (
+                      <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold">DISPENSED</span>
+                    ) : (
+                      <button
+                        onClick={() => onDispense(medicine.id)}
+                        className="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 rounded-lg transition-colors font-bold shadow-sm"
+                      >
+                        Dispense
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -214,7 +230,7 @@ function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void })
   );
 }
 
-export default function DoctorConsultationsPage() {
+export default function ConsultationsPage() {
   const [records, setRecords] = useState<ConsultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -253,6 +269,31 @@ export default function DoctorConsultationsPage() {
   useEffect(() => {
     void loadConsultations();
   }, []);
+
+  async function handleDispense(medId: string) {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      await api.put(`/clinic/visits/dispense/${medId}`, {}, token);
+      alert("Medicine dispensed successfully");
+      
+      // Update local state to reflect dispensed status
+      if (selected) {
+        setSelected({
+          ...selected,
+          medicines: selected.medicines.map(m => m.id === medId ? { ...m, status: 'DISPENSED' } : m)
+        });
+      }
+      setRecords(records.map(r => 
+        r.id === selected?.id 
+        ? { ...r, medicines: r.medicines.map(m => m.id === medId ? { ...m, status: 'DISPENSED' } : m) } 
+        : r
+      ));
+    } catch (err: any) {
+      alert(err.message || 'Failed to dispense medicine');
+    }
+  }
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -309,19 +350,19 @@ export default function DoctorConsultationsPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
-      {selected && <DetailModal row={selected} onClose={() => setSelected(null)} />}
+      {selected && <DetailModal row={selected} onClose={() => setSelected(null)} onDispense={handleDispense} />}
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Doctor Consultations</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Clinic visit records for medical review</p>
+          <h1 className="text-xl font-bold text-gray-900">Consultations</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Live records from clinic visits</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link
-            href="/dashboard/doctor/records"
+            href="/dashboard/doctor/scanner"
             className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-600 px-3 py-2 rounded-xl transition-colors bg-white"
           >
-            Open Medical Records
+            Scan QR Code
           </Link>
           <button
             onClick={() => downloadCSV(filtered)}

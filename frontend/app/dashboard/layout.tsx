@@ -41,7 +41,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     pathname?.startsWith('/dashboard/student') ||
     pathname?.startsWith('/dashboard/admin') ||
     pathname?.startsWith('/dashboard/doctor') ||
-    pathname?.startsWith('/dashboard/dental')
+    pathname?.startsWith('/dashboard/dental') ||
+    pathname?.startsWith('/dashboard/staff')
   );
 
   useEffect(() => {
@@ -53,13 +54,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       router.replace('/login');
       return;
     }
-
-    if (role !== 'DOCTOR') {
-      router.replace(getDashboardRouteForRole(role));
-    }
   }, [hasDedicatedRoleLayout, role, router, token]);
 
-  const isAuthorized = !!token && role === 'DOCTOR';
+  const isAuthorized = !!token;
 
   // Student and admin pages use their own self-contained layouts
   if (hasDedicatedRoleLayout) {
@@ -81,9 +78,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        userName="Doctor"
-        userRole="doctor"
-        brandSubtitle="Doctor Portal"
+        userName={role === 'ADMIN' ? 'Admin' : 'User'}
+        userRole={role?.toLowerCase() || 'user'}
+        brandSubtitle={`${role === 'ADMIN' ? 'Admin' : 'Clinic'} Portal`}
       />
 
       {/* Right side: TopBar + page content */}
@@ -92,7 +89,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Sticky top header — hamburger opens sidebar on mobile */}
         <TopBar
           onMenuOpen={() => setSidebarOpen(true)}
-          userName="Doctor"
+          userName={role === 'ADMIN' ? 'Admin' : 'User'}
         />
 
         {/* Scrollable page content */}

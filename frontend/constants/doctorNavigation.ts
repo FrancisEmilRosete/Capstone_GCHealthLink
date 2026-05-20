@@ -54,6 +54,24 @@ export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
         icon:  InventoryIcon,
       },
       {
+        id:    'announcement',
+        label: 'Announcements',
+        href:  '/dashboard/doctor/announcement',
+        icon:  NotificationsIcon,
+      },
+      {
+        id:    'certificates',
+        label: 'Certificates',
+        href:  '/dashboard/doctor/certificates',
+        icon:  CertificatesIcon,
+      },
+      {
+        id:    'reports',
+        label: 'Reports',
+        href:  '/dashboard/doctor/reports',
+        icon:  DashboardIcon,
+      },
+      {
         id:    'notifications',
         label: 'Notifications',
         href:  '/dashboard/doctor/notifications',

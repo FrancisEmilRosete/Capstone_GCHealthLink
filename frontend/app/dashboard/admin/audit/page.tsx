@@ -11,7 +11,11 @@ interface AuditLogEntry {
   ipAddress: string | null;
   metadata: Record<string, unknown> | null;
   timestamp: string;
-  user: { email: string; role: string } | null;
+  user: {
+    email: string;
+    role: string;
+    studentProfile?: { firstName: string; lastName: string } | null;
+  } | null;
 }
 
 interface AuditLogsResponse {
@@ -63,6 +67,21 @@ function formatTs(ts: string) {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
+}
+
+function formatUserName(user: AuditLogEntry['user']) {
+  if (!user) return <span className="text-gray-400 italic">System</span>;
+  if (user.studentProfile) {
+    return `${user.studentProfile.firstName} ${user.studentProfile.lastName}`;
+  }
+  const localPart = user.email.split('@')[0];
+  const cleaned = localPart.replace(/[._-]+/g, ' ').trim();
+  if (!cleaned) return user.email;
+  return cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(' ');
 }
 
 export default function AdminAuditPage() {
@@ -151,7 +170,7 @@ export default function AdminAuditPage() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date & Time</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User Email</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User Role</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</th>
               </tr>
@@ -165,7 +184,7 @@ export default function AdminAuditPage() {
                 <tr key={log.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{formatTs(log.timestamp)}</td>
                   <td className="px-4 py-3 text-gray-800 font-medium max-w-[180px] truncate">
-                    {log.user?.email ?? <span className="text-gray-400 italic">System</span>}
+                    {formatUserName(log.user)}
                   </td>
                   <td className="px-4 py-3">
                     {log.user?.role ? (

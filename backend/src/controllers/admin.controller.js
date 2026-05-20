@@ -343,6 +343,8 @@ const getUsers = async (req, res, next) => {
             mi: true,
             studentNumber: true,
             courseDept: true,
+            course: true,
+            yearLevel: true,
           },
         },
       },
@@ -399,7 +401,11 @@ const getAuditLogs = async (req, res, next) => {
         take: limit,
         include: {
           user: {
-            select: { email: true, role: true },
+            select: {
+              email: true,
+              role: true,
+              studentProfile: { select: { firstName: true, lastName: true } },
+            },
           },
         },
       }),
@@ -549,7 +555,8 @@ const getAdminSessionProfile = async (req, res, next) => {
 
 const getHealthAnalytics = async (req, res, next) => {
   try {
-    const [allVisits, concernGroups] = await prisma.$transaction([
+    const thirtyDaysAgo = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000));
+    const [allVisits, concernGroups, dispensed] = await prisma.$transaction([
       prisma.clinicVisit.findMany({
         select: {
           id: true,
@@ -575,9 +582,34 @@ const getHealthAnalytics = async (req, res, next) => {
           _all: true,
         },
       }),
+      prisma.visitMedicine.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo }, status: "DISPENSED" },
+        include: { inventory: { select: { itemName: true, currentStock: true, unit: true } } }
+      })
     ]);
 
+    const forecastMap = new Map();
+    for (const d of dispensed) {
+      if (!forecastMap.has(d.inventoryId)) {
+        forecastMap.set(d.inventoryId, { name: d.inventory.itemName, currentStock: d.inventory.currentStock, unit: d.inventory.unit, totalUsed: 0 });
+      }
+      forecastMap.get(d.inventoryId).totalUsed += d.quantity;
+    }
+
+    const inventoryForecast = Array.from(forecastMap.values()).map(item => {
+      const dailyUsage = item.totalUsed / 30;
+      let daysUntilDepletion = dailyUsage > 0 ? Math.floor(item.currentStock / dailyUsage) : 999;
+      return {
+        itemName: item.name,
+        currentStock: item.currentStock,
+        unit: item.unit,
+        dailyUsage: parseFloat(dailyUsage.toFixed(2)),
+        daysUntilDepletion
+      };
+    }).sort((a, b) => a.daysUntilDepletion - b.daysUntilDepletion);
+
     const analytics = buildHealthAnalyticsPayload(allVisits, concernGroups);
+    analytics.inventoryForecast = inventoryForecast;
 
     res.json({
       success: true,

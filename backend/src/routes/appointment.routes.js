@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { bookAppointment, getLiveQueue, updateAppointmentStatus, createQueueAppointment } = require("../controllers/appointment.controller");
+const { bookAppointment, getLiveQueue, updateAppointmentStatus, createQueueAppointment, getAppointmentAvailability } = require("../controllers/appointment.controller");
 const { protect } = require("../middleware/auth.middleware");
 const { authorize } = require("../middleware/rbac.middleware");
 const { auditLogger } = require("../middleware/auditLogger.middleware");
@@ -12,6 +12,14 @@ router.post(
   authorize("STUDENT"), 
   auditLogger("BOOKED_APPOINTMENT"),
   bookAppointment
+);
+
+// Get appointment availability calendar
+router.get(
+  "/availability",
+  protect,
+  auditLogger("VIEWED_APPOINTMENT_AVAILABILITY"),
+  getAppointmentAvailability
 );
 
 // Clinic/Admin Routes: Manage the Live Queue
