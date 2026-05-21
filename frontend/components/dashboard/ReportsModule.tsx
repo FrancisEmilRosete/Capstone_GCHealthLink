@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
-import { FileDown, Printer, BarChart2, Loader2, RefreshCw } from 'lucide-react';
+import { FileDown, Printer, BarChart2, Loader2, RefreshCw, Lightbulb } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,11 +27,7 @@ interface DentalConsultData { students: DentalConsultRow[]; employees: DentalCon
 interface DentalExamCondition { condition: string; male: number; female: number; total: number; }
 interface DentalExamRow    { period: string; conditions: DentalExamCondition[]; }
 
-type ReportData =
-  | MedConsultRow[]
-  | PhysExamRow[]
-  | DentalConsultData
-  | DentalExamRow[];
+type ReportData = any;
 
 interface ReportResponse {
   success: boolean;
@@ -70,43 +66,73 @@ function escCsv(v: string | number): string {
   return `"${String(v).replace(/"/g, '""')}"`;
 }
 
-function buildCsv(type: string, data: ReportData): string {
+function buildCsv(type: string, data: any): string {
   const lines: string[] = [];
+  if (!data) return '';
+
+  const table1 = Array.isArray(data.table1) ? data.table1 : [];
+  const table2 = Array.isArray(data.table2) ? data.table2 : [];
 
   if (type === 'medical_consultation') {
-    const rows = data as MedConsultRow[];
-    lines.push(['COMPLAINTS', 'SEX (M)', 'SEX (F)', 'TOTAL #'].map(escCsv).join(','));
-    rows.forEach((r) => lines.push([r.complaint, r.male, r.female, r.total].map(escCsv).join(',')));
-    const totM = rows.reduce((a, r) => a + r.male, 0);
-    const totF = rows.reduce((a, r) => a + r.female, 0);
-    lines.push(['TOTAL', totM, totF, totM + totF].map(escCsv).join(','));
-  } else if (type === 'physical_examination') {
-    const rows = data as PhysExamRow[];
-    lines.push(['MONTH / PERIOD', 'SEX (MALE)', 'SEX (FEMALE)', 'TOTAL CERTIFIED'].map(escCsv).join(','));
-    rows.forEach((r) => lines.push([r.period, r.male, r.female, r.totalCertified].map(escCsv).join(',')));
-    const totM = rows.reduce((a, r) => a + r.male, 0);
-    const totF = rows.reduce((a, r) => a + r.female, 0);
-    lines.push(['TOTAL', totM, totF, totM + totF].map(escCsv).join(','));
-  } else if (type === 'dental_consultation') {
-    const { students, employees } = data as DentalConsultData;
-    lines.push('TABLE 1. EMPLOYEES');
-    lines.push(['MONTH / PERIOD', 'SERVICE', 'SEX (M)', 'SEX (F)', 'TOTAL'].map(escCsv).join(','));
-    employees.forEach((r) => lines.push([r.period, r.service, r.male, r.female, r.total].map(escCsv).join(',')));
+    lines.push('TABLE 1. TEMPORAL DISTRIBUTION');
+    lines.push(['MONTH / PERIOD', 'SEX (M)', 'SEX (F)', 'TOTAL #'].map(escCsv).join(','));
+    table1.forEach((r: any) => lines.push([r.period, r.male, r.female, r.total].map(escCsv).join(',')));
+    const totM1 = table1.reduce((a: number, r: any) => a + (r.male || 0), 0);
+    const totF1 = table1.reduce((a: number, r: any) => a + (r.female || 0), 0);
+    lines.push(['TOTAL', totM1, totF1, totM1 + totF1].map(escCsv).join(','));
     lines.push('');
-    lines.push('TABLE 2. STUDENTS');
+
+    lines.push('TABLE 2. COMPLAINTS SUMMARY');
+    lines.push(['COMPLAINTS', 'SEX (M)', 'SEX (F)', 'TOTAL #'].map(escCsv).join(','));
+    table2.forEach((r: any) => lines.push([r.complaint || r.reason || '', r.male, r.female, r.total].map(escCsv).join(',')));
+    const totM2 = table2.reduce((a: number, r: any) => a + (r.male || 0), 0);
+    const totF2 = table2.reduce((a: number, r: any) => a + (r.female || 0), 0);
+    lines.push(['TOTAL', totM2, totF2, totM2 + totF2].map(escCsv).join(','));
+  } else if (type === 'physical_examination') {
+    lines.push('TABLE 1. TEMPORAL DISTRIBUTION');
+    lines.push(['MONTH / PERIOD', 'SEX (MALE)', 'SEX (FEMALE)', 'TOTAL CERTIFIED'].map(escCsv).join(','));
+    table1.forEach((r: any) => lines.push([r.period, r.male, r.female, r.total].map(escCsv).join(',')));
+    const totM1 = table1.reduce((a: number, r: any) => a + (r.male || 0), 0);
+    const totF1 = table1.reduce((a: number, r: any) => a + (r.female || 0), 0);
+    lines.push(['TOTAL', totM1, totF1, totM1 + totF1].map(escCsv).join(','));
+    lines.push('');
+
+    lines.push('TABLE 2. FINDINGS / REASONS SUMMARY');
+    lines.push(['FINDINGS / REASON', 'SEX (M)', 'SEX (F)', 'TOTAL'].map(escCsv).join(','));
+    table2.forEach((r: any) => lines.push([r.reason || r.finding || '', r.male, r.female, r.total].map(escCsv).join(',')));
+    const totM2 = table2.reduce((a: number, r: any) => a + (r.male || 0), 0);
+    const totF2 = table2.reduce((a: number, r: any) => a + (r.female || 0), 0);
+    lines.push(['TOTAL', totM2, totF2, totM2 + totF2].map(escCsv).join(','));
+  } else if (type === 'dental_consultation') {
+    lines.push('TABLE 1. DENTAL CONSULTATION TEMPORAL DISTRIBUTION (STUDENTS)');
     lines.push(['MONTH / PERIOD', 'SERVICE', 'SEX (M)', 'SEX (F)', 'TOTAL'].map(escCsv).join(','));
-    students.forEach((r) => lines.push([r.period, r.service, r.male, r.female, r.total].map(escCsv).join(',')));
-    const totM = students.reduce((a, r) => a + r.male, 0);
-    const totF = students.reduce((a, r) => a + r.female, 0);
-    lines.push(['TOTAL', '', totM, totF, totM + totF].map(escCsv).join(','));
+    table1.forEach((r: any) => lines.push([r.period, r.service || 'Dental Consultation/Exam', r.male, r.female, r.total].map(escCsv).join(',')));
+    const totM1 = table1.reduce((a: number, r: any) => a + (r.male || 0), 0);
+    const totF1 = table1.reduce((a: number, r: any) => a + (r.female || 0), 0);
+    lines.push(['TOTAL', '', totM1, totF1, totM1 + totF1].map(escCsv).join(','));
+    lines.push('');
+
+    lines.push('TABLE 2. DENTAL CONCERNS SUMMARY');
+    lines.push(['DENTAL CONCERN', 'SEX (M)', 'SEX (F)', 'TOTAL'].map(escCsv).join(','));
+    table2.forEach((r: any) => lines.push([r.reason || r.condition || '', r.male, r.female, r.total].map(escCsv).join(',')));
+    const totM2 = table2.reduce((a: number, r: any) => a + (r.male || 0), 0);
+    const totF2 = table2.reduce((a: number, r: any) => a + (r.female || 0), 0);
+    lines.push(['TOTAL', totM2, totF2, totM2 + totF2].map(escCsv).join(','));
   } else if (type === 'dental_examination') {
-    const rows = data as DentalExamRow[];
-    lines.push(['MONTH / PERIOD', 'DIAGNOSED DENTAL PROBLEM', 'SEX (M)', 'SEX (F)', 'TOTAL'].map(escCsv).join(','));
-    rows.forEach((r) =>
-      r.conditions.forEach((c) =>
-        lines.push([r.period, c.condition, c.male, c.female, c.total].map(escCsv).join(','))
-      )
-    );
+    lines.push('TABLE 1. DENTAL EXAMINATION TEMPORAL DISTRIBUTION');
+    lines.push(['MONTH / PERIOD', 'SEX (M)', 'SEX (F)', 'TOTAL'].map(escCsv).join(','));
+    table1.forEach((r: any) => lines.push([r.period, r.male, r.female, r.total].map(escCsv).join(',')));
+    const totM1 = table1.reduce((a: number, r: any) => a + (r.male || 0), 0);
+    const totF1 = table1.reduce((a: number, r: any) => a + (r.female || 0), 0);
+    lines.push(['TOTAL', totM1, totF1, totM1 + totF1].map(escCsv).join(','));
+    lines.push('');
+
+    lines.push('TABLE 2. DIAGNOSED DENTAL PROBLEMS');
+    lines.push(['DENTAL PROBLEM', 'SEX (M)', 'SEX (F)', 'TOTAL'].map(escCsv).join(','));
+    table2.forEach((r: any) => lines.push([r.condition || r.reason || '', r.male, r.female, r.total].map(escCsv).join(',')));
+    const totM2 = table2.reduce((a: number, r: any) => a + (r.male || 0), 0);
+    const totF2 = table2.reduce((a: number, r: any) => a + (r.female || 0), 0);
+    lines.push(['TOTAL', totM2, totF2, totM2 + totF2].map(escCsv).join(','));
   }
 
   return lines.join('\n');
@@ -158,106 +184,307 @@ function TotalRow({ cells }: { cells: (string | number)[] }) {
   );
 }
 
+// ─── Interpretation Component & Generator ─────────────────────────────────────
+
+function TableInterpretation({ text }: { text: string }) {
+  if (!text) return null;
+  return (
+    <div className="print-interpretation mt-3 p-3.5 bg-[hsl(var(--primary-soft))] border border-[hsl(var(--primary))/0.15] rounded-[var(--radius-md)] flex gap-2.5 items-start">
+      <Lightbulb className="w-4 h-4 text-[hsl(var(--primary))] shrink-0 mt-0.5" />
+      <div className="text-xs text-[hsl(var(--foreground))] leading-relaxed text-left">
+        <span className="font-semibold text-[hsl(var(--primary))] uppercase tracking-wider text-[10px] block mb-0.5">Clinical & Operational Interpretation</span>
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function generateTableInterpretation(type: string, tableNumber: 1 | 2, rows: any[]): string {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return "No data recorded for this reporting period. A baseline assessment cannot be established. Continuous monitoring is recommended as new records are captured.";
+  }
+
+  // Helper for computing totals
+  const totalMale = rows.reduce((sum, r) => sum + (Number(r.male) || 0), 0);
+  const totalFemale = rows.reduce((sum, r) => sum + (Number(r.female) || 0), 0);
+  const totalCombined = totalMale + totalFemale;
+
+  const malePercent = totalCombined > 0 ? Math.round((totalMale / totalCombined) * 100) : 0;
+  const femalePercent = totalCombined > 0 ? Math.round((totalFemale / totalCombined) * 100) : 0;
+
+  if (tableNumber === 1) {
+    // Temporal Distribution Analysis
+    // Find the row with the maximum total
+    let peakRow = rows[0];
+    let maxTotal = Number(rows[0].total) || 0;
+    for (let i = 1; i < rows.length; i++) {
+      const t = Number(rows[i].total) || 0;
+      if (t > maxTotal) {
+        maxTotal = t;
+        peakRow = rows[i];
+      }
+    }
+    const peakPeriod = peakRow?.period || "the recorded period";
+    const peakCount = Number(peakRow?.total) || 0;
+
+    const genderDominance = totalMale > totalFemale 
+      ? `male patients (${malePercent}%) showing higher utilization compared to female patients (${femalePercent}%)`
+      : totalFemale > totalMale
+      ? `female patients (${femalePercent}%) showing higher utilization compared to male patients (${malePercent}%)`
+      : `an equal distribution between male (${malePercent}%) and female (${femalePercent}%) patients`;
+
+    if (type === 'medical_consultation') {
+      return `Consultation volume peaked during ${peakPeriod} with ${peakCount} clinical visits. The gender distribution reveals ${genderDominance}. These trends suggest a heightened demand for medical consultation during the peak period, which correlates with academic stress, weather changes, or mid-term seasonal flu outbreaks. Clinic staffing and pharmaceutical supplies should be proactively adjusted to accommodate these cyclical trends.`;
+    }
+    if (type === 'physical_examination') {
+      return `Physical examination clearances reached a peak during ${peakPeriod} with ${peakCount} certified cases. The overall throughput comprises ${genderDominance}. This volume is indicative of enrollment-related medical clearances or routine annual fitness-for-duty evaluations. Implementing staggered scheduling slots during high-volume periods will improve operational efficiency and prevent bottlenecking at vital-signs and diagnostic stations.`;
+    }
+    if (type === 'dental_consultation') {
+      return `Dental consultation frequency was highest during ${peakPeriod} with ${peakCount} student visits recorded. The gender breakdown consists of ${genderDominance}. The steady volume indicates a strong patient awareness of oral health. Providing preemptive online booking options during these peak times can optimize dentist schedules and minimize patient wait times.`;
+    }
+    if (type === 'dental_examination') {
+      return `Comprehensive dental examinations peaked during ${peakPeriod} with ${peakCount} procedures. The sex-disaggregated data shows ${genderDominance}. This indicates robust participation in preventative screening. It is highly recommended to continue promoting annual dental checkups to catch dental carries and malocclusions at early, reversible stages.`;
+    }
+  } else {
+    // Table 2: Category/Findings/Complaints Summary
+    // Find the leading item
+    let peakRow = rows[0];
+    let maxTotal = Number(rows[0].total) || 0;
+    for (let i = 1; i < rows.length; i++) {
+      const t = Number(rows[i].total) || 0;
+      if (t > maxTotal) {
+        maxTotal = t;
+        peakRow = rows[i];
+      }
+    }
+
+    const getRowLabel = (r: any) => {
+      return r.complaint || r.reason || r.finding || r.condition || "unspecified concerns";
+    };
+
+    const leadingLabel = getRowLabel(peakRow);
+    const leadingCount = Number(peakRow?.total) || 0;
+    const leadingMale = Number(peakRow?.male) || 0;
+    const leadingFemale = Number(peakRow?.female) || 0;
+
+    const leadingGenderRatio = leadingMale > leadingFemale
+      ? "higher prevalence in male patients"
+      : leadingFemale > leadingMale
+      ? "higher prevalence in female patients"
+      : "an equal prevalence among both genders";
+
+    if (type === 'medical_consultation') {
+      return `The primary reason for consultation is "${leadingLabel}", accounting for ${leadingCount} cases (${leadingGenderRatio}). This suggests a high incidence of this specific morbidity in the student and staff population. It is recommended that the health services unit maintains adequate stocks of appropriate therapeutics and designs targeted wellness bulletins highlighting preventative measures for this condition.`;
+    }
+    if (type === 'physical_examination') {
+      return `The most frequent physical examination outcome/finding is "${leadingLabel}", recorded in ${leadingCount} patients, with ${leadingGenderRatio}. These outcomes demonstrate the critical role of screening programs in identifying underlying health conditions. Follow-up counseling and referrals should be offered to patients presenting with abnormal or borderline findings to ensure continuity of care.`;
+    }
+    if (type === 'dental_consultation') {
+      return `The leading dental complaint is "${leadingLabel}", representing ${leadingCount} consultations (${leadingGenderRatio}). This highlights a significant need for targeted educational campaigns on correct tooth brushing techniques, regular flossing, and the impact of dietary choices on dental health.`;
+    }
+    if (type === 'dental_examination') {
+      return `The primary diagnosed dental pathology is "${leadingLabel}", identified in ${leadingCount} examinations, with ${leadingGenderRatio}. These diagnostic results underscore the high prevalence of this oral health issue. Priority should be given to scheduling follow-up restorative treatments, sealants, or scaling/polishing for the affected patients.`;
+    }
+  }
+
+  return "Statistical analysis of this table suggests consistent operational throughput. Standard health protocols and wellness monitoring should be maintained.";
+}
+
 // ─── Table renderers ──────────────────────────────────────────────────────────
 
-function MedicalConsultationTable({ rows }: { rows: MedConsultRow[] }) {
-  const totM = rows.reduce((a, r) => a + r.male, 0);
-  const totF = rows.reduce((a, r) => a + r.female, 0);
+function MedicalConsultationTables({ table1, table2 }: { table1: any[]; table2: any[] }) {
+  const totM1 = table1.reduce((a, r) => a + (r.male || 0), 0);
+  const totF1 = table1.reduce((a, r) => a + (r.female || 0), 0);
+
+  const totM2 = table2.reduce((a, r) => a + (r.male || 0), 0);
+  const totF2 = table2.reduce((a, r) => a + (r.female || 0), 0);
+
   return (
-    <TableWrapper>
-      <thead><tr><Th>Complaints</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total #</Th></tr></thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
-            <Td>{r.complaint}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
-          </tr>
-        ))}
-        <TotalRow cells={['TOTAL', totM, totF, totM + totF]} />
-      </tbody>
-    </TableWrapper>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h4 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Table 1. Temporal Distribution</h4>
+        <TableWrapper>
+          <thead><tr><Th>Month / Period</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total #</Th></tr></thead>
+          <tbody>
+            {table1.map((r, i) => (
+              <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
+                <Td>{r.period}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
+              </tr>
+            ))}
+            <TotalRow cells={['TOTAL', totM1, totF1, totM1 + totF1]} />
+          </tbody>
+        </TableWrapper>
+        <TableInterpretation text={generateTableInterpretation('medical_consultation', 1, table1)} />
+      </div>
+
+      <div>
+        <h4 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Table 2. Complaints Summary</h4>
+        <TableWrapper>
+          <thead><tr><Th>Complaints</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total #</Th></tr></thead>
+          <tbody>
+            {table2.map((r, i) => (
+              <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
+                <Td>{r.complaint || r.reason}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
+              </tr>
+            ))}
+            <TotalRow cells={['TOTAL', totM2, totF2, totM2 + totF2]} />
+          </tbody>
+        </TableWrapper>
+        <TableInterpretation text={generateTableInterpretation('medical_consultation', 2, table2)} />
+      </div>
+    </div>
   );
 }
 
-function PhysicalExaminationTable({ rows }: { rows: PhysExamRow[] }) {
-  const totM = rows.reduce((a, r) => a + r.male, 0);
-  const totF = rows.reduce((a, r) => a + r.female, 0);
+function PhysicalExaminationTables({ table1, table2 }: { table1: any[]; table2: any[] }) {
+  const totM1 = table1.reduce((a, r) => a + (r.male || 0), 0);
+  const totF1 = table1.reduce((a, r) => a + (r.female || 0), 0);
+
+  const totM2 = table2.reduce((a, r) => a + (r.male || 0), 0);
+  const totF2 = table2.reduce((a, r) => a + (r.female || 0), 0);
+
   return (
-    <TableWrapper>
-      <thead><tr><Th>Month / Period</Th><Th>Sex (Male)</Th><Th>Sex (Female)</Th><Th>Total Certified</Th></tr></thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
-            <Td>{r.period}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.totalCertified}</Td>
-          </tr>
-        ))}
-        <TotalRow cells={['TOTAL', totM, totF, totM + totF]} />
-      </tbody>
-    </TableWrapper>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h4 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Table 1. Temporal Distribution</h4>
+        <TableWrapper>
+          <thead><tr><Th>Month / Period</Th><Th>Sex (Male)</Th><Th>Sex (Female)</Th><Th>Total Certified</Th></tr></thead>
+          <tbody>
+            {table1.map((r, i) => (
+              <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
+                <Td>{r.period}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
+              </tr>
+            ))}
+            <TotalRow cells={['TOTAL', totM1, totF1, totM1 + totF1]} />
+          </tbody>
+        </TableWrapper>
+        <TableInterpretation text={generateTableInterpretation('physical_examination', 1, table1)} />
+      </div>
+
+      <div>
+        <h4 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Table 2. Findings / Reasons Summary</h4>
+        <TableWrapper>
+          <thead><tr><Th>Findings / Reason</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total</Th></tr></thead>
+          <tbody>
+            {table2.map((r, i) => (
+              <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
+                <Td>{r.reason || r.finding}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
+              </tr>
+            ))}
+            <TotalRow cells={['TOTAL', totM2, totF2, totM2 + totF2]} />
+          </tbody>
+        </TableWrapper>
+        <TableInterpretation text={generateTableInterpretation('physical_examination', 2, table2)} />
+      </div>
+    </div>
   );
 }
 
-function DentalConsultationTables({ data }: { data: DentalConsultData }) {
-  const renderTable = (rows: DentalConsultRow[], title: string) => {
-    const totM = rows.reduce((a, r) => a + r.male, 0);
-    const totF = rows.reduce((a, r) => a + r.female, 0);
-    return (
-      <div key={title}>
-        <h3 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">{title}</h3>
+function DentalConsultationTables({ table1, table2 }: { table1: any[]; table2: any[] }) {
+  const totM1 = table1.reduce((a, r) => a + (r.male || 0), 0);
+  const totF1 = table1.reduce((a, r) => a + (r.female || 0), 0);
+
+  const totM2 = table2.reduce((a, r) => a + (r.male || 0), 0);
+  const totF2 = table2.reduce((a, r) => a + (r.female || 0), 0);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h4 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Table 1. Dental Consultation Temporal Distribution (Students)</h4>
         <TableWrapper>
           <thead><tr><Th>Month / Period</Th><Th>Service</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total</Th></tr></thead>
           <tbody>
-            {rows.map((r, i) => (
+            {table1.map((r, i) => (
               <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
-                <Td>{r.period}</Td><Td>{r.service}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
+                <Td>{r.period}</Td><Td>{r.service || 'Dental Consultation/Exam'}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
               </tr>
             ))}
-            <TotalRow cells={['TOTAL', '', totM, totF, totM + totF]} />
+            <TotalRow cells={['TOTAL', '', totM1, totF1, totM1 + totF1]} />
           </tbody>
         </TableWrapper>
+        <TableInterpretation text={generateTableInterpretation('dental_consultation', 1, table1)} />
       </div>
-    );
-  };
+
+      <div>
+        <h4 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Table 2. Dental Concerns Summary</h4>
+        <TableWrapper>
+          <thead><tr><Th>Dental Concern</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total</Th></tr></thead>
+          <tbody>
+            {table2.map((r, i) => (
+              <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
+                <Td>{r.reason || r.condition}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
+              </tr>
+            ))}
+            <TotalRow cells={['TOTAL', totM2, totF2, totM2 + totF2]} />
+          </tbody>
+        </TableWrapper>
+        <TableInterpretation text={generateTableInterpretation('dental_consultation', 2, table2)} />
+      </div>
+    </div>
+  );
+}
+
+function DentalExaminationTables({ table1, table2 }: { table1: any[]; table2: any[] }) {
+  const totM1 = table1.reduce((a, r) => a + (r.male || 0), 0);
+  const totF1 = table1.reduce((a, r) => a + (r.female || 0), 0);
+
+  const totM2 = table2.reduce((a, r) => a + (r.male || 0), 0);
+  const totF2 = table2.reduce((a, r) => a + (r.female || 0), 0);
+
   return (
     <div className="flex flex-col gap-6">
-      {renderTable(data.employees, 'Table 1. Employees')}
-      {renderTable(data.students,  'Table 2. Students')}
+      <div>
+        <h4 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Table 1. Dental Examination Temporal Distribution</h4>
+        <TableWrapper>
+          <thead><tr><Th>Month / Period</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total</Th></tr></thead>
+          <tbody>
+            {table1.map((r, i) => (
+              <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
+                <Td>{r.period}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
+              </tr>
+            ))}
+            <TotalRow cells={['TOTAL', totM1, totF1, totM1 + totF1]} />
+          </tbody>
+        </TableWrapper>
+        <TableInterpretation text={generateTableInterpretation('dental_examination', 1, table1)} />
+      </div>
+
+      <div>
+        <h4 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Table 2. Diagnosed Dental Problems</h4>
+        <TableWrapper>
+          <thead><tr><Th>Dental Problem</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total</Th></tr></thead>
+          <tbody>
+            {table2.map((r, i) => (
+              <tr key={i} className="hover:bg-[hsl(var(--surface))] transition-colors">
+                <Td>{r.condition || r.reason}</Td><Td>{r.male}</Td><Td>{r.female}</Td><Td bold>{r.total}</Td>
+              </tr>
+            ))}
+            <TotalRow cells={['TOTAL', totM2, totF2, totM2 + totF2]} />
+          </tbody>
+        </TableWrapper>
+        <TableInterpretation text={generateTableInterpretation('dental_examination', 2, table2)} />
+      </div>
     </div>
   );
 }
 
-function DentalExaminationTable({ rows }: { rows: DentalExamRow[] }) {
-  return (
-    <div className="flex flex-col gap-4">
-      {rows.map((r, pi) => {
-        if (r.conditions.length === 0) return null;
-        const totM = r.conditions.reduce((a, c) => a + c.male, 0);
-        const totF = r.conditions.reduce((a, c) => a + c.female, 0);
-        return (
-          <div key={pi}>
-            <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase mb-1">{r.period}</p>
-            <TableWrapper>
-              <thead><tr><Th>Diagnosed Dental Problem</Th><Th>Sex (M)</Th><Th>Sex (F)</Th><Th>Total</Th></tr></thead>
-              <tbody>
-                {r.conditions.map((c, ci) => (
-                  <tr key={ci} className="hover:bg-[hsl(var(--surface))] transition-colors">
-                    <Td>{c.condition}</Td><Td>{c.male}</Td><Td>{c.female}</Td><Td bold>{c.total}</Td>
-                  </tr>
-                ))}
-                <TotalRow cells={['TOTAL', totM, totF, totM + totF]} />
-              </tbody>
-            </TableWrapper>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+function renderSingleTable(meta: ReportMeta, data: any) {
+  if (!data) return null;
+  const table1 = Array.isArray(data.table1) ? data.table1 : [];
+  const table2 = Array.isArray(data.table2) ? data.table2 : [];
 
-function renderSingleTable(meta: ReportMeta, data: ReportData) {
-  if (meta.type === 'medical_consultation') return <MedicalConsultationTable rows={data as MedConsultRow[]} />;
-  if (meta.type === 'physical_examination') return <PhysicalExaminationTable rows={data as PhysExamRow[]} />;
-  if (meta.type === 'dental_consultation')  return <DentalConsultationTables data={data as DentalConsultData} />;
-  if (meta.type === 'dental_examination')   return <DentalExaminationTable   rows={data as DentalExamRow[]} />;
+  if (meta.type === 'medical_consultation') {
+    return <MedicalConsultationTables table1={table1} table2={table2} />;
+  }
+  if (meta.type === 'physical_examination') {
+    return <PhysicalExaminationTables table1={table1} table2={table2} />;
+  }
+  if (meta.type === 'dental_consultation') {
+    return <DentalConsultationTables table1={table1} table2={table2} />;
+  }
+  if (meta.type === 'dental_examination') {
+    return <DentalExaminationTables table1={table1} table2={table2} />;
+  }
   return null;
 }
 
@@ -354,6 +581,15 @@ export default function ReportsModule({ staffRole }: ReportsModuleProps) {
           #print-report-area th,
           #print-report-area td { border: 1px solid #bbb; padding: 4px 8px; text-align: left; font-size: 11px; }
           #print-report-area th { background: #efefef; font-weight: 700; text-transform: uppercase; }
+          #print-report-area .print-interpretation {
+            border: 1px solid #ddd !important;
+            border-left: 3.5px solid hsl(var(--primary)) !important;
+            background: hsl(var(--primary-soft)) !important;
+            padding: 10px !important;
+            margin-top: 8px !important;
+            border-radius: 6px !important;
+            page-break-inside: avoid;
+          }
           .print-school-header { display: block !important; text-align: center; margin-bottom: 14px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
           .print-school-header h1 { font-size: 14px; font-weight: 700; margin: 0 0 2px; }
           .print-school-header p  { font-size: 10px; color: #555; margin: 0; }
