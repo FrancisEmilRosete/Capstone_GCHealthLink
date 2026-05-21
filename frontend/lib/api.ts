@@ -14,6 +14,8 @@
  */
 
 export const API_PREFIX = '/api/v1';
+const API_BASE_CACHE_KEY = 'gchl_api_base';
+const LOCAL_FALLBACK_ATTEMPT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_FALLBACK_ATTEMPT_TIMEOUT_MS || 500);
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
@@ -25,20 +27,140 @@ const configuredBase = normalizeBaseUrl(
   ?? ''
 );
 
-const defaultBase = process.env.NODE_ENV === 'production'
-  ? ''
-  : 'http://localhost:5000';
+function stripApiPrefix(base: string): string {
+  return base.toLowerCase().endsWith(API_PREFIX)
+    ? base.slice(0, -API_PREFIX.length)
+    : base;
+}
 
-const effectiveBase = configuredBase || defaultBase;
-const alreadyIncludesPrefix = effectiveBase.toLowerCase().endsWith(API_PREFIX);
+const defaultDevBases = Array.from(
+  { length: 11 },
+  (_, index) => {
+    const port = 5000 + index;
+    return [`http://127.0.0.1:${port}`, `http://localhost:${port}`];
+  },
+).flat();
 
-export const API_BASE = alreadyIncludesPrefix
-  ? effectiveBase.slice(0, -API_PREFIX.length)
-  : effectiveBase;
+function readCachedApiBase(): string {
+  if (typeof window === 'undefined') return '';
+  return normalizeBaseUrl(window.localStorage.getItem(API_BASE_CACHE_KEY) || '');
+}
 
-function buildApiUrl(path: string): string {
+function writeCachedApiBase(base: string): void {
+  if (typeof window === 'undefined' || !base) return;
+  window.localStorage.setItem(API_BASE_CACHE_KEY, base);
+}
+
+function uniqueBases(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const normalized = normalizeBaseUrl(value);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+
+  return result;
+}
+
+const configuredApiBase = configuredBase ? stripApiPrefix(configuredBase) : '';
+const cachedApiBase = readCachedApiBase();
+export const API_BASE = configuredApiBase || cachedApiBase || defaultDevBases[0] || '';
+
+let preferredApiBase = API_BASE;
+
+function orderedCandidateBases(): string[] {
+  if (configuredApiBase) {
+    if (process.env.NODE_ENV === 'production') {
+      return [configuredApiBase];
+    }
+
+    const latestCachedBase = readCachedApiBase();
+    return uniqueBases([configuredApiBase, latestCachedBase, ...defaultDevBases]);
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return [''];
+  }
+
+  const latestCachedBase = readCachedApiBase();
+  return uniqueBases([preferredApiBase, latestCachedBase, ...defaultDevBases]);
+}
+
+function rememberWorkingBase(base: string): void {
+  if (!base || preferredApiBase === base) return;
+  preferredApiBase = base;
+  writeCachedApiBase(base);
+}
+
+function buildApiUrl(base: string, path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${API_BASE || ''}${API_PREFIX}${normalizedPath}`;
+  return `${base}${API_PREFIX}${normalizedPath}`;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs?: number,
+): Promise<Response> {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return fetch(url, init);
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const forwardAbort = () => controller.abort();
+  init.signal?.addEventListener('abort', forwardAbort, { once: true });
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+    init.signal?.removeEventListener('abort', forwardAbort);
+  }
+}
+
+function hasJsonContentType(response: Response): boolean {
+  const contentType = response.headers.get('content-type');
+  if (!contentType) return false;
+
+  return contentType.toLowerCase().includes('application/json');
+}
+
+async function fetchWithFallback(
+  path: string,
+  init: RequestInit,
+  options?: { expectsJson?: boolean },
+): Promise<Response> {
+  let lastError: unknown = null;
+  const candidates = orderedCandidateBases();
+  const expectsJson = options?.expectsJson === true;
+
+  for (const [index, base] of candidates.entries()) {
+    try {
+      const timeoutMs = index === 0 ? undefined : LOCAL_FALLBACK_ATTEMPT_TIMEOUT_MS;
+      const res = await fetchWithTimeout(buildApiUrl(base, path), init, timeoutMs);
+
+      if (expectsJson && !hasJsonContentType(res)) {
+        lastError = new Error(`Received non-JSON response from ${base}.`);
+        continue;
+      }
+
+      rememberWorkingBase(base);
+      return res;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  throw new Error('Unable to contact backend API.');
 }
 
 // ── Error class ─────────────────────────────────────────────────
@@ -63,11 +185,11 @@ async function request<T = unknown>(
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(buildApiUrl(path), {
+  const res = await fetchWithFallback(path, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  }, { expectsJson: true });
 
   // Parse response body (backend always returns JSON)
   let data: { message?: string } & Record<string, unknown>;
@@ -93,11 +215,11 @@ async function requestForm<T = unknown>(
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(buildApiUrl(path), {
+  const res = await fetchWithFallback(path, {
     method,
     headers,
     body: formData,
-  });
+  }, { expectsJson: true });
 
   let data: { message?: string } & Record<string, unknown>;
   try {
@@ -140,7 +262,7 @@ async function requestBlob(
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(buildApiUrl(path), {
+  const res = await fetchWithFallback(path, {
     method: 'GET',
     headers,
   });

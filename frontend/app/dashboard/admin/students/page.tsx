@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface UserEntry {
 	id: string;
@@ -37,6 +38,8 @@ export default function AdminStudentsPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
 	const [search, setSearch] = useState('');
+	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(15);
 
 	const loadStudents = useCallback(async () => {
 		const token = getToken();
@@ -88,6 +91,17 @@ export default function AdminStudentsPage() {
 		});
 	}, [search, students]);
 
+	useEffect(() => {
+		setPage(1);
+	}, [search, students.length]);
+
+	const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+	const currentPage = Math.min(page, totalPages);
+	const pagedStudents = useMemo(() => {
+		const start = (currentPage - 1) * pageSize;
+		return filteredStudents.slice(start, start + pageSize);
+	}, [filteredStudents, currentPage, pageSize]);
+
 	return (
 		<div className="p-6 space-y-5 max-w-7xl mx-auto">
 			<div>
@@ -127,7 +141,7 @@ export default function AdminStudentsPage() {
 								<tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">Loading students...</td></tr>
 							) : filteredStudents.length === 0 ? (
 								<tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">No students match your search.</td></tr>
-							) : filteredStudents.map((student) => (
+							) : pagedStudents.map((student) => (
 								<tr key={student.id} className="hover:bg-gray-50 transition-colors">
 									<td className="px-4 py-3 text-gray-700">{student.studentProfile?.studentNumber ?? '—'}</td>
 									<td className="px-4 py-3 text-gray-800 font-medium">{fullName(student)}</td>
@@ -143,6 +157,21 @@ export default function AdminStudentsPage() {
 						</tbody>
 					</table>
 				</div>
+				{!loading && filteredStudents.length > 0 && (
+					<PaginationControls
+						page={currentPage}
+						totalPages={totalPages}
+						totalItems={filteredStudents.length}
+						pageSize={pageSize}
+						pageSizeOptions={[10, 15, 25, 50]}
+						itemLabel="students"
+						onPageChange={setPage}
+						onPageSizeChange={(next) => {
+							setPageSize(next);
+							setPage(1);
+						}}
+					/>
+				)}
 			</div>
 		</div>
 	);

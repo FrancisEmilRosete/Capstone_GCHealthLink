@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface SearchStudent {
   id: string;
@@ -44,6 +45,8 @@ export default function StaffStudentsPage() {
   const [yearLevelFilter, setYearLevelFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   async function loadStudents(value?: string) {
     setError('');
@@ -110,6 +113,17 @@ export default function StaffStudentsPage() {
     }),
     [rows, departmentFilter, courseFilter, yearLevelFilter],
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, departmentFilter, courseFilter, yearLevelFilter, results.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, currentPage, pageSize]);
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
@@ -202,7 +216,7 @@ export default function StaffStudentsPage() {
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">Searching students...</td></tr>
               ) : filteredRows.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">No students found.</td></tr>
-              ) : filteredRows.map((student) => (
+              ) : pagedRows.map((student) => (
                 <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50/70">
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{student.studentNumber}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{student.lastName}, {student.firstName}</td>
@@ -222,6 +236,21 @@ export default function StaffStudentsPage() {
             </tbody>
           </table>
         </div>
+        {!loading && filteredRows.length > 0 && (
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredRows.length}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 30, 50]}
+            itemLabel="students"
+            onPageChange={setPage}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(1);
+            }}
+          />
+        )}
       </div>
 
       <UseQrLookupModal

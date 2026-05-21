@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 const prisma = new PrismaClient();
 
 const MAX_INVENTORY_NUMBER = 1000000;
@@ -29,9 +30,29 @@ function parsePositiveInteger(value, fieldName) {
 // 1. View all inventory (Nurses need to see what's in stock)
 const getInventory = async (req, res, next) => {
   try {
-    const items = await prisma.inventory.findMany({
-      orderBy: { itemName: "asc" } // Alphabetical order
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 200,
+      maxLimit: 1000,
     });
+    const q = normalizeText(req.query?.q);
+    const where = q
+      ? {
+          OR: [
+            { itemName: { contains: q, mode: "insensitive" } },
+            { unit: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : undefined;
+
+    const [items, total] = await prisma.$transaction([
+      prisma.inventory.findMany({
+        where,
+        orderBy: { itemName: "asc" },
+        skip,
+        take: limit,
+      }),
+      prisma.inventory.count({ where }),
+    ]);
     
     const now = new Date();
     const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
@@ -51,7 +72,8 @@ const getInventory = async (req, res, next) => {
 
     res.json({
       success: true,
-      data: mapped
+      data: mapped,
+      pagination: buildPaginationMeta({ page, limit, total }),
     });
   } catch (error) {
     next(error);

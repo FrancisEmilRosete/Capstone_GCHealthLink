@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 
 const prisma = new PrismaClient();
 
@@ -57,7 +58,12 @@ function mapCertificateToDto(cert) {
 
 const listCertificates = async (req, res, next) => {
   try {
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 50,
+      maxLimit: 300,
+    });
     const query = normalizeText(req.query.q).toLowerCase();
+    const certificateType = normalizeText(req.query.type).toUpperCase();
 
     const where = {};
     if (query) {
@@ -68,19 +74,29 @@ const listCertificates = async (req, res, next) => {
       ];
     }
 
-    const certs = await prisma.medicalCertificate.findMany({
-      where,
-      orderBy: { issuedAt: "desc" },
-      include: {
-        studentProfile: { select: { studentNumber: true, firstName: true, lastName: true, courseDept: true } },
-        doctor: { select: { email: true } },
-      },
-    });
+    if (certificateType === "CONSULTATION" || certificateType === "PHYSICAL_EXAM") {
+      where.certificateType = certificateType;
+    }
+
+    const [certs, total] = await prisma.$transaction([
+      prisma.medicalCertificate.findMany({
+        where,
+        orderBy: { issuedAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          studentProfile: { select: { studentNumber: true, firstName: true, lastName: true, courseDept: true } },
+          doctor: { select: { email: true } },
+        },
+      }),
+      prisma.medicalCertificate.count({ where }),
+    ]);
 
     return res.json({
       success: true,
       message: "Certificates retrieved successfully.",
       data: certs.map(mapCertificateToDto),
+      pagination: buildPaginationMeta({ page, limit, total }),
     });
   } catch (error) {
     return next(error);
@@ -121,6 +137,7 @@ const issueCertificate = async (req, res, next) => {
     if (!student) {
       return res.status(404).json({ success: false, message: "Student profile not found." });
     }
+    const studentName = `${student.firstName} ${student.lastName}`;
 
     const type = req.body?.certificateType === 'PHYSICAL_EXAM' ? 'PHYSICAL_EXAM' : 'CONSULTATION';
 

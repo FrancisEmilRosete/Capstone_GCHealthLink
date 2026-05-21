@@ -20,6 +20,10 @@
  */
 
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { ErrorAlert } from '@/components/ui/ErrorAlert';
 
 type LegalModalType = 'privacy' | 'terms' | null;
 
@@ -34,26 +38,26 @@ function LegalModal({ type, onClose }: LegalModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center px-4"
+      className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center px-4 animate-fade-in"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="legal-modal-title"
-        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100"
+        className="w-full max-w-2xl rounded-[var(--radius-xl)] bg-[hsl(var(--card))] shadow-[var(--shadow-lg)] border border-[hsl(var(--border))] animate-scale-in"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between gap-3">
+        <div className="px-6 pt-6 pb-4 border-b border-[hsl(var(--border))] flex items-center justify-between gap-3">
           <div>
-            <h2 id="legal-modal-title" className="text-base font-bold text-gray-900">{title}</h2>
-            <p className="text-xs text-gray-500 mt-1">GC HealthLink - Gordon College Clinic</p>
+            <h2 id="legal-modal-title" className="text-h3 text-[hsl(var(--foreground))]">{title}</h2>
+            <p className="text-xs text-[hsl(var(--muted))] mt-1">GC HealthLink - Gordon College Clinic</p>
           </div>
           <button
             type="button"
             aria-label="Close legal policy"
             onClick={onClose}
-            className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            className="rounded-[var(--radius-md)] p-2 text-[hsl(var(--muted))] hover:bg-[hsl(var(--primary-soft))] hover:text-[hsl(var(--primary))] transition-colors"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -61,7 +65,7 @@ function LegalModal({ type, onClose }: LegalModalProps) {
           </button>
         </div>
 
-        <div className="px-5 py-4 max-h-[70vh] overflow-y-auto text-sm text-gray-700 space-y-3 leading-relaxed">
+        <div className="px-6 py-5 max-h-[70vh] overflow-y-auto text-sm text-[hsl(var(--muted-foreground))] space-y-3 leading-relaxed">
           {isPrivacy ? (
             <>
               <p>
@@ -126,14 +130,10 @@ function LegalModal({ type, onClose }: LegalModalProps) {
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-gray-100 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
-          >
+        <div className="px-6 py-4 border-t border-[hsl(var(--border))] flex justify-end">
+          <Button onClick={onClose}>
             Close
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -184,28 +184,22 @@ export default function LoginForm({
 
   return (
     <>
-      {/* ── Email Field ── */}
-      <div className="mb-4">
-        <label htmlFor={emailInputId} className="block text-sm font-medium text-gray-700 mb-1.5">
-          Email Address
-        </label>
-        <input
-          id={emailInputId}
-          type="email"
-          placeholder="Enter your email"
-          value={email}
-          onChange={(e) => onEmailChange(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-gray-200
-            text-sm text-gray-900 placeholder-gray-400
-            focus:outline-none focus:ring-2 focus:ring-teal-500
-            focus:border-transparent transition-all"
-        />
-      </div>
+      {/* Email Field */}
+      <Input
+        id={emailInputId}
+        type="email"
+        label="Email Address"
+        placeholder="Enter your email"
+        value={email}
+        onChange={(e) => onEmailChange(e.target.value)}
+        containerClassName="mb-4"
+        required
+      />
 
-      {/* ── Password Field ── */}
+      {/* Password Field */}
       <div className="mb-4">
-        <label htmlFor={passwordInputId} className="block text-sm font-medium text-gray-700 mb-1.5">
-          Password
+        <label htmlFor={passwordInputId} className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1.5">
+          Password <span className="text-[hsl(var(--danger))]">*</span>
         </label>
         <div className="relative">
           <input
@@ -214,62 +208,56 @@ export default function LoginForm({
             placeholder="••••••••"
             value={password}
             onChange={(e) => onPasswordChange(e.target.value)}
-            className="w-full px-4 py-2.5 pr-12 rounded-xl border border-gray-200
-            text-sm text-gray-900 placeholder-gray-400
-            focus:outline-none focus:ring-2 focus:ring-teal-500
-            focus:border-transparent transition-all"
+            className="w-full h-10 px-3 pr-10 rounded-[var(--radius-md)]
+              border border-[hsl(var(--input-border))]
+              bg-[hsl(var(--surface))]
+              text-sm text-[hsl(var(--foreground))]
+              placeholder:text-[hsl(var(--muted))]
+              transition-all
+              focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus-ring)_/_0.4)] focus:border-[hsl(var(--primary))]"
           />
-
           <button
             type="button"
             onClick={() => setShowPassword((previous) => !previous)}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
-            className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-teal-600"
+            className="absolute inset-y-0 right-0 px-3 text-[hsl(var(--muted))] hover:text-[hsl(var(--primary))] transition-colors"
           >
             {showPassword ? (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
-                <path d="M3 3l18 18" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M9.88 5.09A9.77 9.77 0 0112 5c5 0 9 4 10 7a11.8 11.8 0 01-4.29 5.19" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M6.61 6.61A11.76 11.76 0 002 12c1 3 5 7 10 7a9.77 9.77 0 003.42-.61" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <EyeOff className="h-4 w-4" />
             ) : (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
+              <Eye className="h-4 w-4" />
             )}
           </button>
         </div>
       </div>
 
-      {/* ── Remember Me + Forgot Password ── */}
+      {/* Remember Me + Forgot Password */}
       <div className="flex items-center justify-between mb-5">
-        <label htmlFor={rememberInputId} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+        <label htmlFor={rememberInputId} className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer select-none">
           <input
             id={rememberInputId}
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => onRememberChange(e.target.checked)}
-            className="w-4 h-4 rounded accent-teal-600 cursor-pointer"
+            className="w-4 h-4 rounded-[4px] accent-[hsl(var(--primary))] cursor-pointer"
           />
           Remember me
         </label>
 
-        <button type="button" className="text-sm text-teal-600 font-medium hover:text-teal-700 hover:underline transition-colors cursor-pointer">
+        <button type="button" className="text-sm text-[hsl(var(--primary))] font-medium hover:text-[hsl(var(--primary-hover))] hover:underline transition-colors cursor-pointer">
           Forgot password?
         </button>
       </div>
 
-      {/* ── Privacy + Terms (Required) ── */}
+      {/* Privacy + Terms (Required) */}
       <div className="mb-5">
-        <label htmlFor={legalInputId} className="flex items-start gap-2 text-sm text-gray-600 cursor-pointer select-none">
+        <label htmlFor={legalInputId} className="flex items-start gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer select-none">
           <input
             id={legalInputId}
             type="checkbox"
             checked={legalAccepted}
             onChange={(e) => onLegalChange(e.target.checked)}
-            className="mt-0.5 w-4 h-4 rounded accent-teal-600 cursor-pointer"
+            className="mt-0.5 w-4 h-4 rounded-[4px] accent-[hsl(var(--primary))] cursor-pointer"
           />
           <span>
             I agree to the{' '}
@@ -280,7 +268,7 @@ export default function LoginForm({
                 event.stopPropagation();
                 openLegalModal('privacy');
               }}
-              className="font-medium text-teal-600 hover:text-teal-700 hover:underline"
+              className="font-medium text-[hsl(var(--primary))] hover:text-[hsl(var(--primary-hover))] hover:underline"
             >
               Privacy Policy
             </button>{' '}
@@ -292,7 +280,7 @@ export default function LoginForm({
                 event.stopPropagation();
                 openLegalModal('terms');
               }}
-              className="font-medium text-teal-600 hover:text-teal-700 hover:underline"
+              className="font-medium text-[hsl(var(--primary))] hover:text-[hsl(var(--primary-hover))] hover:underline"
             >
               Terms of Agreement
             </button>
@@ -301,23 +289,23 @@ export default function LoginForm({
         </label>
       </div>
 
-      {/* ── Sign In Button ── */}
+      {/* Error Alert */}
       {error && (
-        <div className="mb-3 px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 text-center">
-          {error}
+        <div className="mb-4">
+          <ErrorAlert message={error} variant="error" />
         </div>
       )}
 
-      <button
+      {/* Sign In Button */}
+      <Button
         onClick={onSubmit}
         disabled={loading || !legalAccepted}
-        className="w-full py-3 bg-teal-600 hover:bg-teal-700 active:bg-teal-800
-          text-white font-semibold rounded-xl transition-colors
-          shadow-md shadow-teal-200 cursor-pointer
-          disabled:opacity-60 disabled:cursor-not-allowed"
+        loading={loading}
+        size="lg"
+        className="w-full"
       >
         {loading ? 'Signing in…' : 'Sign In'}
-      </button>
+      </Button>
 
       {activeLegalModal && <LegalModal type={activeLegalModal} onClose={closeLegalModal} />}
     </>

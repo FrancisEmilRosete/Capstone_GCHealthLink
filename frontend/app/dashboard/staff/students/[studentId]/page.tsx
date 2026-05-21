@@ -1,3 +1,3 @@
 'use client';
 
-export { default } from '../../records/[studentId]/page';
+export { default } from '../../record/[studentId]/page';

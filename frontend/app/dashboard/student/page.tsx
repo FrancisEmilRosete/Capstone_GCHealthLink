@@ -158,22 +158,22 @@ function QrCard({
   prominent?: boolean;
 }) {
   return (
-    <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col items-center ${className}`}>
-      <h2 className="text-sm font-bold text-gray-800 mb-3">My QR Code</h2>
+    <div className={`card p-5 flex flex-col items-center ${className}`}>
+      <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-3">My QR Code</h2>
 
       {loading ? (
-        <p className="text-sm text-gray-400">Loading QR...</p>
+        <p className="text-sm text-[hsl(var(--muted))]">Loading QR...</p>
       ) : qrImage ? (
         <img
           src={qrImage}
           alt="Student QR Code"
-          className={`${prominent ? 'w-56 h-56 sm:w-60 sm:h-60' : 'w-44 h-44'} rounded-xl border border-gray-100`}
+          className={`${prominent ? 'w-56 h-56 sm:w-60 sm:h-60' : 'w-44 h-44'} rounded-[var(--radius-xl)] border border-[hsl(var(--border))]`}
         />
       ) : (
-        <p className="text-sm text-gray-400 text-center">QR code is not available right now.</p>
+        <p className="text-sm text-[hsl(var(--muted))] text-center">QR code is not available right now.</p>
       )}
 
-      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-xs text-teal-700">
+      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--success)_/_0.2)] bg-[hsl(var(--success-soft))] px-3 py-1 text-xs text-[hsl(var(--success))]">
         <svg
           className="w-3.5 h-3.5"
           fill="none"
@@ -191,7 +191,7 @@ function QrCard({
         <span>Static QR cached for offline use</span>
       </div>
 
-      <p className="text-xs text-gray-500 mt-3 text-center">
+      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3 text-center">
         {profile ? `${profile.firstName} ${profile.lastName}` : ''}
         {profile ? ` - ${profile.courseDept}` : ''}
       </p>
@@ -275,8 +275,8 @@ export default function StudentDashboard() {
   return (
     <div className="p-5 space-y-5 max-w-4xl mx-auto">
       <div
-        className="relative rounded-2xl overflow-hidden px-6 py-7"
-        style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 60%, #134e4a 100%)' }}
+        className="relative rounded-[var(--radius-xl)] overflow-hidden px-6 py-7"
+        style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-hover)) 60%, hsl(174 72% 26%) 100%)' }}
       >
         <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10" />
         <div className="absolute -bottom-6 right-16 w-24 h-24 rounded-full bg-white/5" />
@@ -287,25 +287,25 @@ export default function StudentDashboard() {
               ? 'Loading your dashboard...'
               : `Welcome back, ${profile?.firstName || 'Student'}!`}
           </h1>
-          <p className="text-teal-100 text-sm mt-1.5 max-w-md">
+          <p className="text-white/90 text-sm mt-1.5 max-w-md">
             Your profile and clinic records are now connected to the live backend.
           </p>
           <div className="flex flex-wrap gap-3 mt-4">
-            <Link href="/dashboard/student/consultation-request" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
+            <Link href="/dashboard/student/consultation-request" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
               Request Consultation
             </Link>
             {!loading && !registrationCompleted && (
-              <Link href="/dashboard/student/registration" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
+              <Link href="/dashboard/student/registration" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
                 Register
               </Link>
             )}
-            <Link href="/dashboard/student/my-record" className="px-4 py-2 bg-white text-teal-700 text-sm font-semibold rounded-xl hover:bg-teal-50 transition-colors">
+            <Link href="/dashboard/student/my-record" className="px-4 py-2 bg-white text-[hsl(var(--primary))] text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/90 transition-colors">
               View My Record
             </Link>
-            <Link href="/dashboard/student/notifications" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
+            <Link href="/dashboard/student/notifications" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
               Advisories
             </Link>
-            <Link href="/dashboard/student/certificates" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-xl hover:bg-white/10 transition-colors">
+            <Link href="/dashboard/student/certificates" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
               Medical Certificate
             </Link>
           </div>
@@ -313,7 +313,7 @@ export default function StudentDashboard() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="rounded-[var(--radius-lg)] border border-[hsl(var(--danger)_/_0.3)] bg-[hsl(var(--danger-soft))] px-4 py-3 text-sm text-[hsl(var(--danger))]">
           {error}
         </div>
       )}
@@ -327,48 +327,48 @@ export default function StudentDashboard() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Student Number</p>
-          <p className="text-lg font-bold text-gray-800 mt-1">{loading ? '...' : profile?.studentNumber || '-'}</p>
+        <div className="card p-4">
+          <p className="text-xs text-[hsl(var(--muted))] uppercase tracking-wide font-medium">Student Number</p>
+          <p className="text-lg font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : profile?.studentNumber || '-'}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Total Visits</p>
-          <p className="text-2xl font-bold text-gray-800 mt-1">{loading ? '...' : totalVisits}</p>
+        <div className="card p-4">
+          <p className="text-xs text-[hsl(var(--muted))] uppercase tracking-wide font-medium">Total Visits</p>
+          <p className="text-2xl font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : totalVisits}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Known Allergies</p>
-          <p className="text-2xl font-bold text-gray-800 mt-1">{loading ? '...' : allergyCount}</p>
+        <div className="card p-4">
+          <p className="text-xs text-[hsl(var(--muted))] uppercase tracking-wide font-medium">Known Allergies</p>
+          <p className="text-2xl font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : allergyCount}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Last Visit</p>
-          <p className="text-lg font-bold text-gray-800 mt-1">{loading ? '...' : (lastVisitDate ? formatDate(lastVisitDate) : '-')}</p>
+        <div className="card p-4">
+          <p className="text-xs text-[hsl(var(--muted))] uppercase tracking-wide font-medium">Last Visit</p>
+          <p className="text-lg font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : (lastVisitDate ? formatDate(lastVisitDate) : '-')}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-bold text-gray-800 mb-4">Recent Clinic Visits</h2>
+        <div className="lg:col-span-2 card p-5">
+          <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">Recent Clinic Visits</h2>
 
           {loading ? (
-            <p className="text-sm text-gray-400">Loading visits...</p>
+            <p className="text-sm text-[hsl(var(--muted))]">Loading visits...</p>
           ) : recentVisits.length === 0 ? (
-            <p className="text-sm text-gray-400">No visit records yet.</p>
+            <p className="text-sm text-[hsl(var(--muted))]">No visit records yet.</p>
           ) : (
             <div className="space-y-3">
               {recentVisits.map((visit) => (
-                <div key={visit.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <div key={visit.id} className="rounded-[var(--radius-lg)] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-gray-800 truncate">
+                    <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">
                       {normalizeComplaintDisplay(visit.chiefComplaintEnc, 'General Consultation')}
                     </p>
-                    <span className="text-xs text-gray-400 whitespace-nowrap">{formatDate(visit.visitDate)}</span>
+                    <span className="text-xs text-[hsl(var(--muted))] whitespace-nowrap tabular-nums">{formatDate(visit.visitDate)}</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Handled by: {visit.handledBy?.email || 'Clinic Staff'}</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Handled by: {visit.handledBy?.email || 'Clinic Staff'}</p>
                   {visit.dispensedMedicines.length > 0 && (
-                    <p className="text-xs text-teal-600 mt-1">
+                    <p className="text-xs text-[hsl(var(--primary))] mt-1">
                       Medicines: {visit.dispensedMedicines.map((item) => `${item.inventory.itemName} x${item.quantity}`).join(', ')}
                     </p>
                   )}

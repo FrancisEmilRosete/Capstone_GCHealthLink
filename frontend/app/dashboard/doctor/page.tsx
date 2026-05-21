@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserPlus, Clock, Activity, Search } from 'lucide-react';
+import { UserPlus, Clock, Activity, Search, Loader2 } from 'lucide-react';
 
 import Toast from '@/components/ui/Toast';
 import { api, ApiError } from '@/lib/api';
@@ -110,6 +110,7 @@ export default function StaffCommandCenterPage() {
   const [consultingPatient, setConsultingPatient] = useState<QueueItem | null>(null);
   const [consultInitialValues, setConsultInitialValues] = useState<Partial<ConsultationForm> | null>(null);
   const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
+  const [isPending, startTransition] = useTransition();
 
   function showToast(message: string) {
     setToastConfig({ isVisible: true, message });
@@ -434,115 +435,120 @@ export default function StaffCommandCenterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      <header className="bg-white border-b border-slate-200 px-8 py-5 sticky top-0 z-30 shadow-sm flex items-center justify-between">
+    <div className="min-h-screen bg-[hsl(var(--background))] flex flex-col">
+      <div className="px-6 py-5 border-b border-[hsl(var(--border))] flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Doctor Dashboard</h1>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Live queue and follow-up management</p>
+          <h1 className="text-h1 text-[hsl(var(--foreground))]">Doctor Dashboard</h1>
+          <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide mt-1">Live queue • Follow-up management</p>
         </div>
 
         <button
           onClick={() => router.push('/dashboard/doctor/scanner')}
-          className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
+          className="flex items-center gap-2 px-5 py-2.5 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold rounded-[var(--radius-lg)] shadow-[var(--shadow-sm)] transition-all"
         >
-          <UserPlus size={18} />
+          <UserPlus size={18} strokeWidth={1.5} />
           Open QR Scanner
         </button>
-      </header>
+      </div>
 
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-6 overflow-y-auto">
         <div className="max-w-7xl mx-auto space-y-6">
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            <div className="rounded-[var(--radius-lg)] border border-[hsl(var(--danger)_/_0.3)] bg-[hsl(var(--danger-soft))] px-4 py-3 text-sm text-[hsl(var(--danger))]">
               {error}
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
-                  <UserPlus size={24} />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="card p-5">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-[hsl(var(--primary-soft))] text-[hsl(var(--primary))] rounded-[var(--radius-lg)]">
+                  <UserPlus size={20} strokeWidth={1.5} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">All Patients</p>
-                  <p className="text-2xl font-black text-slate-800">{allPatientsCount}</p>
+                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">All Patients</p>
+                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{allPatientsCount}</p>
                 </div>
               </div>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-sky-50 text-sky-600 rounded-2xl">
-                  <Clock size={24} />
+            <div className="card p-5">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-[hsl(var(--info-soft))] text-[hsl(var(--info))] rounded-[var(--radius-lg)]">
+                  <Clock size={20} strokeWidth={1.5} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Incoming</p>
-                  <p className="text-2xl font-black text-slate-800">{incomingCount}</p>
+                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">Incoming</p>
+                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{incomingCount}</p>
                 </div>
               </div>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl">
-                  <Clock size={24} />
+            <div className="card p-5">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))] rounded-[var(--radius-lg)]">
+                  <Clock size={20} strokeWidth={1.5} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Waiting</p>
-                  <p className="text-2xl font-black text-slate-800">{waitingCount}</p>
+                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">Waiting</p>
+                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{waitingCount}</p>
                 </div>
               </div>
             </div>
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl">
-                  <Activity size={24} />
+            <div className="card p-5">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-[hsl(var(--success-soft))] text-[hsl(var(--success))] rounded-[var(--radius-lg)]">
+                  <Activity size={20} strokeWidth={1.5} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pending</p>
-                  <p className="text-2xl font-black text-slate-800">{pendingCount}</p>
+                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">Pending</p>
+                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{pendingCount}</p>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-white">
-                <h2 className="text-sm font-bold text-gray-800">Live Patient Queue</h2>
+            <div className="xl:col-span-2 card overflow-hidden flex flex-col h-[600px]">
+              <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-h3 text-[hsl(var(--foreground))]">Live Patient Queue</h2>
+                  {isPending && (
+                    <Loader2 size={16} className="text-[hsl(var(--primary))] animate-spin" />
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
-                  <div className="inline-flex items-center rounded-2xl border border-gray-200 bg-gray-100 p-1">
+                  <div className="inline-flex items-center rounded-[var(--radius-lg)] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1">
                     <button
                       type="button"
-                      onClick={() => setLiveQueueFilter('all')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                        liveQueueFilter === 'all' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-white'
+                      onClick={() => startTransition(() => setLiveQueueFilter('all'))}
+                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
+                        liveQueueFilter === 'all' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
                       }`}
                     >
                       All
                     </button>
                     <button
                       type="button"
-                      onClick={() => setLiveQueueFilter('incoming')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                        liveQueueFilter === 'incoming' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-white'
+                      onClick={() => startTransition(() => setLiveQueueFilter('incoming'))}
+                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
+                        liveQueueFilter === 'incoming' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
                       }`}
                     >
                       Incoming
                     </button>
                     <button
                       type="button"
-                      onClick={() => setLiveQueueFilter('waiting')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                        liveQueueFilter === 'waiting' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-white'
+                      onClick={() => startTransition(() => setLiveQueueFilter('waiting'))}
+                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
+                        liveQueueFilter === 'waiting' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
                       }`}
                     >
                       Waiting
                     </button>
                     <button
                       type="button"
-                      onClick={() => setLiveQueueFilter('pending')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                        liveQueueFilter === 'pending' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-white'
+                      onClick={() => startTransition(() => setLiveQueueFilter('pending'))}
+                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
+                        liveQueueFilter === 'pending' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
                       }`}
                     >
                       Pending
@@ -550,20 +556,20 @@ export default function StaffCommandCenterPage() {
                   </div>
 
                   <div className="relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Search size={16} strokeWidth={1.5} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted))]" />
                     <input
                       type="text"
                       placeholder="Search queue..."
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 w-64 transition-all"
+                      onChange={(e) => startTransition(() => setSearchQuery(e.target.value))}
+                      className="pl-10 pr-4 py-2 bg-[hsl(var(--background))] border border-[hsl(var(--input-border))] rounded-[var(--radius-md)] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus-ring)_/_0.4)] focus:border-[hsl(var(--primary))] w-64 transition-all"
                     />
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setQrModalOpen(true)}
-                    className="text-xs font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-2 rounded-xl transition-colors"
+                    className="text-xs font-medium border border-[hsl(var(--border))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-soft))] px-3 py-2 rounded-[var(--radius-md)] transition-colors"
                   >
                     Use QR
                   </button>
@@ -572,51 +578,52 @@ export default function StaffCommandCenterPage() {
 
               <div className="flex-1 overflow-auto">
                 {loading ? (
-                  <div className="px-4 py-10 text-center text-gray-400 text-sm">Loading queue...</div>
+                  <div className="px-4 py-10 text-center text-[hsl(var(--muted))] text-sm">Loading queue...</div>
                 ) : (
-                  <table className="w-full table-fixed text-sm">
+                  <div className={`transition-opacity duration-200 ${isPending ? 'opacity-60' : 'opacity-100'}`}>
+                    <table className="w-full table-fixed text-sm">
                     <thead>
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Student</th>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Department</th>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Preferred Slot</th>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Reason</th>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Status</th>
-                        <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-500 border-b border-gray-100">Actions</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Student</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Department</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Preferred Slot</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Reason</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Status</th>
+                        <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-[hsl(var(--border)_/_0.5)]">
                       {liveQueue.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No patients found.</td>
+                          <td colSpan={6} className="px-4 py-10 text-center text-[hsl(var(--muted))] text-sm">No patients found.</td>
                         </tr>
                       ) : (
                         liveQueue.map((patient) => (
                           <tr
                             key={patient.id}
-                            className="hover:bg-gray-50 transition-colors"
+                            className="hover:bg-[hsl(var(--primary-soft)_/_0.3)] transition-colors"
                           >
                             <td className="px-4 py-3 text-left">
                               <div>
-                                <p className="font-semibold text-gray-800">{patient.studentProfile.lastName}, {patient.studentProfile.firstName}</p>
-                                <p className="text-xs text-teal-600 font-semibold mt-0.5">{patient.studentProfile.studentNumber}</p>
+                                <p className="font-semibold text-[hsl(var(--foreground))]">{patient.studentProfile.lastName}, {patient.studentProfile.firstName}</p>
+                                <p className="text-xs text-[hsl(var(--primary))] font-medium mt-0.5 tabular-nums">{patient.studentProfile.studentNumber}</p>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-left text-gray-600">{patient.studentProfile.courseDept || 'N/A'}</td>
-                            <td className="px-4 py-3 text-left text-gray-600">
+                            <td className="px-4 py-3 text-left text-[hsl(var(--muted-foreground))]">{patient.studentProfile.courseDept || 'N/A'}</td>
+                            <td className="px-4 py-3 text-left text-[hsl(var(--muted-foreground))] tabular-nums">
                               {formatDate(patient.preferredDate)} at {patient.preferredTime}
                             </td>
                             <td className="px-4 py-3 text-left">
-                              <p className="text-xs font-semibold text-teal-600">{patient.serviceType}</p>
-                              <p className="text-gray-700 break-words leading-snug">{patient.symptoms || 'N/A'}</p>
+                              <p className="text-xs font-medium text-[hsl(var(--primary))]">{patient.serviceType}</p>
+                              <p className="text-[hsl(var(--foreground))] break-words leading-snug">{patient.symptoms || 'N/A'}</p>
                             </td>
                             <td className="px-4 py-3 text-left">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                                 resolveLiveQueueStatus(patient) === 'INCOMING'
-                                  ? 'bg-slate-100 text-slate-700'
+                                  ? 'bg-[hsl(var(--info-soft))] text-[hsl(var(--info))]'
                                   : resolveLiveQueueStatus(patient) === 'PENDING'
-                                    ? 'bg-orange-100 text-orange-700'
-                                    : 'bg-amber-100 text-amber-700'
+                                    ? 'bg-[hsl(var(--success-soft))] text-[hsl(var(--success))]'
+                                    : 'bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))]'
                               }`}>
                                 {resolveLiveQueueStatus(patient) === 'INCOMING'
                                   ? 'Incoming'
@@ -630,7 +637,7 @@ export default function StaffCommandCenterPage() {
                                 type="button"
                                 onClick={() => openConsultModal(patient)}
                                 disabled={patient.status === 'COMPLETED' || patient.status === 'CANCELLED'}
-                                className="text-xs font-semibold bg-teal-500 hover:bg-teal-600 text-white px-2.5 py-1.5 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-1.5 rounded-[var(--radius-md)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                               >
                                 Consult
                               </button>
@@ -640,27 +647,28 @@ export default function StaffCommandCenterPage() {
                       )}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="xl:col-span-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
-              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
-                <h2 className="text-lg font-black text-slate-800 tracking-tight">Follow Ups</h2>
-                <p className="text-xs font-semibold text-slate-500 mt-1">Patients with follow-up appointments</p>
+            <div className="xl:col-span-1 card overflow-hidden flex flex-col h-[600px]">
+              <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+                <h2 className="text-h3 text-[hsl(var(--foreground))]">Follow Ups</h2>
+                <p className="text-xs text-[hsl(var(--muted))] mt-1">Scheduled follow-up appointments</p>
               </div>
 
-              <div className="flex-1 overflow-auto divide-y divide-slate-50">
+              <div className="flex-1 overflow-auto divide-y divide-[hsl(var(--border)_/_0.5)]">
                 {loading ? (
-                  <div className="px-6 py-8 text-center text-slate-400 font-bold">Loading follow ups...</div>
+                  <div className="px-5 py-8 text-center text-[hsl(var(--muted))] text-sm">Loading follow ups...</div>
                 ) : followUps.length === 0 ? (
-                  <div className="px-6 py-8 text-center text-slate-400 font-bold">No follow ups yet.</div>
+                  <div className="px-5 py-8 text-center text-[hsl(var(--muted))] text-sm">No follow ups yet.</div>
                 ) : (
                   followUps.map((item) => (
-                    <div key={`followup-${item.id}`} className="px-6 py-4 hover:bg-slate-50/60 transition-colors">
-                      <p className="text-sm font-black text-slate-800">{item.studentProfile.firstName} {item.studentProfile.lastName}</p>
-                      <p className="text-xs font-semibold text-slate-400 mt-0.5">{item.studentProfile.studentNumber}</p>
-                      <p className="text-xs text-slate-500 mt-2">Follow-up Date: {formatDate(item.preferredDate)}</p>
+                    <div key={`followup-${item.id}`} className="px-5 py-4 hover:bg-[hsl(var(--primary-soft)_/_0.3)] transition-colors">
+                      <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{item.studentProfile.firstName} {item.studentProfile.lastName}</p>
+                      <p className="text-xs text-[hsl(var(--muted))] mt-0.5 tabular-nums">{item.studentProfile.studentNumber}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 tabular-nums">Follow-up: {formatDate(item.preferredDate)}</p>
                     </div>
                   ))
                 )}
