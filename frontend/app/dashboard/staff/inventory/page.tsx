@@ -1,3 +1,3 @@
 'use client';
 
-export { default } from '@/app/dashboard/staff/inventory/page';
+export { default } from '@/app/dashboard/admin/inventory/page';

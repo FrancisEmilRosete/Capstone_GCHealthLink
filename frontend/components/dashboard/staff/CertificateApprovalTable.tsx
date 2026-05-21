@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 export type CertificateStatus = 'pending' | 'pending_doctor' | 'doctor_approved' | 'denied';
 
@@ -116,6 +117,8 @@ export default function CertificateApprovalTable({
   const [selectedCourse, setSelectedCourse] = useState('all');
   const [selectedYearLevel, setSelectedYearLevel] = useState('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Sync from localStorage whenever we come back (doctor may have approved)
   useEffect(() => {
@@ -191,9 +194,19 @@ export default function CertificateApprovalTable({
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
   const awaitingCount = rows.filter((r) => r.status === 'pending_doctor').length;
   const readyCount = rows.filter((r) => r.status === 'doctor_approved').length;
-  const visiblePendingIds = visibleRows.filter((row) => row.status === 'pending').map((row) => row.id);
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return visibleRows.slice(start, start + pageSize);
+  }, [visibleRows, currentPage, pageSize]);
+  const visiblePendingIds = pagedRows.filter((row) => row.status === 'pending').map((row) => row.id);
   const selectedVisibleCount = visiblePendingIds.filter((id) => selectedIds.includes(id)).length;
   const allVisiblePendingSelected = visiblePendingIds.length > 0 && selectedVisibleCount === visiblePendingIds.length;
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, selectedStatus, dateFrom, dateTo, selectedDepartment, selectedCourse, selectedYearLevel, rows.length]);
 
   useEffect(() => {
     setSelectedIds((current) => current.filter((id) => rows.some((row) => row.id === id && row.status === 'pending')));
@@ -357,7 +370,7 @@ export default function CertificateApprovalTable({
                 </td>
               </tr>
             ) : (
-              visibleRows.map((row) => (
+              pagedRows.map((row) => (
                 <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
                   <td className="px-3 py-3">
                     <input
@@ -394,6 +407,23 @@ export default function CertificateApprovalTable({
           </tbody>
         </table>
       </div>
+
+      {visibleRows.length > 0 && (
+        <PaginationControls
+          page={currentPage}
+          totalPages={totalPages}
+          totalItems={visibleRows.length}
+          pageSize={pageSize}
+          pageSizeOptions={[5, 10, 20, 30]}
+          itemLabel="requests"
+          onPageChange={setPage}
+          onPageSizeChange={(next) => {
+            setPageSize(next);
+            setPage(1);
+          }}
+          className="mt-2"
+        />
+      )}
     </section>
   );
 }

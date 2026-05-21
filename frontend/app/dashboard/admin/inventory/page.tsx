@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface InventoryItem {
 	id: string;
@@ -63,6 +64,8 @@ export default function AdminInventoryPage() {
 	const [search, setSearch] = useState('');
 	const [sortKey, setSortKey] = useState<SortKey>('itemName');
 	const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(20);
 
 	async function loadInventory() {
 		const token = getToken();
@@ -121,6 +124,17 @@ export default function AdminInventoryPage() {
 
 		return rows;
 	}, [withStatus, q, sortKey, sortDir]);
+
+	useEffect(() => {
+		setPage(1);
+	}, [search, sortKey, sortDir, items.length]);
+
+	const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+	const currentPage = Math.min(page, totalPages);
+	const pagedItems = useMemo(() => {
+		const start = (currentPage - 1) * pageSize;
+		return filtered.slice(start, start + pageSize);
+	}, [filtered, currentPage, pageSize]);
 
 	const lowStock = withStatus.filter((item) => item.status === 'Low Stock').length;
 	const outOfStock = withStatus.filter((item) => item.status === 'Out of Stock').length;
@@ -214,7 +228,7 @@ export default function AdminInventoryPage() {
 									<td colSpan={5} className="px-4 py-10 text-center text-gray-300">No inventory items found.</td>
 								</tr>
 							) : (
-								filtered.map((item) => (
+								pagedItems.map((item) => (
 									<tr key={item.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
 										<td className="px-4 py-3 font-semibold text-gray-800">{item.itemName}</td>
 										<td className="px-4 py-3 text-right text-gray-700">
@@ -241,6 +255,21 @@ export default function AdminInventoryPage() {
 						</tbody>
 					</table>
 				</div>
+				{!loading && filtered.length > 0 && (
+					<PaginationControls
+						page={currentPage}
+						totalPages={totalPages}
+						totalItems={filtered.length}
+						pageSize={pageSize}
+						pageSizeOptions={[10, 20, 30, 50]}
+						itemLabel="inventory items"
+						onPageChange={setPage}
+						onPageSizeChange={(next) => {
+							setPageSize(next);
+							setPage(1);
+						}}
+					/>
+				)}
 			</div>
 		</div>
 	);

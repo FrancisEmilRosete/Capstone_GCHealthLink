@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface AdminAlert {
   id: string;
@@ -87,6 +88,8 @@ export default function AdminNotifications() {
   const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(8);
 
   async function loadAlerts() {
     const token = getToken();
@@ -190,6 +193,17 @@ export default function AdminNotifications() {
     return alerts.filter((item) => item.category === TABS.find((tab) => tab.id === activeTab)?.cat);
   }, [alerts, activeTab]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, alerts.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedAlerts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
   const unreadCount = (cat: string | null) => alerts.filter((item) => !item.read && (cat === null || item.category === cat)).length;
 
   function markRead(id: string) {
@@ -262,48 +276,63 @@ export default function AdminNotifications() {
           No notifications in this category.
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {filtered.map((alert) => {
-            const style = LEVEL_STYLE[alert.level];
-            return (
-              <div
-                key={alert.id}
-                className={`bg-white rounded-2xl border border-l-4 border-gray-100 ${style.border} shadow-sm p-4 ${alert.read ? 'opacity-70' : ''}`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${alert.read ? 'bg-gray-300' : style.dot}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-gray-800">{alert.title}</p>
-                      <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${style.badge}`}>
-                        {alert.level}
-                      </span>
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+          <div className="space-y-2.5 p-3">
+            {pagedAlerts.map((alert) => {
+              const style = LEVEL_STYLE[alert.level];
+              return (
+                <div
+                  key={alert.id}
+                  className={`rounded-2xl border border-l-4 border-gray-100 ${style.border} p-4 ${alert.read ? 'opacity-70' : ''}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${alert.read ? 'bg-gray-300' : style.dot}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-gray-800">{alert.title}</p>
+                        <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${style.badge}`}>
+                          {alert.level}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-0.5 leading-relaxed">{alert.message}</p>
+                      <p className="text-xs text-gray-400 mt-1.5">{alert.time}</p>
                     </div>
-                    <p className="text-sm text-gray-500 mt-0.5 leading-relaxed">{alert.message}</p>
-                    <p className="text-xs text-gray-400 mt-1.5">{alert.time}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {!alert.read && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {!alert.read && (
+                        <button
+                          onClick={() => markRead(alert.id)}
+                          className="text-xs text-teal-600 hover:bg-teal-50 px-2.5 py-1.5 rounded-lg font-medium"
+                        >
+                          Mark read
+                        </button>
+                      )}
                       <button
-                        onClick={() => markRead(alert.id)}
-                        className="text-xs text-teal-600 hover:bg-teal-50 px-2.5 py-1.5 rounded-lg font-medium"
+                        onClick={() => dismiss(alert.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
                       >
-                        Mark read
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                       </button>
-                    )}
-                    <button
-                      onClick={() => dismiss(alert.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            pageSizeOptions={[5, 8, 12, 20]}
+            itemLabel="alerts"
+            onPageChange={setPage}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(1);
+            }}
+          />
         </div>
       )}
     </div>

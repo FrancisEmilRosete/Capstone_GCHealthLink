@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface UserEntry {
   id: string;
@@ -37,6 +38,8 @@ export default function AdminUsersPage() {
   const [error,    setError]   = useState('');
   const [search,   setSearch]  = useState('');
   const [role,     setRole]    = useState('ALL');
+  const [page,     setPage]    = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   const loadUsers = useCallback(async () => {
     const token = getToken();
@@ -77,6 +80,17 @@ export default function AdminUsersPage() {
     }
     setFiltered(list);
   }, [search, role, users]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, role, users.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   function fullName(u: UserEntry) {
     if (!u.studentProfile) return '—';
@@ -133,7 +147,7 @@ export default function AdminUsersPage() {
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">Loading user account records...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No user accounts match the selected filters.</td></tr>
-              ) : filtered.map((u) => (
+              ) : pagedUsers.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-gray-800 font-medium">{u.email}</td>
                   <td className="px-4 py-3 text-gray-700">{fullName(u)}</td>
@@ -156,6 +170,21 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         </div>
+        {!loading && filtered.length > 0 && (
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 15, 25, 50]}
+            itemLabel="accounts"
+            onPageChange={setPage}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(1);
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Download, Activity, Users, AlertTriangle, TrendingUp } from 'lucide-react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -11,6 +12,14 @@ import type { OutbreakForecastPoint } from '@/components/dashboard/admin/Outbrea
 import ResourcePredictionPanel, { type ProjectedSupplyRisk } from '@/components/dashboard/admin/ResourcePredictionPanel';
 import WellnessTrendsWidget from '@/components/dashboard/admin/WellnessTrendsWidget';
 import AiOutbreakForecastClient from '@/components/dashboard/admin/AiOutbreakForecastClient';
+
+// New UI Components
+import { StatCard } from '@/components/ui/StatCard';
+import { ErrorAlert } from '@/components/ui/ErrorAlert';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 
 interface TopConcern {
   tag: string;
@@ -209,16 +218,6 @@ function mapProjectedStockouts(items: NonNullable<AnalyticsData['resourcePredict
   }));
 }
 
-function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <p className="text-xs text-gray-500 font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
 export default function AdminDashboard() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -296,96 +295,122 @@ export default function AdminDashboard() {
 
   const topConcern = topConcerns[0]?.tag || '-';
   const outbreakCount = Array.isArray(data?.outbreakWatch) ? data?.outbreakWatch.length : 0;
+  
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Department Health Overview</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Live analytics from backend records</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => downloadAdminAnalyticsCsv(data?.monthlyVisits || [], data?.weeklyVisits || [], topConcerns, departmentRows)}
-          disabled={loading}
-          className="shrink-0 rounded-xl bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Preparing...' : 'Export'}
-        </button>
-      </div>
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <PageHeader
+        title="Department Health Overview"
+        subtitle="Live analytics from backend records"
+        action={
+          <Button
+            onClick={() => downloadAdminAnalyticsCsv(data?.monthlyVisits || [], data?.weeklyVisits || [], topConcerns, departmentRows)}
+            disabled={loading}
+            size="md"
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            {loading ? 'Preparing...' : 'Export CSV'}
+          </Button>
+        }
+      />
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
-        </div>
+        <ErrorAlert
+          message={error}
+          variant="error"
+          onRetry={() => void loadAnalytics()}
+        />
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total Clinic Visits"
           value={loading ? '...' : data?.totalVisits ?? 0}
-          sub="All-time recorded visits"
-          color="text-teal-600"
+          icon={<Activity className="h-5 w-5" />}
+          loading={loading}
         />
         <StatCard
           label="Tracked Departments"
           value={loading ? '...' : departmentRows.length}
-          sub="With recorded clinic activity"
-          color="text-blue-600"
+          icon={<Users className="h-5 w-5" />}
+          loading={loading}
         />
         <StatCard
           label="Top Concern"
           value={loading ? '...' : topConcern}
-          sub="Most frequent complaint"
-          color="text-orange-600"
+          icon={<TrendingUp className="h-5 w-5" />}
+          loading={loading}
         />
         <StatCard
           label="Outbreak Alerts"
           value={loading ? '...' : outbreakCount}
-          sub="Clusters flagged in last 48h"
-          color="text-red-600"
+          icon={<AlertTriangle className="h-5 w-5" />}
+          loading={loading}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-800 mb-4">Top Health Concerns</h2>
+        <div className="card">
+          <h2 className="text-h3 text-[hsl(var(--foreground))] mb-4">Top Health Concerns</h2>
 
           {loading ? (
-            <p className="text-sm text-gray-400">Loading concerns...</p>
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="skeleton h-12"></div>
+              ))}
+            </div>
           ) : topConcerns.length === 0 ? (
-            <p className="text-sm text-gray-400">No concerns recorded yet.</p>
+            <EmptyState
+              icon="search"
+              title="No concerns recorded yet"
+              description="Health concern data will appear here once clinic visits are logged"
+            />
           ) : (
             <div className="space-y-2">
               {topConcerns.map((concern) => (
-                <div key={`${concern.tag}-${concern.count}`} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-                  <p className="text-sm text-gray-700 truncate pr-3">{concern.tag}</p>
-                  <span className="text-xs font-semibold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
-                    {concern.count}
-                  </span>
+                <div
+                  key={`${concern.tag}-${concern.count}`}
+                  className="flex items-center justify-between rounded-[var(--radius-md)] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2.5 hover:border-[hsl(var(--border-hover))] transition-colors"
+                >
+                  <p className="text-sm text-[hsl(var(--foreground))] truncate pr-3 font-medium">
+                    {concern.tag}
+                  </p>
+                  <Badge variant="info">{concern.count}</Badge>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-800 mb-4">Visits by Department</h2>
+        <div className="card">
+          <h2 className="text-h3 text-[hsl(var(--foreground))] mb-4">Visits by Department</h2>
 
           {loading ? (
-            <p className="text-sm text-gray-400">Loading departments...</p>
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="skeleton h-4 w-full"></div>
+                  <div className="skeleton h-2 w-full"></div>
+                </div>
+              ))}
+            </div>
           ) : departmentRows.length === 0 ? (
-            <p className="text-sm text-gray-400">No department activity yet.</p>
+            <EmptyState
+              icon="users"
+              title="No department activity yet"
+              description="Department visit statistics will appear here once students check in"
+            />
           ) : (
             <div className="space-y-3">
               {departmentRows.map(([department, count]) => (
                 <div key={department}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-600">{department}</span>
-                    <span className="font-semibold text-gray-800">{count}</span>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="text-[hsl(var(--muted))] font-medium">{toDisplayDepartment(department)}</span>
+                    <span className="font-semibold text-[hsl(var(--foreground))] tabular-nums">{count}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-2 rounded-[var(--radius-full)] bg-[hsl(var(--border))] overflow-hidden">
                     <div
-                      className="h-full bg-teal-500"
+                      className="h-full bg-[hsl(var(--primary))] transition-all"
                       style={{ width: `${Math.max(8, (count / maxDepartmentCount) * 100)}%` }}
                     />
                   </div>
@@ -416,25 +441,40 @@ export default function AdminDashboard() {
         items={projectedSupplyRisks}
       />
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-800 mb-4">Outbreak Watch</h2>
+      <div className="card">
+        <h2 className="text-h3 text-[hsl(var(--foreground))] mb-4">Outbreak Watch</h2>
 
         {loading ? (
-          <p className="text-sm text-gray-400">Checking alerts...</p>
+          <div className="space-y-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="skeleton h-20"></div>
+            ))}
+          </div>
         ) : Array.isArray(data?.outbreakWatch) && data.outbreakWatch.length > 0 ? (
           <div className="space-y-2">
             {data.outbreakWatch.map((alert, index) => (
-              <div key={`${alert.message}-${index}`} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-sm font-semibold text-amber-700">{alert.level} Alert</p>
-                <p className="text-sm text-amber-800 mt-0.5">{alert.message}</p>
-                <p className="text-xs text-amber-700 mt-1">Cases: {alert.cases}</p>
+              <div
+                key={`${alert.message}-${index}`}
+                className="rounded-[var(--radius-lg)] border border-[hsl(var(--warning))] bg-[hsl(var(--warning-soft))] px-4 py-3"
+              >
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-[hsl(var(--warning))] flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-[hsl(var(--warning))]">{alert.level} Alert</p>
+                    <p className="text-sm text-[hsl(var(--foreground))] mt-0.5">{alert.message}</p>
+                    <p className="text-xs text-[hsl(var(--muted))] mt-1 tabular-nums">Cases: {alert.cases}</p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-            {typeof data?.outbreakWatch === 'string' ? data.outbreakWatch : 'Green - No clusters detected'}
-          </p>
+          <div className="rounded-[var(--radius-lg)] border border-[hsl(var(--success))] bg-[hsl(var(--success-soft))] px-4 py-3 flex items-center gap-3">
+            <div className="h-2 w-2 rounded-full bg-[hsl(var(--success))]"></div>
+            <p className="text-sm font-medium text-[hsl(var(--success))]">
+              {typeof data?.outbreakWatch === 'string' ? data.outbreakWatch : 'All clear - No clusters detected'}
+            </p>
+          </div>
         )}
       </div>
     </div>

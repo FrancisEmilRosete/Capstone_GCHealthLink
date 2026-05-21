@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 const prisma = new PrismaClient();
 
 const ALLOWED_SEVERITIES = new Set(["INFO", "WARNING", "CRITICAL"]);
@@ -259,6 +260,10 @@ const createAdvisory = async (req, res, next) => {
 // ==========================================
 const getAdvisories = async (req, res, next) => {
   try {
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 30,
+      maxLimit: 200,
+    });
     const requestedDept = normalizeDept(req.query?.dept);
     const role = req.user?.role;
     let whereClause = {};
@@ -307,11 +312,15 @@ const getAdvisories = async (req, res, next) => {
       whereClause = buildTargetDeptWhere(["ALL", "ADMIN"]);
     }
 
-    const advisories = await prisma.healthAdvisory.findMany({
-      where: whereClause,
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-    });
+    const [advisories, total] = await prisma.$transaction([
+      prisma.healthAdvisory.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.healthAdvisory.count({ where: whereClause }),
+    ]);
 
     const normalizedAdvisories = advisories.map((advisory) => ({
       ...advisory,
@@ -321,7 +330,8 @@ const getAdvisories = async (req, res, next) => {
     res.json({
       success: true,
       message: "Advisories retrieved successfully.",
-      data: normalizedAdvisories
+      data: normalizedAdvisories,
+      pagination: buildPaginationMeta({ page, limit, total }),
     });
   } catch (error) {
     next(error);

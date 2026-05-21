@@ -39,14 +39,14 @@ function BellIcon({ hasUnread }: { hasUnread?: boolean }) {
   return (
     <div className="relative">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-        className="w-5 h-5 text-gray-500" aria-hidden="true">
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+        className="w-[18px] h-[18px] text-[hsl(var(--muted-foreground))]" aria-hidden="true">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
         <path d="M13.73 21a2 2 0 0 1-3.46 0" />
       </svg>
       {/* Red dot indicator for unread notifications */}
       {hasUnread && (
-        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[hsl(var(--danger))] rounded-full animate-pulse" />
       )}
     </div>
   );
@@ -80,7 +80,7 @@ export default function TopBar({
     .toUpperCase();
 
   return (
-    <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-white border-b border-gray-100 sticky top-0 z-10 print:hidden">
+    <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-[hsl(var(--surface)_/_0.95)] backdrop-blur-sm border-b border-[hsl(var(--border))] sticky top-0 z-10 print:hidden">
 
       {/* Left: Hamburger (mobile) + Page title */}
       <div className="flex items-center gap-3 min-w-0">
@@ -88,7 +88,7 @@ export default function TopBar({
         {/* Hamburger — only visible on mobile/tablet */}
         <button
           onClick={onMenuOpen}
-          className="lg:hidden shrink-0 p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
+          className="lg:hidden shrink-0 p-1.5 rounded-[var(--radius-md)] text-[hsl(var(--muted))] hover:bg-[hsl(var(--primary-soft))] hover:text-[hsl(var(--primary))] transition-colors"
           aria-label="Open menu"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,10 +99,10 @@ export default function TopBar({
 
         {/* GC HealthLink brand — replaces per-page title */}
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-white rounded-lg border border-teal-100 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 bg-[hsl(var(--surface))] rounded-[var(--radius-md)] border border-[hsl(var(--border))] flex items-center justify-center shrink-0 shadow-[var(--shadow-sm)]">
             <AppLogo className="h-5 w-5 object-contain" />
           </div>
-          <span className="text-base font-bold text-gray-900 tracking-tight">GC HealthLink</span>
+          <span className="text-base font-bold text-[hsl(var(--foreground))] tracking-tight">GC HealthLink</span>
         </div>
       </div>
 
@@ -113,13 +113,13 @@ export default function TopBar({
         {resolvedNotifHref ? (
           <Link
             href={resolvedNotifHref}
-            className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-[var(--radius-md)] hover:bg-[hsl(var(--primary-soft))] hover:text-[hsl(var(--primary))] transition-colors"
             aria-label="Notifications"
           >
             <BellIcon hasUnread />
           </Link>
         ) : (
-          <button className="p-2 rounded-xl hover:bg-gray-100 transition-colors" aria-label="Notifications">
+          <button className="p-2 rounded-[var(--radius-md)] hover:bg-[hsl(var(--primary-soft))] hover:text-[hsl(var(--primary))] transition-colors" aria-label="Notifications">
             <BellIcon hasUnread />
           </button>
         )}
@@ -128,14 +128,14 @@ export default function TopBar({
         <div className="flex items-center gap-2">
           {userAvatar ? (
             <img src={userAvatar} alt={userName}
-              className="w-8 h-8 rounded-full object-cover shrink-0" />
+              className="w-8 h-8 rounded-full object-cover shrink-0 border border-[hsl(var(--border))]" />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[hsl(var(--primary))] flex items-center justify-center text-white text-xs font-bold shrink-0">
               {initials}
             </div>
           )}
           {/* Name — hidden on small screens */}
-          <p className="hidden md:block text-sm font-semibold text-gray-800 truncate max-w-[120px]">
+          <p className="hidden md:block text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[120px]">
             {userName}
           </p>
         </div>

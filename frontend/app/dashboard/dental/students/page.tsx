@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface StudentDirectoryItem {
   id: string;
@@ -28,6 +29,8 @@ export default function DentalStudentsPage() {
   const [students, setStudents] = useState<StudentDirectoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   async function loadStudents(value?: string) {
     const token = getToken();
@@ -67,6 +70,17 @@ export default function DentalStudentsPage() {
     }
     void loadStudents(value);
   }
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, students.length]);
+
+  const totalPages = Math.max(1, Math.ceil(students.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return students.slice(start, start + pageSize);
+  }, [students, currentPage, pageSize]);
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
@@ -119,7 +133,7 @@ export default function DentalStudentsPage() {
                 <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400">Loading students...</td></tr>
               ) : students.length === 0 ? (
                 <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400">No students found.</td></tr>
-              ) : students.map((student) => (
+              ) : pagedStudents.map((student) => (
                 <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50/70">
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{student.studentNumber}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{student.lastName}, {student.firstName}</td>
@@ -137,6 +151,21 @@ export default function DentalStudentsPage() {
             </tbody>
           </table>
         </div>
+        {!loading && students.length > 0 && (
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            totalItems={students.length}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 30, 50]}
+            itemLabel="students"
+            onPageChange={setPage}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(1);
+            }}
+          />
+        )}
       </div>
 
       <UseQrLookupModal

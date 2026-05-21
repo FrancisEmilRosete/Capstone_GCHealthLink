@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface AdvisoryItem {
 	id: string;
@@ -64,6 +65,8 @@ export default function AdminAnnouncementPage() {
 	const [error, setError] = useState('');
 	const [feedback, setFeedback] = useState('');
 	const [search, setSearch] = useState('');
+	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(10);
 
 	async function loadHistory() {
 		const token = getToken();
@@ -156,6 +159,17 @@ export default function AdminAnnouncementPage() {
 				|| (item.severity || '').toLowerCase().includes(q);
 		});
 	}, [history, search]);
+
+	useEffect(() => {
+		setPage(1);
+	}, [search, history.length]);
+
+	const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
+	const currentPage = Math.min(page, totalPages);
+	const pagedHistory = useMemo(() => {
+		const start = (currentPage - 1) * pageSize;
+		return filteredHistory.slice(start, start + pageSize);
+	}, [filteredHistory, currentPage, pageSize]);
 
 	function handleAudienceToggle(value: (typeof AUDIENCE_OPTIONS)[number]['value']) {
 		if (value === 'ALL') {
@@ -301,7 +315,7 @@ export default function AdminAnnouncementPage() {
 					<div className="p-10 text-center text-sm text-gray-400">No announcement logs found.</div>
 				) : (
 					<div className="divide-y divide-gray-100">
-						{filteredHistory.map((item) => {
+						{pagedHistory.map((item) => {
 							const normalizedSeverity = (item.severity || 'INFO').toUpperCase();
 							return (
 								<div key={item.id} className="p-4">
@@ -322,8 +336,21 @@ export default function AdminAnnouncementPage() {
 							);
 						})}
 					</div>
-				)}
+						})}
 			</div>
+					<PaginationControls
+						page={currentPage}
+						totalPages={totalPages}
+						totalItems={filteredHistory.length}
+						pageSize={pageSize}
+						pageSizeOptions={[5, 10, 20, 30]}
+						itemLabel="announcements"
+						onPageChange={setPage}
+						onPageSizeChange={(next) => {
+							setPageSize(next);
+							setPage(1);
+						}}
+					/>
 		</div>
 	);
 }

@@ -120,25 +120,23 @@ export default function LoginPage() {
 
   // ── Render ─────────────────────────────────────────────────
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-white">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[hsl(var(--background))]">
 
-      {/* ── Background Blobs ───────────────────────────────── */}
-      <div className="pointer-events-none absolute -top-32 -left-32 w-[520px] h-[520px] rounded-full bg-teal-400 opacity-20 blur-[120px]" />
-      <div className="pointer-events-none absolute -top-20 -right-32 w-[480px] h-[480px] rounded-full bg-blue-400 opacity-20 blur-[120px]" />
-      <div className="pointer-events-none absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-teal-300 opacity-15 blur-[120px]" />
+      {/* Subtle background accent */}
+      <div className="pointer-events-none absolute -top-96 -left-96 w-[1000px] h-[1000px] rounded-full bg-[hsl(var(--primary-soft))] opacity-20 blur-[200px]" />
 
-      {/* ── Login Card ─────────────────────────────────────── */}
-      <div className="relative z-10 bg-white rounded-3xl shadow-2xl p-8 w-full max-w-[380px] mx-4">
+      {/* Login Card */}
+      <div className="relative z-10 bg-[hsl(var(--card))] rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] border border-[hsl(var(--border))] p-8 w-full max-w-[420px] mx-4">
 
         {/* App Logo and Title */}
-        <div className="flex flex-col items-center mb-7">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-teal-200 mb-3 bg-white border border-teal-100">
-            <AppLogo className="h-10 w-10 object-contain" />
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-12 h-12 rounded-[var(--radius-lg)] flex items-center justify-center shadow-[var(--shadow-sm)] mb-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))]">
+            <AppLogo className="h-8 w-8 object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+          <h1 className="text-h1 text-[hsl(var(--foreground))]">
             GC HealthLink
           </h1>
-          <p className="text-teal-600 text-sm mt-0.5 font-medium">
+          <p className="text-[hsl(var(--primary))] text-sm mt-1 font-medium">
             Campus Clinic Management System
           </p>
         </div>
@@ -159,9 +157,9 @@ export default function LoginPage() {
         />
 
         {/* Register link for new students */}
-        <p className="mt-4 text-center text-xs text-gray-400">
+        <p className="mt-6 text-center text-xs text-[hsl(var(--muted))]">
           New student?{' '}
-          <Link href="/register" className="text-teal-600 hover:text-teal-700 font-semibold hover:underline">
+          <Link href="/register" className="text-[hsl(var(--primary))] hover:text-[hsl(var(--primary-hover))] font-semibold hover:underline transition-colors">
             Register your health record
           </Link>
         </p>

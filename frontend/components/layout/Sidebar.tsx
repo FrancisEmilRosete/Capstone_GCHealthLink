@@ -113,24 +113,24 @@ export default function Sidebar({
 
   // Shared panel rendered in both desktop column and mobile drawer
   const panel = (
-    <aside className="flex flex-col w-[220px] h-full bg-[#0d1b2a] text-white">
+    <aside className="flex flex-col w-[220px] h-full bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] text-[hsl(var(--foreground))]">
 
       {/* Logo row + mobile close button */}
-      <div className="flex items-center justify-between px-5 pt-6 pb-6">
+      <div className="flex items-center justify-between px-5 pt-6 pb-6 border-b border-[hsl(var(--border))]">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-white rounded-xl border border-slate-300/60 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 bg-[hsl(var(--surface))] rounded-[var(--radius-lg)] border border-[hsl(var(--border))] flex items-center justify-center shrink-0 shadow-[var(--shadow-sm)]">
             <AppLogo className="h-6 w-6 object-contain" />
           </div>
           <div className="leading-tight">
-            <p className="text-sm font-bold tracking-tight">GC HealthLink</p>
-            <p className="text-[10px] text-slate-400">{brandSubtitle}</p>
+            <p className="text-sm font-bold tracking-tight text-[hsl(var(--foreground))]">GC HealthLink</p>
+            <p className="text-[10px] text-[hsl(var(--muted))]">{brandSubtitle}</p>
           </div>
         </div>
 
         {/* X button — only visible inside the mobile drawer */}
         <button
           onClick={onClose}
-          className="lg:hidden p-1 text-slate-400 hover:text-white transition-colors"
+          className="lg:hidden p-1 text-[hsl(var(--muted))] hover:text-[hsl(var(--primary))] transition-colors"
           aria-label="Close menu"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,18 +141,18 @@ export default function Sidebar({
       </div>
 
       {/* Navigation groups — scrollable if content overflows */}
-      <nav className="flex flex-col gap-5 px-3 flex-1 overflow-y-auto">
+      <nav className="flex flex-col gap-5 px-3 py-4 flex-1 overflow-y-auto">
         {navGroups.map(({ groupLabel, items }) => (
           <div key={groupLabel ?? 'unlabeled'}>
 
             {/* Section label e.g. "Main", "Inventory & Reports" */}
             {groupLabel && (
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest px-3 mb-1.5">
+              <p className="text-[10px] font-semibold text-[hsl(var(--muted))] uppercase tracking-widest px-3 mb-2">
                 {groupLabel}
               </p>
             )}
 
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-1">
               {items.map(({ id, label, href, badge, icon: Icon }) => {
                 const active = isActive(href);
                 return (
@@ -161,17 +161,17 @@ export default function Sidebar({
                     href={href}
                     className={`
                       relative flex items-center justify-between
-                      px-3 py-2.5 rounded-xl text-sm font-medium
+                      px-3 py-2.5 rounded-[var(--radius-md)] text-sm font-medium
                       transition-all
                       ${active
-                        ? 'bg-slate-700/50 text-white'
-                        : 'text-slate-400 hover:bg-slate-700/30 hover:text-white'
+                        ? 'bg-[hsl(var(--primary-soft))] text-[hsl(var(--primary))]'
+                        : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft)_/_0.5)] hover:text-[hsl(var(--foreground))]'
                       }
                     `}
                   >
-                    {/* Teal left accent bar on the active item */}
+                    {/* Primary left accent bar on the active item */}
                     {active && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-teal-400 rounded-full" />
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-[hsl(var(--primary))] rounded-full" />
                     )}
 
                     <div className="flex items-center gap-3">
@@ -181,7 +181,7 @@ export default function Sidebar({
 
                     {/* Badge count circle */}
                     {badge !== undefined && badge > 0 && (
-                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-teal-500 text-white text-[10px] font-bold shrink-0">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[hsl(var(--primary))] text-white text-[10px] font-bold shrink-0">
                         {badge}
                       </span>
                     )}
@@ -195,13 +195,13 @@ export default function Sidebar({
 
       {/* Bottom: Sign Out */}
       <div className="px-3 pb-6 mt-4 shrink-0">
-        <div className="border-t border-slate-700/50 mb-3" />
+        <div className="border-t border-[hsl(var(--border))] mb-3" />
 
         <button
           onClick={() => setShowLogoutConfirm(true)}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
-            text-sm font-medium text-slate-400
-            hover:bg-slate-700/30 hover:text-white
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-[var(--radius-md)]
+            text-sm font-medium text-[hsl(var(--muted-foreground))]
+            hover:bg-[hsl(var(--danger-soft))] hover:text-[hsl(var(--danger))]
             transition-all cursor-pointer"
         >
           <SignOutIcon className="w-[18px] h-[18px] shrink-0" />

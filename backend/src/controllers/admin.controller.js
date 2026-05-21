@@ -3,6 +3,7 @@ const {
   normalizeConcernTag,
   isOutbreakConcernTag,
 } = require("../utils/concernTag.util");
+const { parsePaginationParams, buildPaginationMeta } = require("../utils/pagination.util");
 const prisma = new PrismaClient();
 
 const ALERT_PRIORITY = { RED: 3, YELLOW: 2, GREEN: 1 };
@@ -328,32 +329,65 @@ function toDisplayNameFromEmail(email) {
 
 const getUsers = async (req, res, next) => {
   try {
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        clinicStaffType: true,
-        createdAt: true,
-        studentProfile: {
-          select: {
-            firstName: true,
-            lastName: true,
-            mi: true,
-            studentNumber: true,
-            courseDept: true,
-            course: true,
-            yearLevel: true,
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 200,
+      maxLimit: 2000,
+    });
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const role = typeof req.query.role === "string" ? req.query.role.trim().toUpperCase() : "";
+
+    const where = {};
+    if (role && role !== "ALL") {
+      where.role = role;
+    }
+
+    if (search) {
+      where.OR = [
+        { email: { contains: search, mode: "insensitive" } },
+        { studentProfile: { firstName: { contains: search, mode: "insensitive" } } },
+        { studentProfile: { lastName: { contains: search, mode: "insensitive" } } },
+        { studentProfile: { studentNumber: { contains: search, mode: "insensitive" } } },
+        { studentProfile: { courseDept: { contains: search, mode: "insensitive" } } },
+        { studentProfile: { course: { contains: search, mode: "insensitive" } } },
+        { studentProfile: { yearLevel: { contains: search, mode: "insensitive" } } },
+      ];
+    }
+
+    const [users, total] = await prisma.$transaction([
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          clinicStaffType: true,
+          createdAt: true,
+          studentProfile: {
+            select: {
+              firstName: true,
+              lastName: true,
+              mi: true,
+              studentNumber: true,
+              courseDept: true,
+              course: true,
+              yearLevel: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.user.count({ where }),
+    ]);
 
     res.json({
       success: true,
       message: 'Users retrieved successfully',
-      data: users,
+      data: {
+        users,
+        pagination: buildPaginationMeta({ page, limit, total }),
+      },
     });
   } catch (error) {
     next(error);

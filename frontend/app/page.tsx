@@ -8,82 +8,94 @@
  */
 
 import Link from 'next/link';
+import { ArrowRight, CheckCircle, Shield, Activity } from 'lucide-react';
 import AppLogo from '@/components/branding/AppLogo';
+import { Button } from '@/components/ui/Button';
 
 export default function RootPage() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-50 text-slate-900">
-      {/* Background atmosphere */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full bg-teal-300/30 blur-[120px]" />
-      <div className="pointer-events-none absolute top-32 -right-32 h-[460px] w-[460px] rounded-full bg-amber-200/40 blur-[140px]" />
-      <div className="pointer-events-none absolute bottom-0 left-1/2 h-[360px] w-[360px] -translate-x-1/2 rounded-full bg-emerald-200/40 blur-[140px]" />
+    <main className="relative min-h-screen overflow-hidden bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
+      {/* Subtle background accent - calm, not playful */}
+      <div className="pointer-events-none absolute -top-64 -left-64 h-[800px] w-[800px] rounded-full bg-[hsl(var(--primary-soft))] opacity-30 blur-[200px]" />
 
-      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-10">
+      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8">
         {/* Top bar */}
-        <header className="flex items-center justify-between">
+        <header className="flex items-center justify-between py-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white border border-teal-100 shadow-lg shadow-teal-200">
-              <AppLogo className="h-8 w-8 object-contain" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-[var(--shadow-sm)]">
+              <AppLogo className="h-7 w-7 object-contain" />
             </span>
             <div className="leading-tight">
-              <p className="text-sm font-semibold tracking-wide text-teal-700">GC HealthLink</p>
-              <p className="text-xs text-slate-500">Campus Clinic Management System</p>
+              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">GC HealthLink</p>
+              <p className="text-xs text-[hsl(var(--muted))]">Campus Clinic Management System</p>
             </div>
           </div>
-          <Link
-            href="/login"
-            className="rounded-full border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-700 shadow-sm transition hover:border-teal-300 hover:text-teal-800"
-          >
-            Sign In
+          <Link href="/login">
+            <Button variant="secondary" size="sm">
+              Sign In
+            </Button>
           </Link>
         </header>
 
         {/* Hero */}
-        <section className="mt-16 grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="mt-20 grid items-center gap-12 lg:grid-cols-[1.2fr_0.8fr]">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-teal-600">AI-assisted campus care</p>
-            <h1 className="mt-4 text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl">
-              A smarter clinic workflow for faster, safer student care.
+            <div className="inline-flex items-center gap-2 rounded-[var(--radius-full)] bg-[hsl(var(--primary-soft))] px-3 py-1 text-xs font-semibold text-[hsl(var(--primary))]">
+              <div className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--primary))]"></div>
+              System Status: Online
+            </div>
+            <h1 className="mt-6 text-display text-[hsl(var(--foreground))]">
+              Modern clinic management for campus health
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600">
-              GC HealthLink centralizes triage, records, and clinic operations with intelligent routing
-              and real-time decision support, so every student visit feels coordinated and personal.
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-[hsl(var(--muted))]">
+              Centralized triage, records, and operations with intelligent routing and real-time decision support. 
+              Every student visit is coordinated, secure, and trackable.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Link
-                href="/login"
-                className="rounded-full bg-teal-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-200 transition hover:bg-teal-700"
-              >
-                Get Started
+              <Link href="/login">
+                <Button size="lg" className="gap-2">
+                  Get Started
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
               </Link>
-              <div className="text-sm text-slate-500">
-                Built for admins, clinic staff, doctors, dental teams, and students.
-              </div>
+              <p className="text-sm text-[hsl(var(--muted))]">
+                Built for admins, nurses, doctors, dental staff, and students
+              </p>
             </div>
           </div>
 
           <div className="relative">
-            <div className="absolute right-6 top-6 h-16 w-16 rounded-full border border-teal-200/80 bg-white/70 shadow-md shadow-teal-100 animate-pulse" />
-            <div className="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-xl shadow-slate-200">
+            <div className="card card-hover space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Live status</p>
-                  <p className="text-lg font-semibold text-slate-800">Clinic Operations</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-[hsl(var(--muted))]">System Status</p>
+                  <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Clinic Operations</p>
                 </div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Online</span>
+                <div className="rounded-[var(--radius-full)] bg-[hsl(var(--success-soft))] px-3 py-1 text-xs font-semibold text-[hsl(var(--success))]">
+                  Live
+                </div>
               </div>
-              <div className="mt-6 space-y-4">
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Smart queueing</p>
-                  <p className="text-sm font-medium text-slate-700">Auto-triage requests, priority routing</p>
+              <div className="space-y-3 pt-2">
+                <div className="flex items-start gap-3 rounded-[var(--radius-md)] border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2.5">
+                  <CheckCircle className="h-5 w-5 text-[hsl(var(--primary))] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-[hsl(var(--muted))]">Smart Queueing</p>
+                    <p className="text-sm text-[hsl(var(--foreground))]">Auto-triage, priority routing</p>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Unified records</p>
-                  <p className="text-sm font-medium text-slate-700">One profile across visits and services</p>
+                <div className="flex items-start gap-3 rounded-[var(--radius-md)] border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2.5">
+                  <Shield className="h-5 w-5 text-[hsl(var(--primary))] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-[hsl(var(--muted))]">Unified Records</p>
+                    <p className="text-sm text-[hsl(var(--foreground))]">One profile across all services</p>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Analytics ready</p>
-                  <p className="text-sm font-medium text-slate-700">Actionable insights for campus leaders</p>
+                <div className="flex items-start gap-3 rounded-[var(--radius-md)] border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2.5">
+                  <Activity className="h-5 w-5 text-[hsl(var(--primary))] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-[hsl(var(--muted))]">Analytics Ready</p>
+                    <p className="text-sm text-[hsl(var(--foreground))]">Actionable insights for leaders</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -91,14 +103,14 @@ export default function RootPage() {
         </section>
 
         {/* About */}
-        <section className="mt-16 grid gap-8 rounded-3xl border border-slate-100 bg-white/80 p-8 shadow-lg shadow-slate-100 lg:grid-cols-[0.4fr_0.6fr]">
+        <section className="mt-20 card space-y-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">About</p>
-            <h2 className="mt-3 text-2xl font-semibold text-slate-900">Designed for modern campus clinics.</h2>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted))]">About the System</p>
+            <h2 className="mt-3 text-h2 text-[hsl(var(--foreground))]">Designed for modern campus clinics</h2>
           </div>
-          <div className="space-y-4 text-sm leading-relaxed text-slate-600">
+          <div className="grid gap-6 lg:grid-cols-2 text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
             <p>
-              GC HealthLink helps clinics coordinate appointments, consultations, and follow-ups while
+              GC HealthLink coordinates appointments, consultations, and follow-ups while
               maintaining secure student records. The platform blends automation with clear human oversight
               so staff can stay focused on care quality.
             </p>
@@ -108,6 +120,11 @@ export default function RootPage() {
             </p>
           </div>
         </section>
+
+        {/* Footer */}
+        <footer className="mt-auto pt-12 pb-8 text-center text-xs text-[hsl(var(--muted))]">
+          <p>© {new Date().getFullYear()} GC HealthLink. Campus Clinic Management System.</p>
+        </footer>
       </div>
     </main>
   );

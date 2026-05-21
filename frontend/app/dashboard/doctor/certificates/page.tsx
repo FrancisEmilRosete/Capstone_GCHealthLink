@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { FileText, Search, Printer } from 'lucide-react';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface Certificate {
   id: string;
@@ -23,6 +24,8 @@ export default function CertificatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
   
   // QR State
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -76,7 +79,7 @@ export default function CertificatesPage() {
   };
 
   // Filtering Logic
-  const filtered = certificates.filter(c => {
+  const filtered = useMemo(() => certificates.filter(c => {
     if (c.certificateType !== activeTab) return false;
     
     if (dateFrom && new Date(c.issuedAt) < new Date(dateFrom)) return false;
@@ -98,7 +101,18 @@ export default function CertificatesPage() {
     }
     
     return true;
-  });
+  }), [certificates, activeTab, dateFrom, dateTo, timeFrom, timeTo]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, activeTab, dateFrom, dateTo, timeFrom, timeTo, certificates.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedCertificates = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
@@ -189,7 +203,7 @@ export default function CertificatesPage() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No certificates found.</td></tr>
               ) : (
-                filtered.map(cert => (
+                pagedCertificates.map(cert => (
                   <tr key={cert.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="font-semibold text-gray-900">{cert.student}</div>
@@ -207,6 +221,21 @@ export default function CertificatesPage() {
             </tbody>
           </table>
         </div>
+        {!loading && filtered.length > 0 && (
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            pageSizeOptions={[8, 12, 20, 30]}
+            itemLabel="certificates"
+            onPageChange={setPage}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(1);
+            }}
+          />
+        )}
       </div>
       
       <UseQrLookupModal
