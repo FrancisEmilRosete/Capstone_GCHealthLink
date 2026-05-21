@@ -16,6 +16,7 @@
 export const API_PREFIX = '/api/v1';
 const API_BASE_CACHE_KEY = 'gchl_api_base';
 const LOCAL_FALLBACK_ATTEMPT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_FALLBACK_ATTEMPT_TIMEOUT_MS || 500);
+const ENABLE_DEV_PORT_DISCOVERY = process.env.NEXT_PUBLIC_ENABLE_API_PORT_DISCOVERY === 'true';
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
@@ -78,6 +79,11 @@ function orderedCandidateBases(): string[] {
     }
 
     const latestCachedBase = readCachedApiBase();
+
+    if (!ENABLE_DEV_PORT_DISCOVERY) {
+      return uniqueBases([configuredApiBase, latestCachedBase]);
+    }
+
     return uniqueBases([configuredApiBase, latestCachedBase, ...defaultDevBases]);
   }
 
@@ -86,6 +92,11 @@ function orderedCandidateBases(): string[] {
   }
 
   const latestCachedBase = readCachedApiBase();
+
+  if (!ENABLE_DEV_PORT_DISCOVERY) {
+    return uniqueBases([preferredApiBase, latestCachedBase, defaultDevBases[0] || ''].filter(Boolean));
+  }
+
   return uniqueBases([preferredApiBase, latestCachedBase, ...defaultDevBases]);
 }
 

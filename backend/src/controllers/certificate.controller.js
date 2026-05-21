@@ -43,16 +43,21 @@ async function resolveStudentProfile(identifier) {
 }
 
 function mapCertificateToDto(cert) {
+  // Map internal enum PHYSICAL_EXAMINATION → frontend value PHYSICAL_EXAM for backward compat
+  const certType = cert.certificateType === 'PHYSICAL_EXAMINATION' ? 'PHYSICAL_EXAM' : String(cert.certificateType);
   return {
     id: cert.id,
     studentProfileId: cert.studentProfileId,
     studentId: cert.studentProfile.studentNumber,
     student: `${cert.studentProfile.firstName} ${cert.studentProfile.lastName}`,
     course: cert.studentProfile.courseDept,
-    certificateType: cert.certificateType,
-    remarks: cert.remarks,
+    certificateType: certType,
+    diagnosisFindings: cert.diagnosisFindings || '',
+    recommendationsRemarks: cert.recommendationsRemarks || cert.remarks || '',
+    remarks: cert.remarks || '',
+    issuedByRole: cert.issuedByRole || 'DOCTOR',
     issuedAt: cert.issuedAt.toISOString(),
-    issuedBy: cert.doctor.email,
+    issuedBy: cert.issuedBy.email,
   };
 }
 
@@ -74,8 +79,10 @@ const listCertificates = async (req, res, next) => {
       ];
     }
 
-    if (certificateType === "CONSULTATION" || certificateType === "PHYSICAL_EXAM") {
-      where.certificateType = certificateType;
+    if (certificateType === "CONSULTATION") {
+      where.certificateType = "CONSULTATION";
+    } else if (certificateType === "PHYSICAL_EXAM") {
+      where.certificateType = "PHYSICAL_EXAMINATION";
     }
 
     const [certs, total] = await prisma.$transaction([
@@ -86,7 +93,7 @@ const listCertificates = async (req, res, next) => {
         take: limit,
         include: {
           studentProfile: { select: { studentNumber: true, firstName: true, lastName: true, courseDept: true } },
-          doctor: { select: { email: true } },
+          issuedBy: { select: { email: true } },
         },
       }),
       prisma.medicalCertificate.count({ where }),
@@ -108,8 +115,9 @@ const issueCertificate = async (req, res, next) => {
     const studentIdentifier = normalizeText(
       req.body?.studentProfileId || req.body?.studentId || req.body?.studentIdentifier
     );
-    const reason = normalizeText(req.body?.reason);
-    const remarks = normalizeText(req.body?.remarks);
+    // Accept both new field names and legacy names for backward compatibility.
+    const diagnosisFindings = normalizeText(req.body?.diagnosisFindings || req.body?.reason);
+    const recommendationsRemarks = normalizeText(req.body?.recommendationsRemarks || req.body?.remarks);
     const issuedBy = normalizeText(req.body?.issuedBy) || req.user.email || "Clinic Staff";
     const dateIssued = parseDate(req.body?.dateIso || req.body?.dateIssued);
 
@@ -117,16 +125,16 @@ const issueCertificate = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "studentId or studentProfileId is required." });
     }
 
-    if (!reason) {
-      return res.status(400).json({ success: false, message: "reason is required." });
+    if (!diagnosisFindings) {
+      return res.status(400).json({ success: false, message: "diagnosisFindings is required." });
     }
 
-    if (reason.length > 200) {
-      return res.status(400).json({ success: false, message: "reason must be 200 characters or fewer." });
+    if (diagnosisFindings.length > 2000) {
+      return res.status(400).json({ success: false, message: "diagnosisFindings must be 2000 characters or fewer." });
     }
 
-    if (remarks.length > 1000) {
-      return res.status(400).json({ success: false, message: "remarks must be 1000 characters or fewer." });
+    if (recommendationsRemarks.length > 2000) {
+      return res.status(400).json({ success: false, message: "recommendationsRemarks must be 2000 characters or fewer." });
     }
 
     if (!dateIssued) {
@@ -139,20 +147,24 @@ const issueCertificate = async (req, res, next) => {
     }
     const studentName = `${student.firstName} ${student.lastName}`;
 
-    const type = req.body?.certificateType === 'PHYSICAL_EXAM' ? 'PHYSICAL_EXAM' : 'CONSULTATION';
+    // Map frontend value PHYSICAL_EXAM → Prisma enum PHYSICAL_EXAMINATION
+    const type = req.body?.certificateType === 'PHYSICAL_EXAM' ? 'PHYSICAL_EXAMINATION' : 'CONSULTATION';
 
     const [cert] = await prisma.$transaction([
       prisma.medicalCertificate.create({
         data: {
           studentProfileId: student.id,
-          doctorId: req.user.userId,
+          issuedById: req.user.userId,
+          issuedByRole: req.user.clinicStaffType || 'DOCTOR',
           certificateType: type,
-          remarks,
+          diagnosisFindings,
+          recommendationsRemarks,
+          remarks: recommendationsRemarks,
           issuedAt: dateIssued,
         },
         include: {
           studentProfile: { select: { studentNumber: true, firstName: true, lastName: true, courseDept: true } },
-          doctor: { select: { email: true } },
+          issuedBy: { select: { email: true } },
         }
       }),
       prisma.auditLog.create({
@@ -164,7 +176,8 @@ const issueCertificate = async (req, res, next) => {
           metadata: {
             studentName,
             certificateType: type,
-            remarks,
+            diagnosisFindings,
+            recommendationsRemarks,
             issuedBy,
             dateIssued: dateIssued.toISOString(),
           },

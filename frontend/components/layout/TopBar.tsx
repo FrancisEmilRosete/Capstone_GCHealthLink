@@ -24,7 +24,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import AppLogo from '@/components/branding/AppLogo';
+import Image from 'next/image';
 
 interface TopBarProps {
   onMenuOpen?: () => void;
@@ -97,12 +97,25 @@ export default function TopBar({
           </svg>
         </button>
 
-        {/* GC HealthLink brand — replaces per-page title */}
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-[hsl(var(--surface))] rounded-[var(--radius-md)] border border-[hsl(var(--border))] flex items-center justify-center shrink-0 shadow-[var(--shadow-sm)]">
-            <AppLogo className="h-5 w-5 object-contain" />
-          </div>
-          <span className="text-base font-bold text-[hsl(var(--foreground))] tracking-tight">GC HealthLink</span>
+        {/* GC HealthLink brand — dual logos + wordmark */}
+        <div className="flex items-center gap-1.5">
+          <Image
+            src="/icons/gc-logo.png"
+            alt="Gordon College"
+            width={28}
+            height={28}
+            className="h-7 w-7 rounded-full object-contain shrink-0 drop-shadow-sm"
+            priority
+          />
+          <Image
+            src="/icons/clinic-logo.png"
+            alt="Health Services Unit"
+            width={28}
+            height={28}
+            className="h-7 w-7 rounded-full object-contain shrink-0 drop-shadow-sm"
+            priority
+          />
+          <span className="ml-1 text-base font-bold text-[hsl(var(--foreground))] tracking-tight">GC HealthLink</span>
         </div>
       </div>
 

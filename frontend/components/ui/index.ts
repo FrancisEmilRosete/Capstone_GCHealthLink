@@ -8,5 +8,5 @@ export { EmptyState } from './EmptyState';
 export { PageHeader } from './PageHeader';
 export { default as Toast } from './Toast';
 export { default as BackButton } from './BackButton';
-export { default as ComingSoonCard } from './ComingSoonCard';
+export { ComingSoonCard } from './ComingSoonCard';
 export { default as ConfirmLogoutModal } from './ConfirmLogoutModal';

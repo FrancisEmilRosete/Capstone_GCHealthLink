@@ -505,16 +505,6 @@ const recordVisit = async (req, res, next) => {
         }
       }
 
-      // Auto-generate Consultation Certificate
-      await tx.medicalCertificate.create({
-        data: {
-          studentProfileId: normalizedStudentProfileId,
-          doctorId: handledById,
-          certificateType: "CONSULTATION",
-          remarks: "Auto-generated from completed consultation.",
-        }
-      });
-
       const createdVisit = await tx.clinicVisit.findUnique({
         where: { id: newVisit.id },
         include: {

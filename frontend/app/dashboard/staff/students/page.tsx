@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
 
@@ -46,8 +46,8 @@ export default function DoctorStudentsPage() {
       setError('');
       const trimmed = (value || '').trim();
       const path = trimmed
-        ? `/clinic/students?limit=1000&q=${encodeURIComponent(trimmed)}`
-        : '/clinic/students?limit=1000';
+        ? `/clinic/students?limit=200&q=${encodeURIComponent(trimmed)}`
+        : '/clinic/students?limit=200';
       const response = await api.get<StudentDirectoryResponse>(path, token);
       setStudents(response.data || []);
     } catch (err) {
@@ -65,12 +65,17 @@ export default function DoctorStudentsPage() {
     void loadStudents();
   }, []);
 
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   function onSearch(value: string) {
     setQuery(value);
     if (!value.trim()) {
       setQrMessage('');
     }
-    void loadStudents(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      void loadStudents(value);
+    }, 300);
   }
 
   const departmentOptions = useMemo(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { api, ApiError } from '@/lib/api';
@@ -214,10 +214,13 @@ function DetailModal({ row, onClose }: { row: ConsultRow; onClose: () => void })
   );
 }
 
+const PAGE_SIZE = 20;
+
 export default function DoctorConsultationsPage() {
   const [records, setRecords] = useState<ConsultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
 
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('date');
@@ -237,7 +240,7 @@ export default function DoctorConsultationsPage() {
 
     try {
       setError('');
-      const response = await api.get<VisitResponse>('/clinic/visits?limit=1000', token);
+      const response = await api.get<VisitResponse>('/clinic/visits?limit=200', token);
       setRecords((response.data || []).map(mapVisitToRow));
     } catch (err) {
       if (err instanceof ApiError) {
@@ -265,6 +268,8 @@ export default function DoctorConsultationsPage() {
   }
 
   const q = search.toLowerCase().trim();
+  const filteredRef = useRef<ConsultRow[]>([]);
+  const prevFilterKey = useRef('');
   const filtered = useMemo(() => {
     const rows = q
       ? records.filter((record) =>
@@ -289,6 +294,12 @@ export default function DoctorConsultationsPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
 
+    filteredRef.current = narrowed;
+    const newKey = `${q}|${sortKey}|${sortDir}|${dateFilter}|${departmentFilter}|${statusFilter}`;
+    if (prevFilterKey.current !== newKey) {
+      prevFilterKey.current = newKey;
+      setPage(1);
+    }
     return narrowed;
   }, [records, q, sortKey, sortDir, dateFilter, departmentFilter, statusFilter]);
 
@@ -297,15 +308,21 @@ export default function DoctorConsultationsPage() {
   }, [records]);
 
   const total = records.length;
-  const monthly = records.filter((record) => thisMonth(record.dateIso)).length;
-  const uniqueStudents = new Set(records.map((record) => record.studentId)).size;
-  const topDiagnosis = (() => {
+  const monthly = useMemo(() => records.filter((record) => thisMonth(record.dateIso)).length, [records]);
+  const uniqueStudents = useMemo(() => new Set(records.map((record) => record.studentId)).size, [records]);
+  const topDiagnosis = useMemo(() => {
     const freq: Record<string, number> = {};
     records.forEach((record) => {
       freq[record.diagnosis] = (freq[record.diagnosis] || 0) + 1;
     });
     return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
-  })();
+  }, [records]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pagedRows = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page],
+  );
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -417,7 +434,7 @@ export default function DoctorConsultationsPage() {
                   <td colSpan={5} className="px-4 py-10 text-center text-gray-300">No records match your search.</td>
                 </tr>
               ) : (
-                filtered.map((row) => (
+                pagedRows.map((row) => (
                   <tr key={row.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="font-medium text-gray-700">{fmtDate(row.dateIso)}</span>
@@ -441,8 +458,29 @@ export default function DoctorConsultationsPage() {
           </table>
         </div>
 
-        <div className="px-4 py-3 border-t border-gray-50 text-[11px] text-gray-400">
-          Showing {filtered.length} of {total} records
+        <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between gap-4">
+          <span className="text-[11px] text-gray-400">
+            Showing {pagedRows.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} records
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Prev
+              </button>
+              <span className="text-[11px] text-gray-400">Page {page} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

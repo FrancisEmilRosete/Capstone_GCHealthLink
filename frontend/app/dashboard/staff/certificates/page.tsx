@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { FileText, Search, Printer } from 'lucide-react';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
+import { printCertificate } from '@/lib/printCertificate';
 
 interface Certificate {
   id: string;
@@ -12,6 +13,8 @@ interface Certificate {
   student: string;
   course: string;
   certificateType: string;
+  diagnosisFindings: string;
+  recommendationsRemarks: string;
   remarks: string;
   issuedAt: string;
   issuedBy: string;
@@ -33,7 +36,15 @@ export default function CertificatesPage() {
   const [timeFrom, setTimeFrom] = useState('');
   const [timeTo, setTimeTo] = useState('');
 
+  const isMounted = useRef(false);
+
+  // Fires when activeTab changes; skip the very first mount since the
+  // search debounce effect below handles the initial load.
   useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
     loadCertificates(search);
   }, [activeTab]);
 
@@ -59,20 +70,16 @@ export default function CertificatesPage() {
     return () => clearTimeout(handler);
   }, [search]);
 
-  // Individual Print
-  const handlePrint = (cert: Certificate) => {
-    alert(`Printing Certificate for ${cert.student}...`);
-    window.print();
-  };
+  // Individual Print — opens a formatted popup, hides system nav/sidebar
+  const handlePrint = (cert: Certificate) => printCertificate(cert);
 
   // Batch Print
   const handleBatchPrint = () => {
     if (filtered.length === 0) {
-      alert("No certificates match the current filters to print.");
+      alert('No certificates match the current filters.');
       return;
     }
-    alert(`Batch Printing ${filtered.length} Certificates...`);
-    window.print();
+    filtered.forEach(cert => printCertificate(cert));
   };
 
   // Filtering Logic

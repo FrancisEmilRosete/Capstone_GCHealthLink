@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -298,6 +298,17 @@ export default function DoctorRecordsPage() {
   const [filterDepartment, setFilterDepartment] = useState('all');
   const [filterYearLevel, setFilterYearLevel] = useState('all');
   const [filterType, setFilterType] = useState<'all' | LogKind>('all');
+  const [page, setPage] = useState(1);
+  const prevFilterKeyRef = useRef('');
+  const [certModal, setCertModal] = useState<{
+    open: boolean;
+    log: UnifiedLogItem | null;
+    loading: boolean;
+    error: string;
+    diagnosisFindings: string;
+    recommendationsRemarks: string;
+    dateIssued: string;
+  }>({ open: false, log: null, loading: false, error: '', diagnosisFindings: '', recommendationsRemarks: '', dateIssued: '' });
 
   async function loadLogs() {
     const token = getToken();
@@ -426,7 +437,19 @@ export default function DoctorRecordsPage() {
     return matchesQuery && matchesType && matchesDate && matchesDepartment && matchesYearLevel;
   });
 
-  const timelineGrouped = filteredLogs.reduce(
+  const PAGE_SIZE = 10;
+  const filterKey = `${searchStudent}|${filterDate}|${filterDepartment}|${filterYearLevel}|${effectiveFilterType}`;
+  if (prevFilterKeyRef.current !== filterKey) {
+    prevFilterKeyRef.current = filterKey;
+    setPage(1);
+  }
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
+  const pagedLogs = useMemo(
+    () => filteredLogs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredLogs, page],
+  );
+
+  const pagedGrouped = pagedLogs.reduce(
     (acc, item) => {
       const date = formatDate(item.loggedAtIso);
       if (!acc[date]) acc[date] = [];
@@ -436,11 +459,52 @@ export default function DoctorRecordsPage() {
     {} as Record<string, UnifiedLogItem[]>,
   );
 
-  const sortedDates = Object.keys(timelineGrouped).sort((a, b) => {
-    const aDate = new Date(a).getTime();
-    const bDate = new Date(b).getTime();
-    return bDate - aDate;
-  });
+  const pagedDates = Object.keys(pagedGrouped).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+  function handleOpenCertModal(log: UnifiedLogItem) {
+    const diagnosisFindings = log.logType === 'consultation'
+      ? [log.parsedConsultation?.chiefComplaint, log.parsedConsultation?.diagnosis]
+          .filter((v) => v && v !== 'N/A')
+          .join('\n')
+      : log.physicalExam
+        ? `BP: ${log.physicalExam.bp || 'N/A'}, BMI: ${log.physicalExam.bmi || 'N/A'}`
+        : '';
+    setCertModal({
+      open: true,
+      log,
+      loading: false,
+      error: '',
+      diagnosisFindings,
+      recommendationsRemarks: '',
+      dateIssued: (log.dateIso || new Date().toISOString()).split('T')[0],
+    });
+  }
+
+  async function handleSubmitCert(e: React.FormEvent) {
+    e.preventDefault();
+    if (!certModal.log) return;
+    if (!certModal.diagnosisFindings.trim()) {
+      setCertModal((m) => ({ ...m, error: 'Diagnosis / Findings are required.' }));
+      return;
+    }
+    setCertModal((m) => ({ ...m, loading: true, error: '' }));
+    try {
+      const token = getToken();
+      await api.post('/certificates', {
+        studentIdentifier: certModal.log.studentNumber,
+        certificateType: certModal.log.logType === 'consultation' ? 'CONSULTATION' : 'PHYSICAL_EXAM',
+        diagnosisFindings: certModal.diagnosisFindings.trim(),
+        recommendationsRemarks: certModal.recommendationsRemarks.trim(),
+        dateIssued: certModal.dateIssued,
+      }, token!);
+      setCertModal((m) => ({ ...m, open: false }));
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to issue certificate.';
+      setCertModal((m) => ({ ...m, error: msg }));
+    } finally {
+      setCertModal((m) => ({ ...m, loading: false }));
+    }
+  }
 
   return (
     <>
@@ -538,13 +602,13 @@ export default function DoctorRecordsPage() {
 
           {loading ? (
             <div className="px-4 py-12 text-center text-gray-400">Loading logs...</div>
-          ) : sortedDates.length === 0 ? (
+          ) : pagedDates.length === 0 ? (
             <div className="px-4 py-12 text-center">
               <p className="text-gray-500 text-sm">No logs found.</p>
             </div>
           ) : (
             <div className="space-y-8 p-6">
-              {sortedDates.map((date) => (
+              {pagedDates.map((date) => (
                 <div key={date}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="flex-1 h-px bg-gradient-to-r from-teal-400 to-transparent"></div>
@@ -553,7 +617,7 @@ export default function DoctorRecordsPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {timelineGrouped[date].map((item) => (
+                    {pagedGrouped[date].map((item) => (
                       <div
                         key={item.id}
                         onClick={() => setSelectedLog(item)}
@@ -572,8 +636,17 @@ export default function DoctorRecordsPage() {
                               </p>
                             )}
                           </div>
-                          <div className="shrink-0 text-right">
+                          <div className="shrink-0 text-right flex flex-col items-end gap-1.5">
                             <p className="text-xs text-gray-500">{formatTime(item.visitTime)}</p>
+                            {!isDentalLogs && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleOpenCertModal(item); }}
+                                className="text-[10px] font-semibold border border-teal-300 text-teal-700 hover:bg-teal-50 px-2 py-0.5 rounded transition-colors"
+                              >
+                                Give Cert.
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -581,6 +654,33 @@ export default function DoctorRecordsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {!loading && filteredLogs.length > 0 && (
+            <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between gap-4">
+              <span className="text-[11px] text-gray-400">
+                Showing {pagedLogs.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredLogs.length)} of {filteredLogs.length} logs
+              </span>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-[11px] text-gray-400">Page {page} / {totalPages}</span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -723,6 +823,91 @@ export default function DoctorRecordsPage() {
                 View Full Record
               </Link>
             </div>
+          </div>
+        </div>
+      )}
+
+      {certModal.open && certModal.log && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setCertModal((m) => ({ ...m, open: false }))}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <h2 className="text-base font-bold text-gray-900">Issue Medical Certificate</h2>
+              <button
+                type="button"
+                onClick={() => setCertModal((m) => ({ ...m, open: false }))}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg text-lg"
+              >✕</button>
+            </div>
+            <form onSubmit={handleSubmitCert} className="p-5 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Student</p>
+                <p className="text-sm font-bold text-gray-900">{certModal.log.studentName}</p>
+                <p className="text-xs text-teal-600 font-medium">{certModal.log.studentNumber}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase mb-1.5">Certificate Type</p>
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+                  certModal.log.logType === 'consultation' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {certModal.log.logType === 'consultation' ? 'Consultation' : 'Physical Examination'}
+                </span>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {certModal.log.logType === 'consultation' ? 'Diagnosis / Clinical Findings' : 'Physical Examination Findings'}
+                </label>
+                <textarea
+                  rows={4}
+                  value={certModal.diagnosisFindings}
+                  onChange={(e) => setCertModal((m) => ({ ...m, diagnosisFindings: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none resize-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Recommendations / Remarks</label>
+                <textarea
+                  rows={3}
+                  value={certModal.recommendationsRemarks}
+                  onChange={(e) => setCertModal((m) => ({ ...m, recommendationsRemarks: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none resize-none"
+                  placeholder="Optional recommendations or restrictions..."
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date Issued</label>
+                <input
+                  type="date"
+                  value={certModal.dateIssued}
+                  onChange={(e) => setCertModal((m) => ({ ...m, dateIssued: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                  required
+                />
+              </div>
+              {certModal.error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">{certModal.error}</div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCertModal((m) => ({ ...m, open: false }))}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                >Cancel</button>
+                <button
+                  type="submit"
+                  disabled={certModal.loading}
+                  className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors"
+                >
+                  {certModal.loading ? 'Issuing...' : 'Issue Certificate'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

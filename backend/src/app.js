@@ -90,7 +90,7 @@ const settingsRoutes = require("./routes/settings.routes");
 const emergencyRoutes = require("./routes/emergency.routes");
 const aiRoutes = require("./routes/ai.routes");
 const debugRoutes = require("./routes/debug.routes");
-
+const reportRoutes = require("./routes/report.routes");
 // 5. Base Route
 app.get("/", (req, res) => {
   res.json({ message: "Backend is running successfully!" });
@@ -116,6 +116,7 @@ app.use("/api/v1/settings", settingsRoutes);
 app.use("/api/v1/emergency", emergencyRoutes);
 app.use("/api/v1/ai", aiRoutes);
 app.use("/api/v1/debug", debugRoutes);
+app.use("/api/v1/reports", reportRoutes);
 
 // 7. Error Handling Middleware
 app.use(notFound);

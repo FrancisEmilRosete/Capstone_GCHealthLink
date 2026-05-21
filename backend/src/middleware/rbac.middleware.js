@@ -12,4 +12,19 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { authorize };
+// Checks req.user.clinicStaffType (DOCTOR, NURSE, DENTIST).
+// Use after authorize() to further restrict by staff sub-type.
+const authorizeStaffType = (...types) => {
+  return (req, res, next) => {
+    const staffType = req.user?.clinicStaffType;
+    if (!staffType || !types.includes(staffType)) {
+      return res.status(403).json({
+        success: false,
+        message: `Forbidden: This action requires staff type ${types.join(' or ')}. Your type is ${staffType || 'None'}.`,
+      });
+    }
+    next();
+  };
+};
+
+module.exports = { authorize, authorizeStaffType };

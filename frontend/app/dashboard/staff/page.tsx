@@ -115,7 +115,7 @@ export default function NurseDashboardPage() {
     try {
       setLoading(true);
       setError('');
-      const response = await api.get<QueueResponse>('/appointments/queue?limit=500&status=WAITING,PENDING,IN_PROGRESS,COMPLETED', token);
+      const response = await api.get<QueueResponse>('/appointments/queue?limit=100&status=WAITING,PENDING,IN_PROGRESS,COMPLETED', token);
       setQueue(response.data || []);
     } catch (err) {
       if (err instanceof ApiError) {

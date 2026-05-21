@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 
-import ScannerPage from '@/app/dashboard/staff/scanner/page';
+import ScannerPage from '@/app/dashboard/doctor/scanner/page';
 
 function ScannerRouteFallback() {
 	return <div className="p-6 text-sm text-gray-500">Loading scanner...</div>;

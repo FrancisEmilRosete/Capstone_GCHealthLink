@@ -5,8 +5,8 @@ const { protect } = require("../middleware/auth.middleware");
 const { authorize } = require("../middleware/rbac.middleware");
 const { auditLogger } = require("../middleware/auditLogger.middleware");
 
-// Public registration (new student account creation only)
-router.post("/registration/public", submitRegistration);
+// Public registration disabled — system is locked for data migration.
+// router.post("/registration/public", submitRegistration);
 
 // Authenticated student registration/profile update
 router.post("/registration", protect, authorize("STUDENT"), submitRegistration);

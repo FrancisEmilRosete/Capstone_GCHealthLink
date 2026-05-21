@@ -3,11 +3,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
-import { FileText, Search, Printer } from 'lucide-react';
+import { FileText, Search, Printer, PlusCircle, X, ClipboardList, Stethoscope } from 'lucide-react';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 import PaginationControls from '@/components/ui/PaginationControls';
+import { printCertificate } from '@/lib/printCertificate';
+
+interface IssueForm {
+  studentIdentifier: string;
+  certificateType: 'CONSULTATION' | 'PHYSICAL_EXAM';
+  diagnosisFindings: string;
+  recommendationsRemarks: string;
+  dateIssued: string;
+}
 
 interface Certificate {
+  diagnosisFindings: string;
+  recommendationsRemarks: string;
   id: string;
   studentId: string;
   student: string;
@@ -36,6 +47,19 @@ export default function CertificatesPage() {
   const [timeFrom, setTimeFrom] = useState('');
   const [timeTo, setTimeTo] = useState('');
 
+  // Issue Certificate modal
+  const [issueModalOpen, setIssueModalOpen] = useState(false);
+  const [issueLoading, setIssueLoading] = useState(false);
+  const [issueError, setIssueError] = useState('');
+  const [issueQrOpen, setIssueQrOpen] = useState(false);
+  const [issueForm, setIssueForm] = useState<IssueForm>({
+    studentIdentifier: '',
+    certificateType: 'CONSULTATION',
+    diagnosisFindings: '',
+    recommendationsRemarks: '',
+    dateIssued: new Date().toISOString().split('T')[0],
+  });
+
   useEffect(() => {
     loadCertificates(search);
   }, [activeTab]);
@@ -45,7 +69,7 @@ export default function CertificatesPage() {
       const token = getToken();
       if (!token) return;
       setLoading(true);
-      const res = await api.get<{ data: Certificate[] }>(`/certificates?q=${q}`, token);
+      const res = await api.get<{ data: Certificate[] }>(`/certificates?q=${encodeURIComponent(q)}`, token);
       setCertificates(res.data);
       setError('');
     } catch (err) {
@@ -62,21 +86,54 @@ export default function CertificatesPage() {
     return () => clearTimeout(handler);
   }, [search]);
 
-  // Individual Print
-  const handlePrint = (cert: Certificate) => {
-    alert(`Printing Certificate for ${cert.student}...`);
-    window.print();
-  };
+  const handlePrint = (cert: Certificate) => printCertificate(cert);
 
-  // Batch Print
   const handleBatchPrint = () => {
     if (filtered.length === 0) {
-      alert("No certificates match the current filters to print.");
+      alert('No certificates match the current filters.');
       return;
     }
-    alert(`Batch Printing ${filtered.length} Certificates...`);
-    window.print();
+    filtered.forEach(cert => printCertificate(cert));
   };
+
+  const openIssueModal = () => {
+    setIssueForm({
+      studentIdentifier: '',
+      certificateType: 'CONSULTATION',
+      diagnosisFindings: '',
+      recommendationsRemarks: '',
+      dateIssued: new Date().toISOString().split('T')[0],
+    });
+    setIssueError('');
+    setIssueModalOpen(true);
+  };
+
+  const handleIssueCertificate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!issueForm.studentIdentifier.trim()) { setIssueError('Student ID is required.'); return; }
+    if (!issueForm.diagnosisFindings.trim()) { setIssueError('Diagnosis / Findings are required.'); return; }
+    setIssueLoading(true);
+    setIssueError('');
+    try {
+      const token = getToken();
+      await api.post<{ data: Certificate }>('/certificates', {
+        studentIdentifier: issueForm.studentIdentifier.trim(),
+        certificateType: issueForm.certificateType,
+        diagnosisFindings: issueForm.diagnosisFindings.trim(),
+        recommendationsRemarks: issueForm.recommendationsRemarks.trim(),
+        dateIssued: issueForm.dateIssued,
+      }, token!);
+      setIssueModalOpen(false);
+      loadCertificates(search);
+    } catch (err) {
+      if (err instanceof ApiError) setIssueError(err.message);
+      else setIssueError('Failed to issue certificate.');
+    } finally {
+      setIssueLoading(false);
+    }
+  };
+
+  const isConsultationType = issueForm.certificateType === 'CONSULTATION';
 
   // Filtering Logic
   const filtered = useMemo(() => certificates.filter(c => {
@@ -119,10 +176,16 @@ export default function CertificatesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText className="text-teal-600" /> Automated Certificates
+            <FileText className="text-teal-600" /> Medical Certificates
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Automatically generated certificates from completed sessions.</p>
+          <p className="text-sm text-gray-500 mt-1">Issue and manage medical certificates for students.</p>
         </div>
+        <button
+          onClick={openIssueModal}
+          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition-colors"
+        >
+          <PlusCircle size={16} /> Issue Certificate
+        </button>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 space-y-4">
@@ -241,12 +304,115 @@ export default function CertificatesPage() {
       <UseQrLookupModal
         open={qrModalOpen}
         onClose={() => setQrModalOpen(false)}
+        onResolved={(student: QrResolvedStudent) => setSearch(student.studentNumber)}
+        onNotFound={() => alert('Student not found. Please try another QR.')}
+      />
+
+      {/* ── Issue Certificate Modal ── */}
+      {issueModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <FileText className="text-teal-600" size={20} /> Issue Medical Certificate
+              </h2>
+              <button onClick={() => setIssueModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleIssueCertificate} className="p-5 space-y-5">
+              {/* Certificate Type */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Certificate Type</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setIssueForm(f => ({ ...f, certificateType: 'CONSULTATION' }))}
+                    className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                      issueForm.certificateType === 'CONSULTATION' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}>
+                    <ClipboardList size={22} />
+                    Consultation
+                    <span className="text-xs font-normal opacity-70">Based on clinic visit</span>
+                  </button>
+                  <button type="button" onClick={() => setIssueForm(f => ({ ...f, certificateType: 'PHYSICAL_EXAM' }))}
+                    className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                      issueForm.certificateType === 'PHYSICAL_EXAM' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}>
+                    <Stethoscope size={22} />
+                    Physical Exam
+                    <span className="text-xs font-normal opacity-70">Based on PE result</span>
+                  </button>
+                </div>
+              </div>
+              {/* Student */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Student ID / Number</label>
+                <div className="flex gap-2">
+                  <input type="text" placeholder="e.g. 2024-00001"
+                    value={issueForm.studentIdentifier}
+                    onChange={e => setIssueForm(f => ({ ...f, studentIdentifier: e.target.value }))}
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none" required />
+                  <button type="button" onClick={() => setIssueQrOpen(true)}
+                    className="px-3 py-2 border border-teal-200 text-teal-700 hover:bg-teal-50 rounded-xl text-xs font-semibold">QR</button>
+                </div>
+              </div>
+              {/* Diagnosis */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  {isConsultationType ? 'Diagnosis / Clinical Findings' : 'Physical Examination Findings'}
+                </label>
+                <textarea rows={4}
+                  placeholder={isConsultationType ? 'Enter diagnosis, chief complaint, or clinical findings...' : 'Enter physical examination findings (e.g. BP, vitals, systems review)...'}
+                  value={issueForm.diagnosisFindings}
+                  onChange={e => setIssueForm(f => ({ ...f, diagnosisFindings: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 outline-none resize-none ${
+                    isConsultationType ? 'border-gray-200 focus:ring-teal-500/20 focus:border-teal-500' : 'border-blue-200 focus:ring-blue-500/20 focus:border-blue-500'
+                  }`} required />
+              </div>
+              {/* Recommendations */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Recommendations / Remarks</label>
+                <textarea rows={3}
+                  placeholder="Enter recommendations, restrictions, or additional remarks..."
+                  value={issueForm.recommendationsRemarks}
+                  onChange={e => setIssueForm(f => ({ ...f, recommendationsRemarks: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 outline-none resize-none ${
+                    isConsultationType ? 'border-gray-200 focus:ring-teal-500/20 focus:border-teal-500' : 'border-blue-200 focus:ring-blue-500/20 focus:border-blue-500'
+                  }`} />
+              </div>
+              {/* Date */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Date Issued</label>
+                <input type="date" value={issueForm.dateIssued}
+                  onChange={e => setIssueForm(f => ({ ...f, dateIssued: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none" required />
+              </div>
+              {issueError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">{issueError}</div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setIssueModalOpen(false)}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                <button type="submit" disabled={issueLoading}
+                  className={`flex-1 py-2.5 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
+                    isConsultationType ? 'bg-teal-600 hover:bg-teal-700' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}>
+                  {issueLoading ? 'Issuing...' : 'Issue Certificate'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── QR for issue form ── */}
+      <UseQrLookupModal
+        open={issueQrOpen}
+        onClose={() => setIssueQrOpen(false)}
         onResolved={(student: QrResolvedStudent) => {
-          setSearch(student.studentNumber);
+          setIssueForm(f => ({ ...f, studentIdentifier: student.studentNumber }));
+          setIssueQrOpen(false);
         }}
-        onNotFound={() => {
-          alert('Student not found. Please try another QR.');
-        }}
+        onNotFound={() => alert('Student not found. Please try another QR.')}
       />
     </div>
   );

@@ -32,6 +32,11 @@ enum XrayResult {
   ABNORMAL
 }
 
+enum MedicalCertificateType {
+  CONSULTATION         @map("consultation")
+  PHYSICAL_EXAMINATION @map("physical_examination")
+}
+
 model User {
   id               String         @id @default(cuid())
   role             UserRole       @default(STUDENT)
@@ -45,7 +50,7 @@ model User {
   studentProfile StudentProfile?
   handledVisits  ClinicVisit[] @relation("HandledByUser")
   auditLogs      AuditLog[]
-  issuedCertificates MedicalCertificate[]
+  issuedCertificates MedicalCertificate[] @relation("IssuedCertificates")
 
   @@index([role, clinicStaffType])
 
@@ -308,12 +313,15 @@ model MedicalCertificate {
   id               String         @id @default(cuid())
   studentProfileId String
   studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
-  doctorId         String
-  doctor           User           @relation(fields: [doctorId], references: [id])
-  certificateType  String         @default("CONSULTATION") // CONSULTATION, PHYSICAL_EXAM
-  remarks          String?        @db.Text
+  issuedById       String
+  issuedBy         User           @relation("IssuedCertificates", fields: [issuedById], references: [id])
+  issuedByRole     String         @default("DOCTOR") // DOCTOR, NURSE, DENTIST
+  certificateType       MedicalCertificateType @default(CONSULTATION)
+  diagnosisFindings     String?                @db.Text
+  recommendationsRemarks String?               @db.Text
+  remarks               String?                @db.Text
   issuedAt         DateTime       @default(now())
 
   @@index([studentProfileId, issuedAt])
-  @@index([doctorId, issuedAt])
+  @@index([issuedById, issuedAt])
 }

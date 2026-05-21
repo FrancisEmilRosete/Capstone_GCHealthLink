@@ -314,43 +314,47 @@ export default function AdminAnnouncementPage() {
 				) : filteredHistory.length === 0 ? (
 					<div className="p-10 text-center text-sm text-gray-400">No announcement logs found.</div>
 				) : (
-					<div className="divide-y divide-gray-100">
-						{pagedHistory.map((item) => {
-							const normalizedSeverity = (item.severity || 'INFO').toUpperCase();
-							return (
-								<div key={item.id} className="p-4">
-									<div className="flex items-center justify-between gap-3 flex-wrap">
-										<p className="text-sm font-semibold text-gray-900">{item.title}</p>
-										<div className="flex items-center gap-2">
-											<span className="text-[11px] font-semibold rounded-full border px-2 py-0.5 text-gray-700 bg-gray-50 border-gray-200">
-												{(item.targetDept || 'ALL').toUpperCase()}
-											</span>
-											<span className={`text-[11px] font-semibold rounded-full border px-2 py-0.5 ${SEVERITY_BADGE_CLASS[normalizedSeverity] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
-												{normalizedSeverity}
-											</span>
+					<>
+						<div className="divide-y divide-gray-100">
+							{pagedHistory.map((item) => {
+								const normalizedSeverity = (item.severity || 'INFO').toUpperCase();
+								return (
+									<div key={item.id} className="p-4">
+										<div className="flex items-center justify-between gap-3 flex-wrap">
+											<p className="text-sm font-semibold text-gray-900">{item.title}</p>
+											<div className="flex items-center gap-2">
+												<span className="text-[11px] font-semibold rounded-full border px-2 py-0.5 text-gray-700 bg-gray-50 border-gray-200">
+													{(item.targetDept || 'ALL').toUpperCase()}
+												</span>
+												<span className={`text-[11px] font-semibold rounded-full border px-2 py-0.5 ${SEVERITY_BADGE_CLASS[normalizedSeverity] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+													{normalizedSeverity}
+												</span>
+											</div>
 										</div>
+										<p className="text-sm text-gray-600 mt-1 leading-relaxed">{item.message}</p>
+										<p className="text-xs text-gray-400 mt-2">{formatDateTime(item.createdAt)}</p>
 									</div>
-									<p className="text-sm text-gray-600 mt-1 leading-relaxed">{item.message}</p>
-									<p className="text-xs text-gray-400 mt-2">{formatDateTime(item.createdAt)}</p>
-								</div>
-							);
-						})}
-					</div>
-						})}
+								);
+							})}
+						</div>
+						<div className="p-4 border-t border-gray-100">
+							<PaginationControls
+								page={currentPage}
+								totalPages={totalPages}
+								totalItems={filteredHistory.length}
+								pageSize={pageSize}
+								pageSizeOptions={[5, 10, 20, 30]}
+								itemLabel="announcements"
+								onPageChange={setPage}
+								onPageSizeChange={(next) => {
+									setPageSize(next);
+									setPage(1);
+								}}
+							/>
+						</div>
+					</>
+				)}
 			</div>
-					<PaginationControls
-						page={currentPage}
-						totalPages={totalPages}
-						totalItems={filteredHistory.length}
-						pageSize={pageSize}
-						pageSizeOptions={[5, 10, 20, 30]}
-						itemLabel="announcements"
-						onPageChange={setPage}
-						onPageSizeChange={(next) => {
-							setPageSize(next);
-							setPage(1);
-						}}
-					/>
 		</div>
 	);
 }

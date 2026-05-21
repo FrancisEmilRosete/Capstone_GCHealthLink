@@ -52,12 +52,6 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
         icon:  DashboardIcon,
       },
       {
-        id:    'announcement',
-        label: 'Announcement',
-        href:  '/dashboard/staff/announcement',
-        icon:  NotificationsIcon,
-      },
-      {
         id:    'students',
         label: 'Student',
         href:  '/dashboard/staff/students',

@@ -156,13 +156,7 @@ export default function LoginPage() {
           loading={loading}
         />
 
-        {/* Register link for new students */}
-        <p className="mt-6 text-center text-xs text-[hsl(var(--muted))]">
-          New student?{' '}
-          <Link href="/register" className="text-[hsl(var(--primary))] hover:text-[hsl(var(--primary-hover))] font-semibold hover:underline transition-colors">
-            Register your health record
-          </Link>
-        </p>
+        {/* Registration is disabled — accounts are managed via data migration only. */}
 
       </div>
     </div>

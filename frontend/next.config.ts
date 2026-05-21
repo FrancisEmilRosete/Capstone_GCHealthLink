@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withPWAInit from "next-pwa";
+import path from "node:path";
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -13,7 +14,20 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  reactStrictMode: true,
+  async redirects() {
+    return [
+      // Registration is disabled; redirect any direct visits to /register back to login.
+      { source: '/register', destination: '/login', permanent: false },
+    ];
+  },
+  // Strict mode in Next dev intentionally double-invokes effects,
+  // which doubles client data fetching and slows perceived rendering.
+  reactStrictMode: process.env.NODE_ENV === "production",
+  outputFileTracingRoot: path.join(__dirname, ".."),
+  experimental: {
+    // Work around intermittent Windows build-worker crashes during static generation.
+    cpus: process.platform === "win32" ? 2 : undefined,
+  },
 };
 
 export default withPWA(nextConfig);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { Search, ChevronRight, AlertCircle } from 'lucide-react';
 
@@ -43,9 +43,9 @@ export default function StaffRecordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSearch = async (value: string) => {
-    setQuery(value);
+  const doSearch = async (value: string) => {
     setError('');
 
     if (!value.trim()) {
@@ -80,6 +80,14 @@ export default function StaffRecordPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = (value: string) => {
+    setQuery(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      void doSearch(value);
+    }, 300);
   };
 
   const displayResults = useMemo(() => {

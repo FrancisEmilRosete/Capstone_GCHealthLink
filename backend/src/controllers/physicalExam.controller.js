@@ -491,16 +491,6 @@ const createPhysicalExam = async (req, res, next) => {
       });
     }
 
-    // Auto-generate Physical Exam Certificate
-    await prisma.medicalCertificate.create({
-      data: {
-        studentProfileId,
-        doctorId: req.user.userId,
-        certificateType: "PHYSICAL_EXAM",
-        remarks: "Auto-generated from completed physical examination.",
-      }
-    });
-
     await prisma.auditLog.create({
       data: {
         userId: req.user.userId,
