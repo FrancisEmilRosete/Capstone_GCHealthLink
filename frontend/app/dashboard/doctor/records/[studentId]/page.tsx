@@ -338,6 +338,7 @@ export default function DoctorRecordPage() {
     everyHours: '8',
   });
   const [medicineDraftError, setMedicineDraftError] = useState('');
+  const [isPrintingPrescription, setIsPrintingPrescription] = useState(false);
 
   const handlePhysicalExamChange = useCallback((field: string, value: string | boolean) => {
     if (!isEditMode || activeTab !== 'overview') return;
@@ -1015,6 +1016,21 @@ export default function DoctorRecordPage() {
     }, 1200);
   }, [medicalRecordFileName]);
 
+  const handlePrintPrescription = useCallback(() => {
+    if (!record) return;
+    setIsPrintingPrescription(true);
+    const originalTitle = document.title;
+    const lastName = sanitizeFilePart(record.lastName, 'LastName');
+    const firstName = sanitizeFilePart(record.firstName, 'FirstName');
+    document.title = `${lastName}-${firstName}_Prescription`;
+
+    window.setTimeout(() => {
+      window.print();
+      setIsPrintingPrescription(false);
+      document.title = originalTitle;
+    }, 150);
+  }, [record]);
+
   useEffect(() => {
     if (!canEditCurrentTab && isEditMode) {
       setIsEditMode(false);
@@ -1096,7 +1112,7 @@ export default function DoctorRecordPage() {
   return (
     <div className="bg-slate-50 min-h-screen pb-32 print:bg-white print:pb-0 print:w-full print:m-0">
       {/* Print-Only Legal Document */}
-      <div className="hidden print:block px-8 py-6 text-black">
+      <div id="print-medical-record" className="hidden print:block px-8 py-6 text-black">
         <div className="flex items-start gap-4 border-b border-black pb-3">
           <div className="flex items-center gap-2 min-w-[110px]">
             <Image src="/icons/gc-logo.png" alt="GC Logo" width={44} height={44} />
@@ -1274,6 +1290,113 @@ export default function DoctorRecordPage() {
         </div>
       </div>
 
+      {/* Print-Only Prescription (5.5" x 8.5" Half-Letter size) */}
+      {record && (
+        <div id="print-prescription" className="hidden print:block w-full text-black font-sans p-6 bg-white">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-4">
+            <div className="space-y-0.5">
+              <h3 className="text-xl font-extrabold text-blue-900 tracking-tighter">GC-HEALTHLINK</h3>
+              <p className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Medical Clinic & Wellness</p>
+            </div>
+            <div className="text-right space-y-0.5">
+              <p className="text-xs font-bold text-slate-800">Dr. Juan Dela Cruz, MD</p>
+              <p className="text-[8px] text-slate-500 font-medium">License No: 123456</p>
+              <p className="text-[8px] text-slate-500 font-medium">PTR No: 7890123</p>
+            </div>
+          </div>
+
+          {/* Patient Details */}
+          <div className="grid grid-cols-12 gap-2 text-xs border-b border-slate-200 pb-3 mb-6">
+            <div className="col-span-7">
+              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold block">Patient Name</span>
+              <span className="font-serif text-sm font-bold italic text-slate-800">{record.lastName}, {record.firstName}</span>
+            </div>
+            <div className="col-span-2 text-center">
+              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold block">Age</span>
+              <span className="font-serif text-sm font-bold text-slate-800">{record.age || 'N/A'}</span>
+            </div>
+            <div className="col-span-3 text-right">
+              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold block">Date</span>
+              <span className="font-serif text-xs text-slate-800 font-semibold">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="min-h-[280px] relative mt-4">
+            {/* Rx watermark */}
+            <div className="absolute top-0 left-0 text-7xl font-serif italic text-slate-100/50 select-none pointer-events-none z-0">
+              Rx
+            </div>
+
+            <div className="relative z-10 pt-8 space-y-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 pb-1 text-slate-400 font-semibold text-[9px] uppercase tracking-wider">
+                    <th className="text-left pb-2">Medicine Name</th>
+                    <th className="text-left pb-2">Dosage</th>
+                    <th className="text-left pb-2">Frequency</th>
+                    <th className="text-right pb-2">Duration</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {medicines.map((med) => (
+                    <tr key={med.id} className="text-slate-800">
+                      <td className="py-2.5 font-bold">{med.name || '—'}</td>
+                      <td className="py-2.5 font-medium">{med.dosage || '—'}</td>
+                      <td className="py-2.5 font-medium">{med.frequency || '—'}</td>
+                      <td className="py-2.5 font-medium text-right">{med.duration || '—'}</td>
+                    </tr>
+                  ))}
+                  {medicines.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-6 text-center text-slate-400 italic">No medicines prescribed</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-slate-800 pt-4 flex justify-between items-center mt-6">
+            <div className="text-[7px] font-semibold text-slate-400 uppercase tracking-wider max-w-[180px]">
+              * VALID FOR 30 DAYS FROM DATE OF ISSUE. KEEP FOR YOUR RECORDS.
+            </div>
+            <div className="text-right flex flex-col items-end">
+               <div className="w-28 border-b border-slate-400 mb-1" />
+               <p className="text-[8px] font-bold text-slate-700 uppercase tracking-widest">Physician Signature</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prescription Print Styles */}
+      <style>{`
+        @media print {
+          #print-prescription {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {isPrintingPrescription && (
+        <style>{`
+          @media print {
+            #print-medical-record {
+              display: none !important;
+            }
+            #print-prescription {
+              display: block !important;
+            }
+            @page {
+              size: 5.5in 8.5in;
+              margin: 0.4in;
+            }
+          }
+        `}</style>
+      )}
+
       {/* NEW: Patient Info Card - STICKY AT TOP */}
       <div className="sticky top-0 z-50 bg-white border-b border-slate-100 shadow-sm px-6 py-6 print:hidden">
         <div className="max-w-6xl mx-auto">
@@ -1302,22 +1425,10 @@ export default function DoctorRecordPage() {
         </div>
       </div>
 
-      {/* PHASE 1.4: Action Buttons - Save on left, Print on right */}
-      <div className="sticky top-[140px] z-40 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-6 py-3 print:hidden">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div />
-          <div className="flex gap-2">
-            <button onClick={handlePrintMedicalRecord} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all">
-              <Printer size={16} /> Print
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Navigation Tabs */}
-      <div className="sticky top-[220px] z-40 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-6 py-4 print:hidden">
+      <div className="sticky top-[140px] z-40 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-6 py-4 print:hidden">
         <div className="max-w-6xl mx-auto">
-          <div className={`${isNurseSideRecord ? 'grid grid-cols-3 max-w-2xl mx-auto' : 'flex'} gap-1 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm w-full overflow-x-auto`}>
+          <div className={`${isNurseSideRecord ? 'grid grid-cols-3 max-w-2xl mx-auto' : 'flex justify-start md:justify-center md:max-w-fit mx-auto'} gap-2 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm w-full overflow-x-auto`}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -1437,21 +1548,29 @@ export default function DoctorRecordPage() {
                 <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-base font-bold text-slate-800">Medical Record</h3>
-                    {canEditCurrentTab && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => {
-                          if (!isEditMode) {
-                            setIsEditMode(true);
-                            return;
-                          }
-                          setShowSaveConfirmation(true);
-                        }}
-                        disabled={isSaving}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={handlePrintMedicalRecord}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all"
                       >
-                        <Save size={16} /> {isSaving ? 'Saving...' : isEditMode ? 'Save Updates' : 'Update Record'}
+                        <Printer size={16} /> Print
                       </button>
-                    )}
+                      {canEditCurrentTab && (
+                        <button
+                          onClick={() => {
+                            if (!isEditMode) {
+                              setIsEditMode(true);
+                              return;
+                            }
+                            setShowSaveConfirmation(true);
+                          }}
+                          disabled={isSaving}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Save size={16} /> {isSaving ? 'Saving...' : isEditMode ? 'Save Updates' : 'Update Record'}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-4">
@@ -1673,7 +1792,13 @@ export default function DoctorRecordPage() {
               </div>
             ) : (
               <div className="space-y-12">
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={handlePrintMedicalRecord}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all"
+                  >
+                    <Printer size={16} /> Print
+                  </button>
                   {canEditCurrentTab && (
                     <button
                       onClick={() => {
@@ -2012,9 +2137,8 @@ export default function DoctorRecordPage() {
                 }}
                 onUpdateMedicine={(id, f, v) => setMedicines(prev => prev.map(m => m.id === id ? { ...m, [f]: v } : m))}
                 onDeleteMedicine={(id) => setMedicines(prev => prev.filter(m => m.id !== id))}
-                onPrint={handlePrintMedicalRecord}
+                onPrint={handlePrintPrescription}
                 onDownload={() => alert('PDF Generation')}
-                onSave={() => alert('Saved!')}
               />
             </div>
           )}

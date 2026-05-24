@@ -21,7 +21,7 @@ interface PrescriptionPadProps {
   onDeleteMedicine: (id: string) => void;
   onPrint: () => void;
   onDownload: () => void;
-  onSave: () => void;
+  onSave?: () => void;
 }
 
 const PrescriptionPad: React.FC<PrescriptionPadProps> = ({ 
@@ -42,12 +42,14 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
           >
             <Printer size={18} /> Print Rx
           </button>
-          <button
-            onClick={onSave}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all"
-          >
-            <Save size={18} /> Save & Send
-          </button>
+          {onSave && (
+            <button
+              onClick={onSave}
+              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all"
+            >
+              <Save size={18} /> Save & Send
+            </button>
+          )}
         </div>
       </div>
 

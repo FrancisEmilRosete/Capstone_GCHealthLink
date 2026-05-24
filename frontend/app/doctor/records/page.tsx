@@ -248,7 +248,6 @@ const DoctorRecordsPage = () => {
             onDeleteMedicine={deleteMedicine}
             onPrint={() => window.print()}
             onDownload={() => alert('Downloading PDF...')}
-            onSave={() => alert('Prescription saved!')}
           />
         </section>
       </main>

@@ -226,7 +226,7 @@ export default function StaffStudentsPage() {
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/dashboard/doctor/records/${encodeURIComponent(student.studentNumber)}?returnTo=${encodeURIComponent('/dashboard/doctor/students')}`}
-                      className="inline-flex rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-teal-300 hover:text-teal-700"
+                      className="inline-flex rounded-lg border border-gray-200 w-32 justify-center py-1.5 text-xs font-semibold text-gray-700 hover:border-teal-300 hover:text-teal-700"
                     >
                       View Record
                     </Link>

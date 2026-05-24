@@ -265,7 +265,6 @@ const PatientProfilePage = () => {
                 }}
                 onPrint={() => window.print()}
                 onDownload={() => {}}
-                onSave={() => {}}
               />
             </div>
           )}

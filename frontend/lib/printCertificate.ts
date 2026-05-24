@@ -32,26 +32,19 @@ function escapeHtml(text: string): string {
 export function printCertificate(cert: PrintableCertificate): void {
   const isPhysical = cert.certificateType === 'PHYSICAL_EXAM';
 
-  const certTitle = isPhysical
-    ? 'MEDICAL CERTIFICATE'
-    : 'MEDICAL CERTIFICATE';
-
-  const certSubtitle = isPhysical
-    ? 'This is to certify that the below-named student has undergone a physical examination and the findings are as follows:'
-    : 'This is to certify that the below-named student was examined at the clinic and found to have the following condition:';
-
-  const findingsLabel = isPhysical
-    ? 'Physical Examination Findings'
-    : 'Diagnosis / Clinical Findings';
-
-  const formattedDate = new Date(cert.issuedAt).toLocaleDateString('en-PH', {
+  const formattedDate = new Date(cert.issuedAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
 
-  const typeLabel = isPhysical ? 'PHYSICAL EXAMINATION' : 'CONSULTATION';
-  const typeColor = isPhysical ? '#1e40af' : '#0f766e';
+  const statementText = isPhysical
+    ? 'This is to certify that the below-named student has undergone a physical examination and the findings are as follows:'
+    : 'The student was seen by the college physician/ nurse on duty:';
+
+  const designationText = (cert.issuedByRole || '').toUpperCase() === 'NURSE' || (cert.issuedByRole || '').toUpperCase() === 'CLINIC_STAFF'
+    ? 'College Nurse'
+    : 'College Physician';
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -60,145 +53,173 @@ export function printCertificate(cert: PrintableCertificate): void {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Medical Certificate &mdash; ${escapeHtml(cert.student)}</title>
   <style>
-    @page { size: A4 portrait; margin: 2.2cm 2cm; }
+    @page {
+      size: 5.5in 8.5in;
+      margin: 0.4in;
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Times New Roman', Times, serif;
-      font-size: 11.5pt;
-      color: #111;
+      font-size: 10pt;
+      color: #000;
       background: #fff;
+      line-height: 1.4;
     }
-    .page { max-width: 680px; margin: 0 auto; }
+    .page {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
 
     /* ── Header ── */
     .header {
+      display: flex;
+      align-items: flex-start;
+      border-bottom: 2px solid #000;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    .header-logo-left {
+      width: 50px;
+      height: 50px;
+      margin-right: 10px;
+    }
+    .header-text {
+      flex: 1;
       text-align: center;
-      padding-bottom: 14px;
-      border-bottom: 3px double #1e3a5f;
-      margin-bottom: 22px;
     }
-    .header .logo-line {
-      font-size: 7pt;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: #888;
-      margin-bottom: 6px;
-    }
-    .header .clinic-name {
-      font-size: 18pt;
+    .header-text h1 {
+      font-size: 13pt;
       font-weight: bold;
       text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: #1e3a5f;
+      margin: 0;
+      padding: 0;
     }
-    .header .clinic-sub {
+    .header-text p.address {
+      font-size: 7.5pt;
+      color: #333;
+      margin-top: 2px;
+      line-height: 1.1;
+    }
+    .header-text p.contact {
+      font-size: 7.5pt;
+      color: #333;
+      margin-top: 1px;
+      line-height: 1.1;
+    }
+    .header-text p.unit {
       font-size: 10pt;
-      color: #555;
-      margin-top: 3px;
+      font-weight: bold;
+      color: #065f46; /* teal */
+      text-transform: uppercase;
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+    }
+    .header-logos-right {
+      display: flex;
+      gap: 3px;
+      margin-left: 10px;
+    }
+    .header-logos-right img {
+      width: 50px;
+      height: 50px;
     }
 
-    /* ── Certificate title ── */
-    .cert-title {
+    /* ── Title ── */
+    .title-container {
       text-align: center;
+      margin: 12px 0;
+    }
+    .title-container h2 {
       font-size: 14pt;
       font-weight: bold;
       text-decoration: underline;
-      letter-spacing: 2px;
-      margin: 20px 0 6px;
       text-transform: uppercase;
+      letter-spacing: 1px;
     }
-    .cert-type-badge {
-      text-align: center;
-      display: inline-block;
-      width: 100%;
-      font-size: 8.5pt;
+
+    /* ── Date ── */
+    .date-row {
+      display: flex;
+      justify-content: flex-end;
+      font-size: 10pt;
+      margin-bottom: 10px;
+    }
+    .underline-value {
       font-weight: bold;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: ${typeColor};
-      border: 1px solid ${typeColor};
-      border-radius: 3px;
-      padding: 2px 10px;
-      margin-bottom: 18px;
+      text-decoration: underline;
+      padding: 0 4px;
     }
 
-    /* ── Body text ── */
-    .subtitle {
-      font-size: 10.5pt;
-      line-height: 1.7;
-      margin-bottom: 18px;
-      color: #333;
-      font-style: italic;
+    /* ── Grid Fields ── */
+    .fields-container {
+      margin-bottom: 15px;
     }
-
-    /* ── Student info box ── */
-    .student-box {
-      border: 1px solid #b0bec5;
-      padding: 12px 16px;
-      margin-bottom: 20px;
-      background: #f8fafb;
-      border-radius: 4px;
-    }
-    .info-row { display: flex; gap: 32px; margin-top: 10px; flex-wrap: wrap; }
-    .field-label {
-      font-size: 8pt;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-    }
-    .field-value { font-size: 11.5pt; font-weight: bold; margin-top: 2px; }
-
-    /* ── Sections ── */
-    .section { margin-bottom: 18px; }
-    .section-title {
-      font-size: 9pt;
-      font-weight: bold;
-      text-transform: uppercase;
-      color: ${typeColor};
-      letter-spacing: 0.8px;
-      border-bottom: 1px solid #dde;
-      padding-bottom: 4px;
-      margin-bottom: 8px;
-    }
-    .section-content {
-      font-size: 11pt;
-      line-height: 1.75;
-      min-height: 2em;
-      padding: 6px 0;
-      color: #222;
-    }
-    .section-empty { color: #aaa; font-style: italic; }
-
-    /* ── Signature area ── */
-    .signature-area {
-      margin-top: 44px;
+    .field-row {
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
-      gap: 24px;
+      gap: 15px;
+      margin-bottom: 8px;
+      font-size: 10pt;
     }
-    .meta-block { font-size: 10pt; color: #444; line-height: 2; }
-    .meta-block strong { color: #111; }
-    .sig-block { text-align: center; min-width: 210px; }
-    .sig-spacer { height: 44px; }
-    .sig-line {
-      border-top: 1.5px solid #111;
-      padding-top: 6px;
-      font-size: 11pt;
-      font-weight: bold;
-      color: #111;
+    .flex-fill {
+      flex: 1;
     }
-    .sig-sub { font-size: 8.5pt; color: #666; margin-top: 3px; }
+    .w-16 { width: 64px; }
+    .w-28 { width: 112px; }
+    .w-36 { width: 144px; }
+    .w-48 { width: 192px; }
 
-    /* ── Footer ── */
-    .footer {
-      margin-top: 32px;
-      text-align: center;
-      font-size: 8pt;
-      color: #aaa;
-      border-top: 1px solid #eee;
-      padding-top: 10px;
+    /* ── Content ── */
+    .statement {
       font-style: italic;
+      font-family: sans-serif;
+      font-size: 9pt;
+      color: #333;
+      margin-bottom: 12px;
+    }
+    .content-section {
+      margin-bottom: 12px;
+    }
+    .content-section p.label {
+      font-weight: bold;
+      font-size: 10pt;
+      margin-bottom: 2px;
+    }
+    .content-section p.value {
+      text-decoration: underline;
+      line-height: 1.8;
+      padding-left: 15px;
+      font-size: 10pt;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    /* ── Signatures ── */
+    .signatures-row {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding: 0 10px;
+    }
+    .signature-block {
+      text-align: center;
+      width: 180px;
+    }
+    .signature-block p.name {
+      font-weight: bold;
+      text-decoration: underline;
+      text-transform: uppercase;
+      font-size: 10pt;
+    }
+    .signature-block p.sub {
+      font-size: 8pt;
+      color: #555;
+      margin-top: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     @media print {
@@ -208,72 +229,87 @@ export function printCertificate(cert: PrintableCertificate): void {
 </head>
 <body>
   <div class="page">
-
-    <div class="header">
-      <div class="logo-line">Republic of the Philippines &mdash; Student Health Services</div>
-      <div class="clinic-name">GC HealthLink Clinic</div>
-      <div class="clinic-sub">Guidance &amp; Clinic Office &mdash; Health and Wellness Division</div>
-    </div>
-
-    <div class="cert-title">${certTitle}</div>
-    <div style="text-align:center">
-      <span class="cert-type-badge">Type: ${typeLabel}</span>
-    </div>
-
-    <p class="subtitle">${certSubtitle}</p>
-
-    <div class="student-box">
-      <div>
-        <div class="field-label">Student Name</div>
-        <div class="field-value">${escapeHtml(cert.student)}</div>
-      </div>
-      <div class="info-row">
-        <div>
-          <div class="field-label">Student ID</div>
-          <div class="field-value">${escapeHtml(cert.studentId)}</div>
+    <div>
+      <!-- Header -->
+      <div class="header">
+        <img src="/icons/gc-logo.png" alt="GC Logo" class="header-logo-left" />
+        <div class="header-text">
+          <h1>Gordon College</h1>
+          <p class="address">Olongapo City Sports Complex, Donor Street, East Tapinac, Olongapo City 2200</p>
+          <p class="contact">Tel. No.: (047) 222-4080 | www.gordoncollege.edu.ph</p>
+          <p class="unit">Health Services Unit</p>
         </div>
-        <div>
-          <div class="field-label">Course / Department</div>
-          <div class="field-value">${escapeHtml(cert.course)}</div>
+        <div class="header-logos-right">
+          <img src="/icons/gc-logo.png" alt="GC Logo" />
+          <img src="/icons/clinic-logo.png" alt="Clinic Logo" />
         </div>
       </div>
-    </div>
 
-    <div class="section">
-      <div class="section-title">${findingsLabel}</div>
-      <div class="section-content">
-        ${cert.diagnosisFindings
-          ? escapeHtml(cert.diagnosisFindings)
-          : '<span class="section-empty">No findings recorded.</span>'}
+      <!-- Title -->
+      <div class="title-container">
+        <h2>Medical Certificate</h2>
+      </div>
+
+      <!-- Date -->
+      <div class="date-row">
+        <p>Date: <span class="underline-value">${escapeHtml(formattedDate)}</span></p>
+      </div>
+
+      <!-- Patient Details -->
+      <div class="fields-container">
+        <div class="field-row">
+          <div class="flex-fill">
+            Name: <span class="underline-value">${escapeHtml(cert.student)}</span>
+          </div>
+          <div class="w-16">
+            Age: <span class="underline-value">N/A</span>
+          </div>
+          <div class="w-36">
+            Status: <span class="underline-value">Student</span>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="flex-fill">
+            Department: <span class="underline-value">${escapeHtml(cert.course || 'N/A')}</span>
+          </div>
+          <div class="w-48">
+            Sex: ( ) Male &nbsp;( ) Female
+          </div>
+          <div class="w-48">
+            Date of Birth: <span class="underline-value">________________</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Body Statement -->
+      <p class="statement">${escapeHtml(statementText)}</p>
+
+      <!-- Diagnosis / For -->
+      <div class="content-section">
+        <p class="label">For:</p>
+        <p class="value">${escapeHtml(cert.diagnosisFindings) || '____________________________________________________________________________________'}</p>
+      </div>
+
+      <!-- Remarks -->
+      <div class="content-section">
+        <p class="label">Remarks:</p>
+        <p class="value">${escapeHtml(cert.recommendationsRemarks) || '____________________________________________________________________________________'}</p>
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Recommendations / Remarks</div>
-      <div class="section-content">
-        ${cert.recommendationsRemarks
-          ? escapeHtml(cert.recommendationsRemarks)
-          : '<span class="section-empty">No recommendations recorded.</span>'}
+    <!-- Signatures -->
+    <div class="signatures-row">
+      <div class="signature-block">
+        <p class="name">${escapeHtml(cert.issuedBy)}</p>
+        <p class="sub">Signature Over Printed Name</p>
+      </div>
+      
+      <div class="signature-block">
+        <p class="name">${escapeHtml(designationText)}</p>
+        <p class="sub">Designation</p>
       </div>
     </div>
-
-    <div class="signature-area">
-      <div class="meta-block">
-        <div><strong>Date Issued:</strong> ${formattedDate}</div>
-        <div><strong>Reference No.:</strong> ${cert.id.slice(-10).toUpperCase()}</div>
-      </div>
-      <div class="sig-block">
-        <div class="sig-spacer"></div>
-        <div class="sig-line">${escapeHtml(cert.issuedBy)}</div>
-        <div class="sig-sub">${(cert.issuedByRole || '').toUpperCase() === 'NURSE' ? 'Clinic Nurse' : 'Clinic Physician'} / Authorized Signatory</div>
-      </div>
-    </div>
-
-    <div class="footer">
-      This certificate is computer-generated and valid without a wet signature unless otherwise indicated. &bull;
-      GC HealthLink System &bull; ${new Date().getFullYear()}
-    </div>
-
   </div>
 
   <script>
@@ -287,7 +323,6 @@ export function printCertificate(cert: PrintableCertificate): void {
 
   const popup = window.open('', '_blank', 'width=860,height=1120,scrollbars=yes');
   if (!popup) {
-    // eslint-disable-next-line no-alert
     alert('Pop-up blocked. Please allow pop-ups for this site to enable printing.');
     return;
   }

@@ -8,6 +8,8 @@ import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import PhysicalExamModal, { type PhysicalExamRecordFormData } from '@/components/modals/PhysicalExamModal';
 import ConsultationModal, { type ConsultationForm, type InventoryOption } from '@/components/modals/ConsultationModal';
+import MedicalCertificateModal from '@/components/modals/MedicalCertificateModal';
+import { FileText } from 'lucide-react';
 
 const QrScannerInput = dynamic(() => import('@/components/scanner/QrCameraScanner'), {
   ssr: false,
@@ -345,6 +347,8 @@ export default function ScannerPage() {
 
   const [showExamModal, setShowExamModal] = useState(false);
   const [showConsultModal, setShowConsultModal] = useState(false);
+  const [showCertModal, setShowCertModal] = useState(false);
+  const [selectedCertType, setSelectedCertType] = useState<'CONSULTATION' | 'PHYSICAL_EXAM'>('CONSULTATION');
   const [consultInitialValues, setConsultInitialValues] = useState<Partial<ConsultationForm> | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -1034,6 +1038,15 @@ export default function ScannerPage() {
         />
       )}
 
+      {showCertModal && foundStudent && (
+        <MedicalCertificateModal
+          isOpen={showCertModal}
+          onClose={() => setShowCertModal(false)}
+          student={foundStudent}
+          certificateType={selectedCertType}
+        />
+      )}
+
       <div
         aria-live="polite"
         className={`fixed top-4 right-4 z-50 flex items-center gap-2.5 text-sm font-bold px-4 py-3 rounded-xl shadow-lg transition-all duration-300 ${
@@ -1136,6 +1149,33 @@ export default function ScannerPage() {
               View Record
             </button>
           </div>
+
+          {/* Medical Certificate Options */}
+          {!isDentalScanner && (
+            <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-100">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Medical Certificates</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={() => {
+                    setSelectedCertType('CONSULTATION');
+                    setShowCertModal(true);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-3 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/10"
+                >
+                  <FileText size={14} /> Give Med Cert (Consultation)
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedCertType('PHYSICAL_EXAM');
+                    setShowCertModal(true);
+                  }}
+                  className="border-2 border-emerald-600 text-emerald-600 hover:bg-emerald-50 font-semibold text-xs px-3 py-2.5 rounded-xl transition-colors bg-white flex items-center justify-center gap-1.5"
+                >
+                  <FileText size={14} /> Give Med Cert (Physical Exam)
+                </button>
+              </div>
+            </div>
+          )}
 
           {certificateStatus && (
             <div className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
