@@ -64,6 +64,8 @@ function Field({
   as = 'input',
   type = 'text',
   rows = 3,
+  min,
+  max,
 }: {
   label: string;
   value: string;
@@ -72,6 +74,8 @@ function Field({
   as?: 'input' | 'textarea';
   type?: string;
   rows?: number;
+  min?: string;
+  max?: string;
 }) {
   const inputId = useId();
   return (
@@ -92,6 +96,8 @@ function Field({
           type={type}
           value={value}
           placeholder={placeholder}
+          min={min}
+          max={max}
           onChange={(event) => onChange?.(event.target.value)}
           className={INPUT_CLASS}
         />
@@ -366,7 +372,7 @@ export default function ConsultationModal({ patient, inventoryOptions, onClose, 
                   {form.addFollowUp && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Field label="Follow Up Date" type="date" value={form.followUpDate} onChange={set('followUpDate')} />
-                      <Field label="Follow Up Time" type="time" value={form.followUpTime} onChange={set('followUpTime')} />
+                      <Field label="Follow Up Time" type="time" min="07:00" max="19:00" value={form.followUpTime} onChange={set('followUpTime')} />
                     </div>
                   )}
                 </div>

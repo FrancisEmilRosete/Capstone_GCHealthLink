@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PendingCertificateRequest } from '@/components/dashboard/staff/CertificateApprovalTable';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { formatTime12Hour } from '@/lib/time';
 
 type Level = 'critical' | 'warning' | 'info';
 type Category = 'appointments' | 'stock' | 'certificates';
@@ -43,6 +44,7 @@ interface InventoryItem {
   currentStock: number;
   reorderThreshold: number;
   unit: string;
+  expirationDate?: string | null;
 }
 
 interface InventoryResponse {
@@ -66,7 +68,7 @@ const LEVEL_STYLE: Record<Level, { badge: string; icon: string; border: string }
 
 const CATEGORY_LABEL: Record<Category, string> = {
   appointments: 'New Appointments',
-  stock: 'Low Inventory',
+  stock: 'Supply Alerts',
   certificates: 'Certificate Approvals',
 };
 
@@ -80,7 +82,7 @@ function formatDateTime(dateIso: string, preferredTime?: string) {
     : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   if (preferredTime && preferredTime.trim()) {
-    return `${dateLabel} at ${preferredTime.trim()}`;
+    return `${dateLabel} at ${formatTime12Hour(preferredTime.trim())}`;
   }
 
   return dateLabel;
@@ -102,7 +104,7 @@ function AlertIcon({ level }: { level: Level }) {
   );
 }
 
-export default function DoctorNotificationsPage() {
+export default function NotificationsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<'all' | Category>('all');
@@ -179,17 +181,36 @@ export default function DoctorNotificationsPage() {
         read: false,
       }));
 
+      const now = new Date();
       const inventoryAlerts: Alert[] = (inventoryResponse.data || [])
-        .filter((item) => item.currentStock <= item.reorderThreshold)
-        .map((item) => ({
-          id: `stock-${item.id}`,
-          level: item.currentStock === 0 ? 'critical' : 'warning',
-          category: 'stock',
-          title: `${item.itemName} ${item.currentStock === 0 ? 'Out of Stock' : 'Low Stock'}`,
-          message: `Current stock is ${item.currentStock} ${item.unit}. Reorder threshold is ${item.reorderThreshold}.`,
-          time: 'Inventory update',
-          read: false,
-        }));
+        .map((item) => {
+          const hasExpiration = Boolean(item.expirationDate);
+          const expirationDate = hasExpiration ? new Date(item.expirationDate as string) : null;
+          const isExpired = Boolean(expirationDate && !Number.isNaN(expirationDate.getTime()) && expirationDate < now);
+          const isOutOfStock = item.currentStock === 0;
+
+          if (!isOutOfStock && !isExpired) return null;
+
+          let title = `${item.itemName} Alert`;
+          if (isOutOfStock && isExpired) title = `${item.itemName} Out of Stock and Expired`;
+          else if (isOutOfStock) title = `${item.itemName} Out of Stock`;
+          else if (isExpired) title = `${item.itemName} Expired`;
+
+          const expiryText = expirationDate && !Number.isNaN(expirationDate.getTime())
+            ? expirationDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'N/A';
+
+          return {
+            id: `stock-${item.id}`,
+            level: isOutOfStock || isExpired ? 'critical' : 'warning',
+            category: 'stock' as const,
+            title,
+            message: `Current stock is ${item.currentStock} ${item.unit}. Reorder threshold is ${item.reorderThreshold}. Expiration date: ${expiryText}.`,
+            time: 'Inventory update',
+            read: false,
+          };
+        })
+        .filter((item): item is Alert => item !== null);
 
       const hydratedAlerts = [...certificateAlerts, ...appointmentAlerts, ...inventoryAlerts]
         .filter((item) => !dismissedSet.has(item.id))
@@ -253,7 +274,7 @@ export default function DoctorNotificationsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Doctor Notifications</h1>
+            <h1 className="text-xl font-bold text-gray-900">Notifications</h1>
             <p className="text-xs text-gray-400 mt-0.5">Operational alerts for appointments and clinic readiness</p>
           </div>
           {unread > 0 && (

@@ -12,6 +12,7 @@ import type { OutbreakForecastPoint } from '@/components/dashboard/admin/Outbrea
 import ResourcePredictionPanel, { type ProjectedSupplyRisk } from '@/components/dashboard/admin/ResourcePredictionPanel';
 import WellnessTrendsWidget from '@/components/dashboard/admin/WellnessTrendsWidget';
 import AiOutbreakForecastClient from '@/components/dashboard/admin/AiOutbreakForecastClient';
+import HealthConcernsByDepartmentCard from '@/components/dashboard/shared/HealthConcernsByDepartmentCard';
 
 // New UI Components
 import { StatCard } from '@/components/ui/StatCard';
@@ -54,6 +55,12 @@ interface AnalyticsData {
       suggestedRestockQty?: number;
       status?: 'critical' | 'warning';
     }>;
+  };
+  inventorySummary?: {
+    expired: number;
+    expiringSoon: number;
+    nearReorder: number;
+    outOfStock: number;
   };
 }
 
@@ -293,6 +300,8 @@ export default function AdminDashboard() {
     [data?.resourcePrediction?.projectedStockouts],
   );
 
+  const inventorySummary = data?.inventorySummary;
+
   const topConcern = topConcerns[0]?.tag || '-';
   const outbreakCount = Array.isArray(data?.outbreakWatch) ? data?.outbreakWatch.length : 0;
   
@@ -348,6 +357,24 @@ export default function AdminDashboard() {
           loading={loading}
         />
       </div>
+
+      {inventorySummary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard label="Expired Items" value={loading ? '...' : inventorySummary.expired} icon={<AlertTriangle className="h-5 w-5" />} loading={loading} />
+          <StatCard label="Expiring Soon" value={loading ? '...' : inventorySummary.expiringSoon} icon={<TrendingUp className="h-5 w-5" />} loading={loading} />
+          <StatCard label="Near Reorder" value={loading ? '...' : inventorySummary.nearReorder} icon={<Users className="h-5 w-5" />} loading={loading} />
+          <StatCard label="Out of Stock" value={loading ? '...' : inventorySummary.outOfStock} icon={<Activity className="h-5 w-5" />} loading={loading} />
+        </div>
+      )}
+
+      {inventorySummary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard label="Expired Items" value={inventorySummary.expired} icon={<AlertTriangle className="h-5 w-5" />} loading={loading} />
+          <StatCard label="Expiring Soon" value={inventorySummary.expiringSoon} icon={<TrendingUp className="h-5 w-5" />} loading={loading} />
+          <StatCard label="Near Reorder" value={inventorySummary.nearReorder} icon={<Users className="h-5 w-5" />} loading={loading} />
+          <StatCard label="Out of Stock" value={inventorySummary.outOfStock} icon={<Activity className="h-5 w-5" />} loading={loading} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card">
@@ -477,6 +504,8 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      <HealthConcernsByDepartmentCard />
     </div>
   );
 }

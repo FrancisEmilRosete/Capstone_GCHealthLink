@@ -7,9 +7,10 @@ import { usePathname } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
+import { formatTime12Hour } from '@/lib/time';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 
-type LogKind = 'consultation' | 'physical_exam';
+type LogKind = 'consultation' | 'physical_exam' | 'other_operation';
 
 interface VisitRecord {
   id: string;
@@ -32,6 +33,12 @@ interface VisitRecord {
     };
     quantity: number;
   }>;
+  handledBy?: {
+    id: string;
+    email?: string;
+    role?: string;
+    clinicStaffType?: string;
+  };
 }
 
 interface PhysicalExamRow {
@@ -58,6 +65,22 @@ interface PhysicalExamResponse {
   data: PhysicalExamRow[];
 }
 
+interface OtherOperationRow {
+  id: string;
+  action: string;
+  actionLabel: string;
+  timestamp: string;
+  targetId?: string | null;
+  metadata?: unknown;
+  actorName?: string;
+  actorRole?: string;
+}
+
+interface OtherOperationResponse {
+  success: boolean;
+  data: OtherOperationRow[];
+}
+
 interface UnifiedLogItem {
   id: string;
   studentNumber: string;
@@ -68,6 +91,12 @@ interface UnifiedLogItem {
   loggedAtIso: string;
   dateIso: string;
   visitTime?: string;
+  actorName: string;
+  actorRole: string;
+  operationLabel?: string;
+  action?: string;
+  targetId?: string;
+  metadata?: unknown;
   consultation?: VisitRecord;
   physicalExam?: PhysicalExamRow;
   parsedConsultation?: ParsedConsultationData;
@@ -113,6 +142,31 @@ interface VitalSnapshot {
   temperature?: string;
 }
 
+interface OtherOperationDetails {
+  title: string;
+  changedItem: string;
+  changeType: string;
+  previousValue: string;
+  newValue: string;
+  appointmentInfo: string;
+  recordReference: string;
+}
+
+interface OtherOperationMetadata {
+  entityType?: string;
+  appointmentId?: string;
+  studentProfileId?: string;
+  serviceType?: string;
+  preferredDate?: string;
+  preferredTime?: string;
+  changes?: {
+    status?: {
+      from?: string | null;
+      to?: string | null;
+    };
+  };
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
     month: 'short',
@@ -123,7 +177,153 @@ function formatDate(iso: string) {
 
 function formatTime(timeStr?: string) {
   if (!timeStr) return '';
-  return timeStr;
+  const trimmed = timeStr.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.includes('T')) {
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+  }
+
+  return formatTime12Hour(trimmed);
+}
+
+function formatActorName(email?: string, fallback = 'Clinic Staff') {
+  const value = (email || '').trim();
+  if (!value) return fallback;
+  const localPart = value.split('@')[0] || '';
+  const normalized = localPart.replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return value;
+  return normalized
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function formatRole(role?: string, clinicStaffType?: string) {
+  const normalized = (clinicStaffType || role || '').trim().toUpperCase();
+  if (normalized === 'NURSE') return 'Nurse';
+  if (normalized === 'DOCTOR') return 'Doctor';
+  if (normalized === 'DENTIST' || normalized === 'DENTAL') return 'Dentist';
+  if (normalized === 'ADMIN') return 'Admin';
+  if (normalized === 'CLINIC_STAFF') return 'Clinic Staff';
+  if (!normalized) return 'Clinic Staff';
+  return normalized.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatActionLabel(action?: string) {
+  const normalized = (action || '').trim();
+  if (!normalized) return 'Other Operation';
+  return normalized.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function toSentenceCase(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function formatChangeValue(value?: string | null) {
+  const normalized = (value || '').trim();
+  if (!normalized) return 'N/A';
+  return normalized
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function parseOtherOperationMetadata(raw: unknown): OtherOperationMetadata | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  return raw as OtherOperationMetadata;
+}
+
+function buildAppointmentInfo(metadata: OtherOperationMetadata | null) {
+  if (!metadata) return '';
+  const dateText = metadata.preferredDate ? formatDate(metadata.preferredDate) : '';
+  const timeText = (metadata.preferredTime || '').trim();
+  const serviceType = (metadata.serviceType || '').trim();
+
+  const dateAndTime = dateText && timeText
+    ? `${dateText} at ${timeText}`
+    : dateText || timeText;
+
+  if (dateAndTime && serviceType) {
+    return `${dateAndTime} (${serviceType})`;
+  }
+
+  return dateAndTime || serviceType;
+}
+
+function buildOtherOperationDetails(log: UnifiedLogItem): OtherOperationDetails {
+  const actionCode = (log.action || '').trim().toUpperCase();
+  const words = actionCode ? actionCode.split('_').filter(Boolean) : [];
+  const metadata = parseOtherOperationMetadata(log.metadata);
+  const statusChange = metadata?.changes?.status;
+
+  if (statusChange && (statusChange.from !== undefined || statusChange.to !== undefined)) {
+    return {
+      title: log.operationLabel || formatActionLabel(log.action),
+      changedItem: 'Appointment Status',
+      changeType: 'Updated',
+      previousValue: formatChangeValue(statusChange.from),
+      newValue: formatChangeValue(statusChange.to),
+      appointmentInfo: buildAppointmentInfo(metadata),
+      recordReference: (metadata?.appointmentId || log.targetId || '').trim(),
+    };
+  }
+
+  const changeTypeMap: Record<string, string> = {
+    CREATE: 'Created',
+    CREATED: 'Created',
+    UPDATE: 'Updated',
+    UPDATED: 'Updated',
+    DELETE: 'Deleted',
+    DELETED: 'Deleted',
+    RECORD: 'Recorded',
+    RECORDED: 'Recorded',
+    ISSUE: 'Issued',
+    ISSUED: 'Issued',
+    APPROVE: 'Approved',
+    APPROVED: 'Approved',
+    REJECT: 'Rejected',
+    REJECTED: 'Rejected',
+    CANCEL: 'Cancelled',
+    CANCELLED: 'Cancelled',
+    UPLOAD: 'Uploaded',
+    UPLOADED: 'Uploaded',
+    GENERATE: 'Generated',
+    GENERATED: 'Generated',
+  };
+
+  const firstVerbIndex = words.findIndex((word) => Boolean(changeTypeMap[word]));
+  const changeType = firstVerbIndex >= 0 ? changeTypeMap[words[firstVerbIndex]] : 'Updated';
+  const changedWords = words
+    .filter((_, index) => index !== firstVerbIndex)
+    .map((word) => toSentenceCase(word));
+  const changedItem = changedWords.length > 0 ? changedWords.join(' ') : 'Record';
+  const title = log.operationLabel || formatActionLabel(log.action);
+
+  return {
+    title,
+    changedItem,
+    changeType,
+    previousValue: 'N/A',
+    newValue: 'N/A',
+    appointmentInfo: buildAppointmentInfo(metadata),
+    recordReference: (log.targetId || '').trim(),
+  };
+}
+
+function hasMeaningfulText(value?: string | null) {
+  const normalized = (value || '').trim().toUpperCase();
+  return normalized !== '' && normalized !== 'N/A' && normalized !== 'NULL';
 }
 
 function parseConsultationData(raw?: string): ParsedConsultationData {
@@ -321,9 +521,11 @@ export default function DoctorRecordsPage() {
     try {
       setError('');
       const ts = Date.now();
-      const [visitsResult, physicalResult] = await Promise.allSettled([
+      const activityStaffType = isDentalLogs ? 'DENTIST' : 'DOCTOR';
+      const [visitsResult, physicalResult, otherResult] = await Promise.allSettled([
         api.get<VisitsResponse>(`/clinic/visits?limit=500&_ts=${ts}`, token),
         api.get<PhysicalExamResponse>(`/physical-exams?limit=500&_ts=${ts}`, token),
+        api.get<OtherOperationResponse>(`/clinic/activity-logs?staffType=${activityStaffType}&limit=500&_ts=${ts}`, token),
       ]);
 
       if (visitsResult.status !== 'fulfilled') {
@@ -338,29 +540,99 @@ export default function DoctorRecordsPage() {
       const physicalResponse = physicalResult.status === 'fulfilled'
         ? physicalResult.value
         : { success: false, data: [] as PhysicalExamRow[] };
+      const otherResponse = otherResult.status === 'fulfilled'
+        ? otherResult.value
+        : { success: false, data: [] as OtherOperationRow[] };
 
-      const visitLogs: UnifiedLogItem[] = (visitsResponse.data || [])
+      const visitCandidates = (visitsResponse.data || [])
         .filter((visit) => !(visit.studentProfile.studentNumber || '').toUpperCase().startsWith('EMP'))
+        .filter((visit) => {
+          const parsed = parseConsultationData(visit.chiefComplaintEnc);
+          const isDental = isDentalConsultation(visit, parsed);
+          return isDentalLogs ? isDental : !isDental;
+        })
         .map((visit) => {
           const parsed = parseConsultationData(visit.chiefComplaintEnc);
+          const actorName = formatActorName(visit.handledBy?.email);
+          const actorRole = formatRole(visit.handledBy?.role, visit.handledBy?.clinicStaffType);
+          const visitTimestamp = +new Date(visit.createdAt || visit.visitDate || new Date().toISOString());
+          const hasDiagnosisOrTreatment = hasMeaningfulText(parsed.diagnosis) || hasMeaningfulText(parsed.treatmentProvided);
+
           return {
-            id: `consult-${visit.id}`,
-            studentNumber: visit.studentProfile.studentNumber,
-            studentName: `${visit.studentProfile.firstName} ${visit.studentProfile.lastName}`,
-            department: visit.studentProfile.courseDept || 'N/A',
-            yearLevel: normalizeYearLevel(visit.studentProfile.yearLevel),
-            logType: 'consultation' as const,
-            loggedAtIso: visit.createdAt || visit.visitDate || new Date().toISOString(),
-            dateIso: visit.visitDate || visit.createdAt || new Date().toISOString(),
-            visitTime: visit.visitTime,
-            consultation: visit,
-            parsedConsultation: parsed,
+            visit,
+            parsed,
+            actorName,
+            actorRole,
+            visitTimestamp,
+            isNurseTriage: actorRole === 'Nurse' && !hasDiagnosisOrTreatment,
+            isDoctorFinal: actorRole === 'Doctor' && hasDiagnosisOrTreatment,
           };
-        })
-        .filter((item) => {
-          const isDental = isDentalConsultation(item.consultation as VisitRecord, item.parsedConsultation as ParsedConsultationData);
-          return isDentalLogs ? isDental : !isDental;
         });
+
+      const matchedNurseVisitIds = new Set<string>();
+      const representedDoctorVisitIds = new Set<string>();
+
+      const doctorFinalCandidates = visitCandidates
+        .filter((candidate) => candidate.isDoctorFinal)
+        .sort((a, b) => a.visitTimestamp - b.visitTimestamp);
+
+      const pairedDoctorLogs: UnifiedLogItem[] = doctorFinalCandidates.map((doctorCandidate) => {
+        representedDoctorVisitIds.add(doctorCandidate.visit.id);
+
+        const pairedNurse = visitCandidates
+          .filter((candidate) => (
+            candidate.isNurseTriage
+            && !matchedNurseVisitIds.has(candidate.visit.id)
+            && candidate.visit.studentProfile.studentNumber === doctorCandidate.visit.studentProfile.studentNumber
+            && toDateKey(candidate.visit.createdAt || candidate.visit.visitDate || '')
+              === toDateKey(doctorCandidate.visit.createdAt || doctorCandidate.visit.visitDate || '')
+            && candidate.visitTimestamp <= doctorCandidate.visitTimestamp
+          ))
+          .sort((a, b) => b.visitTimestamp - a.visitTimestamp)[0];
+
+        if (pairedNurse) {
+          matchedNurseVisitIds.add(pairedNurse.visit.id);
+        }
+
+        return {
+          id: `consult-${doctorCandidate.visit.id}`,
+          studentNumber: doctorCandidate.visit.studentProfile.studentNumber,
+          studentName: `${doctorCandidate.visit.studentProfile.firstName} ${doctorCandidate.visit.studentProfile.lastName}`,
+          department: doctorCandidate.visit.studentProfile.courseDept || 'N/A',
+          yearLevel: normalizeYearLevel(doctorCandidate.visit.studentProfile.yearLevel),
+          logType: 'consultation' as const,
+          loggedAtIso: doctorCandidate.visit.createdAt || doctorCandidate.visit.visitDate || new Date().toISOString(),
+          dateIso: doctorCandidate.visit.visitDate || doctorCandidate.visit.createdAt || new Date().toISOString(),
+          visitTime: doctorCandidate.visit.visitTime,
+          actorName: pairedNurse
+            ? `${pairedNurse.actorName} + ${doctorCandidate.actorName}`
+            : doctorCandidate.actorName,
+          actorRole: pairedNurse ? 'Nurse + Doctor' : doctorCandidate.actorRole,
+          consultation: doctorCandidate.visit,
+          parsedConsultation: doctorCandidate.parsed,
+        };
+      });
+
+      const remainingVisitLogs: UnifiedLogItem[] = visitCandidates
+        .filter((candidate) => !representedDoctorVisitIds.has(candidate.visit.id))
+        .filter((candidate) => !(candidate.isNurseTriage && matchedNurseVisitIds.has(candidate.visit.id)))
+        .map((candidate) => ({
+          id: `consult-${candidate.visit.id}`,
+          studentNumber: candidate.visit.studentProfile.studentNumber,
+          studentName: `${candidate.visit.studentProfile.firstName} ${candidate.visit.studentProfile.lastName}`,
+          department: candidate.visit.studentProfile.courseDept || 'N/A',
+          yearLevel: normalizeYearLevel(candidate.visit.studentProfile.yearLevel),
+          logType: 'consultation' as const,
+          loggedAtIso: candidate.visit.createdAt || candidate.visit.visitDate || new Date().toISOString(),
+          dateIso: candidate.visit.visitDate || candidate.visit.createdAt || new Date().toISOString(),
+          visitTime: candidate.visit.visitTime,
+          actorName: candidate.actorName,
+          actorRole: candidate.actorRole,
+          consultation: candidate.visit,
+          parsedConsultation: candidate.parsed,
+        }));
+
+      const visitLogs: UnifiedLogItem[] = [...pairedDoctorLogs, ...remainingVisitLogs];
 
       const physicalLogs: UnifiedLogItem[] = isDentalLogs ? [] : (physicalResponse.data || [])
         .filter((exam) => !(exam.studentNumber || '').toUpperCase().startsWith('EMP'))
@@ -373,10 +645,29 @@ export default function DoctorRecordsPage() {
           logType: 'physical_exam',
           loggedAtIso: exam.createdAt || exam.examDate,
           dateIso: exam.examDate,
+          actorName: exam.examinedBy?.trim() || 'Clinic Staff',
+          actorRole: isDentalLogs ? 'Dentist' : 'Doctor',
           physicalExam: exam,
         }));
 
-      const merged = [...visitLogs, ...physicalLogs].sort(
+      const otherLogs: UnifiedLogItem[] = (otherResponse.data || []).map((row) => ({
+        id: `other-${row.id}`,
+        studentNumber: row.targetId || 'N/A',
+        studentName: row.actionLabel || formatActionLabel(row.action),
+        department: 'N/A',
+        yearLevel: 'N/A',
+        logType: 'other_operation',
+        loggedAtIso: row.timestamp,
+        dateIso: row.timestamp,
+        actorName: row.actorName?.trim() || 'Clinic Staff',
+        actorRole: formatRole(row.actorRole),
+        operationLabel: row.actionLabel || formatActionLabel(row.action),
+        action: row.action,
+        targetId: row.targetId || undefined,
+        metadata: row.metadata,
+      }));
+
+      const merged = [...visitLogs, ...physicalLogs, ...otherLogs].sort(
         (a, b) => +new Date(b.loggedAtIso || 0) - +new Date(a.loggedAtIso || 0)
       );
 
@@ -429,7 +720,11 @@ export default function DoctorRecordsPage() {
 
   const filteredLogs = logs.filter((item) => {
     const q = searchStudent.toLowerCase().trim();
-    const matchesQuery = !q || item.studentName.toLowerCase().includes(q) || item.studentNumber.toLowerCase().includes(q);
+    const matchesQuery = !q
+      || item.studentName.toLowerCase().includes(q)
+      || item.studentNumber.toLowerCase().includes(q)
+      || item.actorName.toLowerCase().includes(q)
+      || (item.operationLabel || '').toLowerCase().includes(q);
     const matchesType = effectiveFilterType === 'all' || item.logType === effectiveFilterType;
     const matchesDate = !filterDate || toDateKey(item.loggedAtIso) === filterDate;
     const matchesDepartment = filterDepartment === 'all' || item.department === filterDepartment;
@@ -448,6 +743,9 @@ export default function DoctorRecordsPage() {
     () => filteredLogs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [filteredLogs, page],
   );
+  const selectedOtherDetails = selectedLog?.logType === 'other_operation'
+    ? buildOtherOperationDetails(selectedLog)
+    : null;
 
   const pagedGrouped = pagedLogs.reduce(
     (acc, item) => {
@@ -512,7 +810,7 @@ export default function DoctorRecordsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Logs</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {isDentalLogs ? 'Dental consultation logs.' : 'Consultation and physical examination logs.'}
+            {isDentalLogs ? 'Dental consultation and other operation logs.' : 'Consultation, physical examination, and other operation logs.'}
           </p>
           <button
             type="button"
@@ -584,9 +882,10 @@ export default function DoctorRecordsPage() {
                   className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
                   aria-label="Filter by log type"
                 >
-                  <option value="all">Consultation + Physical Exam</option>
+                  <option value="all">All Types</option>
                   <option value="consultation">Consultation</option>
                   <option value="physical_exam">Physical Exam</option>
+                  <option value="other_operation">Others</option>
                 </select>
               )}
 
@@ -625,20 +924,38 @@ export default function DoctorRecordsPage() {
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900">{item.studentName}</p>
-                            <p className="text-xs text-teal-600 font-medium">{item.studentNumber}</p>
-                            <p className="text-sm text-gray-700 mt-1.5">
-                              {isDentalLogs ? 'Dental Consultation' : item.logType === 'consultation' ? 'Consultation' : 'Physical Exam'}
-                            </p>
-                            {isDentalLogs && item.logType === 'consultation' && (
-                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                {displayOrFallback(getChiefComplaint(item), displayOrFallback(getConcernTag(item)))}
-                              </p>
+                            {item.logType === 'other_operation' ? (
+                              <>
+                                <p className="font-semibold text-gray-900">{item.operationLabel || 'Other Operation'}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  By: <span className="font-medium text-gray-700">{item.actorName}</span> ({item.actorRole})
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="font-semibold text-gray-900">{item.studentName}</p>
+                                <p className="text-xs text-teal-600 font-medium">{item.studentNumber}</p>
+                                <p className="text-sm text-gray-700 mt-1.5">
+                                  {isDentalLogs ? 'Dental Consultation' : item.logType === 'consultation' ? 'Consultation' : 'Physical Exam'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  By: <span className="font-medium text-gray-700">{item.actorName}</span> ({item.actorRole})
+                                </p>
+                                {isDentalLogs && item.logType === 'consultation' && (
+                                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                    {displayOrFallback(getChiefComplaint(item), displayOrFallback(getConcernTag(item)))}
+                                  </p>
+                                )}
+                              </>
                             )}
                           </div>
                           <div className="shrink-0 text-right flex flex-col items-end gap-1.5">
-                            <p className="text-xs text-gray-500">{formatTime(item.visitTime)}</p>
-                            {!isDentalLogs && (
+                            <p className="text-xs text-gray-500">
+                              {item.logType === 'other_operation'
+                                ? formatTime(item.loggedAtIso)
+                                : formatTime(item.visitTime)}
+                            </p>
+                            {!isDentalLogs && item.logType !== 'other_operation' && (
                               <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); handleOpenCertModal(item); }}
@@ -693,7 +1010,7 @@ export default function DoctorRecordsPage() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="px-5 py-4 border-b border-gray-100 bg-teal-50 flex items-center justify-between">
-              <p className="text-sm font-bold text-gray-900">Visit Details & Vitals</p>
+              <p className="text-sm font-bold text-gray-900">Log Details</p>
               <button
                 onClick={() => setSelectedLog(null)}
                 className="text-gray-400 hover:text-gray-600 text-lg"
@@ -704,32 +1021,95 @@ export default function DoctorRecordsPage() {
             </div>
 
             <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Student</p>
-                <p className="text-sm font-semibold text-gray-900 mt-1">{selectedLog.studentName}</p>
-                <p className="text-xs text-teal-600 font-medium">{selectedLog.studentNumber}</p>
+              {selectedLog.logType !== 'other_operation' ? (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Student</p>
+                  <p className="text-sm font-semibold text-gray-900 mt-1">{selectedLog.studentName}</p>
+                  <p className="text-xs text-teal-600 font-medium">{selectedLog.studentNumber}</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Operation</p>
+                  <p className="text-sm font-semibold text-gray-900 mt-1">{selectedOtherDetails?.title || 'Other Operation'}</p>
+                </div>
+              )}
+
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase">Performed By</p>
+                <p className="text-sm text-gray-900 font-medium mt-1">{selectedLog.actorName}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Role: {selectedLog.actorRole}</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase">Log Type</p>
-                  <p className="text-sm text-gray-900 font-medium mt-1">
-                    {isDentalLogs ? 'Dental Consultation' : selectedLog.logType === 'consultation' ? 'Consultation' : 'Physical Exam'}
-                  </p>
-                </div>
+                {selectedLog.logType !== 'other_operation' && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase">Log Type</p>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {isDentalLogs
+                        ? selectedLog.logType === 'other_operation' ? 'Other Operation' : 'Dental Consultation'
+                        : selectedLog.logType === 'consultation'
+                          ? 'Consultation'
+                          : selectedLog.logType === 'physical_exam'
+                            ? 'Physical Exam'
+                            : 'Other Operation'}
+                    </p>
+                  </div>
+                )}
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase">Date</p>
                   <p className="text-sm text-gray-900 font-medium mt-1">{formatDate(selectedLog.dateIso)}</p>
                 </div>
               </div>
 
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs font-semibold text-gray-500 uppercase">Visit Date & Time</p>
-                <p className="text-sm text-gray-900 font-medium mt-1">
-                  {formatDate(selectedLog.dateIso)}
-                  {selectedLog.visitTime && ` at ${selectedLog.visitTime}`}
-                </p>
-              </div>
+              {selectedLog.logType !== 'other_operation' && (
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Visit Date & Time</p>
+                  <p className="text-sm text-gray-900 font-medium mt-1">
+                    {formatDate(selectedLog.dateIso)}
+                    {selectedLog.visitTime && ` at ${formatTime12Hour(selectedLog.visitTime)}`}
+                  </p>
+                </div>
+              )}
+
+              {selectedLog.logType === 'other_operation' && selectedOtherDetails && (
+                <div className="bg-gray-50 rounded-lg p-3 space-y-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Changed Data</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase">Changed Item</p>
+                      <p className="text-sm text-gray-900 mt-1">{selectedOtherDetails.changedItem}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase">Change Type</p>
+                      <p className="text-sm text-gray-900 mt-1">{selectedOtherDetails.changeType}</p>
+                    </div>
+                  </div>
+                  {(selectedOtherDetails.previousValue !== 'N/A' || selectedOtherDetails.newValue !== 'N/A') && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase">Previous Value</p>
+                        <p className="text-sm text-gray-900 mt-1">{selectedOtherDetails.previousValue}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase">New Value</p>
+                        <p className="text-sm text-gray-900 mt-1">{selectedOtherDetails.newValue}</p>
+                      </div>
+                    </div>
+                  )}
+                  {selectedOtherDetails.appointmentInfo && (
+                    <div>
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase">Appointment</p>
+                      <p className="text-sm text-gray-900 mt-1">{selectedOtherDetails.appointmentInfo}</p>
+                    </div>
+                  )}
+                  {selectedOtherDetails.recordReference && (
+                    <div>
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase">Record Reference</p>
+                      <p className="text-sm text-gray-900 mt-1 break-all">{selectedOtherDetails.recordReference}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {selectedLog.logType === 'consultation' && selectedLog.consultation && (
                 <>
@@ -809,19 +1189,21 @@ export default function DoctorRecordsPage() {
                 </div>
               )}
 
-              {(!isDentalLogs || hasMeaningfulVitals(getVitalsForLog(selectedLog))) && (
+              {selectedLog.logType !== 'other_operation' && (!isDentalLogs || hasMeaningfulVitals(getVitalsForLog(selectedLog))) && (
                 <VitalSignsPanel vitals={getVitalsForLog(selectedLog)} />
               )}
 
-              <Link
-                href={isDentalLogs
-                  ? `/dashboard/dental/records/${encodeURIComponent(selectedLog.studentNumber)}`
-                  : `/dashboard/doctor/students/${encodeURIComponent(selectedLog.studentNumber)}?returnTo=${encodeURIComponent(pathname || '/dashboard/doctor/records')}`
-                }
-                className="block w-full text-center px-3 py-2.5 mt-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors"
-              >
-                View Full Record
-              </Link>
+              {selectedLog.logType !== 'other_operation' && (
+                <Link
+                  href={isDentalLogs
+                    ? `/dashboard/dental/records/${encodeURIComponent(selectedLog.studentNumber)}`
+                    : `/dashboard/doctor/students/${encodeURIComponent(selectedLog.studentNumber)}?returnTo=${encodeURIComponent(pathname || '/dashboard/doctor/records')}`
+                  }
+                  className="block w-full text-center px-3 py-2.5 mt-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors"
+                >
+                  View Full Record
+                </Link>
+              )}
             </div>
           </div>
         </div>

@@ -81,7 +81,7 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
             </div>
             <div className="col-span-2 space-y-1 text-right">
               <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Date</label>
-              <div className="border-b-2 border-slate-200 pb-2 font-serif text-lg text-slate-800 pt-1">
+              <div className="border-b-2 border-slate-200 pb-2 font-serif text-base text-slate-800 pt-1 whitespace-nowrap">
                 {patient.date}
               </div>
             </div>
@@ -96,16 +96,16 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
           
           <div className="mt-12 space-y-6">
             <div className="grid grid-cols-12 gap-4 px-2 mb-2">
-              <div className="col-span-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Medicine Name</div>
+              <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Medicine Name</div>
               <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Dosage</div>
-              <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Freq.</div>
+              <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Freq.</div>
               <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Duration</div>
               <div className="col-span-1"></div>
             </div>
 
             {medicines.map((med) => (
               <div key={med.id} className="grid grid-cols-12 gap-4 items-center group animate-in fade-in slide-in-from-left-2 duration-300">
-                <div className="col-span-5">
+                <div className="col-span-4">
                   <input
                     type="text"
                     value={med.name}
@@ -123,7 +123,7 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
                     className="w-full bg-slate-50/50 border-none rounded-xl p-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none print:bg-transparent print:p-0 print:text-black"
                   />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-3">
                   <input
                     type="text"
                     value={med.frequency}

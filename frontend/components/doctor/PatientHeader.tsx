@@ -1,13 +1,16 @@
 import React from 'react';
-import { User, Phone, MapPin, Calendar, Briefcase } from 'lucide-react';
+import { User, Phone, MapPin, Calendar, Briefcase, Hash, UserCircle2 } from 'lucide-react';
 
 interface PatientHeaderProps {
   patient: {
+    studentNumber?: string;
     firstName: string;
     middleName: string;
     lastName: string;
+    middleInitial?: string;
     age: number;
     sex: string;
+    civilStatus?: string;
     dob: string;
     address: string;
     contactNumber: string;
@@ -18,6 +21,8 @@ interface PatientHeaderProps {
 }
 
 const PatientHeader: React.FC<PatientHeaderProps> = ({ patient }) => {
+  const middleInitial = (patient.middleInitial || patient.middleName || '').trim().charAt(0).toUpperCase();
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -26,17 +31,8 @@ const PatientHeader: React.FC<PatientHeaderProps> = ({ patient }) => {
             <User size={32} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-800">
               {patient.lastName}, {patient.firstName}
-              {patient.patientStatus && (
-                <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${
-                  patient.patientStatus === 'Admitted' ? 'bg-red-100 text-red-700 border border-red-200' :
-                  patient.patientStatus === 'Discharged' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
-                  'bg-amber-100 text-amber-700 border border-amber-200'
-                }`}>
-                  {patient.patientStatus}
-                </span>
-              )}
             </h1>
             <div className="flex flex-wrap gap-3 mt-2">
               <span className="flex items-center gap-1 text-slate-500 text-sm">
@@ -45,19 +41,31 @@ const PatientHeader: React.FC<PatientHeaderProps> = ({ patient }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-8">
           <div className="flex items-center gap-2 text-slate-600">
-            <Phone size={16} className="text-slate-400" />
-            <span className="text-sm font-medium">{patient.contactNumber}</span>
+            <Hash size={16} className="text-slate-400" />
+            <span className="text-sm font-medium">Student #: {patient.studentNumber || ''}</span>
           </div>
           <div className="flex items-center gap-2 text-slate-600">
             <Briefcase size={16} className="text-slate-400" />
-            <span className="text-sm font-medium">{patient.department}</span>
+            <span className="text-sm font-medium">Course/Dept: {patient.department || ''}</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-600">
+            <UserCircle2 size={16} className="text-slate-400" />
+            <span className="text-sm font-medium">Civil Status: {patient.civilStatus || ''}</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-600">
+            <Phone size={16} className="text-slate-400" />
+            <span className="text-sm font-medium">Tel./CP#: {patient.contactNumber || ''}</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-600 sm:col-span-2">
+            <UserCircle2 size={16} className="text-slate-400" />
+            <span className="text-sm font-medium">M.I.: {middleInitial}</span>
           </div>
           <div className="flex items-start gap-2 text-slate-600 sm:col-span-2">
             <MapPin size={16} className="text-slate-400 mt-0.5 flex-shrink-0" />
-            <span className="text-sm font-medium leading-tight">{patient.address}</span>
+            <span className="text-sm font-medium leading-tight">Present Address: {patient.address || ''}</span>
           </div>
         </div>
       </div>

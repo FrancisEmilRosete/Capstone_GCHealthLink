@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { formatTime12Hour } from '@/lib/time';
 
 type Level = 'critical' | 'warning' | 'info';
 type Category = 'appointments' | 'stock';
@@ -77,7 +78,7 @@ function formatDateTime(dateIso: string, preferredTime?: string) {
     : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   if (preferredTime && preferredTime.trim()) {
-    return `${dateLabel} at ${preferredTime.trim()}`;
+    return `${dateLabel} at ${formatTime12Hour(preferredTime.trim())}`;
   }
 
   return dateLabel;

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { formatTime12Hour, formatDateTime12Hour } from '@/lib/time';
 
 type SeverityFilter = 'ALL' | 'INFO' | 'WARNING' | 'CRITICAL';
 
@@ -37,14 +38,7 @@ function normalizeSeverity(value: string): 'INFO' | 'WARNING' | 'CRITICAL' {
 }
 
 function formatDateTime(value: string) {
-  const date = new Date(value);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatDateTime12Hour(value);
 }
 
 export default function StudentNotificationsPage() {
@@ -71,7 +65,7 @@ export default function StudentNotificationsPage() {
       const response = await api.get<AdvisoryResponse>('/advisories', token);
       setAdvisories(response.data || []);
       setError('');
-      setLastUpdated(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+      setLastUpdated(formatTime12Hour(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })));
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

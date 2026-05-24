@@ -8,6 +8,7 @@ import { getToken } from '@/lib/auth';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
 import PersonalWellnessTrendsCard from '@/components/dashboard/student/PersonalWellnessTrendsCard';
 import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
+import HealthConcernsByDepartmentCard from '@/components/dashboard/shared/HealthConcernsByDepartmentCard';
 
 interface ClinicVisit {
   id: string;
@@ -389,6 +390,8 @@ export default function StudentDashboard() {
       <PersonalWellnessTrendsCard data={personalTrendData} />
 
       <PredictiveInsightsCard role="student" />
+
+      <HealthConcernsByDepartmentCard />
     </div>
   );
 }

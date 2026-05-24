@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 
+import { formatDateTime12Hour } from '@/lib/time';
+
 export interface MedicalTrackingEvent {
   id: string;
   dateIso: string;
@@ -41,13 +43,7 @@ function statusColor(status?: MedicalTrackingEvent['status']) {
 }
 
 function formatDate(dateIso: string) {
-  return new Date(dateIso).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatDateTime12Hour(dateIso);
 }
 
 export default function MedicalTrackingTimeline({

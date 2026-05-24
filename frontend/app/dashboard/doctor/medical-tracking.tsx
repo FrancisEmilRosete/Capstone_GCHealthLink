@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { formatTime12Hour } from '@/lib/time';
 
 interface VitalSign {
   date: string;
@@ -49,7 +50,7 @@ function formatDate(iso: string) {
 
 function formatTime(timeStr?: string) {
   if (!timeStr) return '';
-  return timeStr;
+  return formatTime12Hour(timeStr);
 }
 
 function VitalSignsPanel({ vitals }: { vitals: VitalSign[] }) {
@@ -308,7 +309,7 @@ export default function MedicalTrackingPage() {
                   <p className="text-xs font-semibold text-gray-500 uppercase">Visit Date & Time</p>
                   <p className="text-sm text-gray-900 font-medium mt-1">
                     {formatDate(selectedVisit.visitDate)}
-                    {selectedVisit.visitTime && ` at ${selectedVisit.visitTime}`}
+                    {selectedVisit.visitTime && ` at ${formatTime12Hour(selectedVisit.visitTime)}`}
                   </p>
                 </div>
 

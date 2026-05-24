@@ -62,13 +62,22 @@ function auditLogger(actionOrResolver) {
             userId: safeUserId,
             action,
             targetId:
-              req.params?.id || req.body?.studentProfileId || req.body?.studentId || null,
+              req.auditLog?.targetId
+              || req.params?.id
+              || req.params?.appointmentId
+              || req.body?.appointmentId
+              || req.body?.studentProfileId
+              || req.body?.studentId
+              || null,
             ipAddress: resolveClientIp(req),
             metadata: {
               method: req.method,
               path: req.originalUrl,
               role: req.user?.role || null,
               statusCode: res.statusCode,
+              ...(req.auditLog?.metadata && typeof req.auditLog.metadata === "object"
+                ? req.auditLog.metadata
+                : {}),
             },
           },
         });

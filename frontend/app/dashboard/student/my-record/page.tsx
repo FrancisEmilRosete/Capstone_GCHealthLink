@@ -54,6 +54,27 @@ interface StudentProfile {
     immunizations?: string[] | null;
   } | null;
   clinicVisits: ClinicVisit[];
+  physicalExaminations: Array<{
+    id: string;
+    examDate: string;
+    yearLevel: string;
+    bp?: string | null;
+    cr?: string | null;
+    rr?: string | null;
+    temp?: string | null;
+    weight?: string | null;
+    height?: string | null;
+    bmi?: string | null;
+    visualAcuity?: string | null;
+    skin?: string | null;
+    heent?: string | null;
+    chestLungs?: string | null;
+    heart?: string | null;
+    abdomen?: string | null;
+    extremities?: string | null;
+    others?: string | null;
+    examinedBy?: string | null;
+  }>;
 }
 
 interface StudentProfileResponse {
@@ -232,6 +253,46 @@ function downloadPdf(profile: StudentProfile) {
       2: { cellWidth: 150 },
       3: { cellWidth: 130 },
       4: { cellWidth: 140 },
+    },
+  });
+
+  const physicalExamRows: string[][] = profile.physicalExaminations.length
+    ? profile.physicalExaminations.map((exam) => [
+        formatDate(exam.examDate),
+        exam.yearLevel || 'N/A',
+        exam.bp || 'N/A',
+        exam.weight || 'N/A',
+        exam.height || 'N/A',
+        exam.bmi || 'N/A',
+        exam.examinedBy || 'N/A',
+      ])
+    : [['No physical examination records yet.', '', '', '', '', '', '']];
+
+  autoTable(doc, {
+    startY: ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 130) + 22,
+    head: [['Exam Date', 'Year Level', 'BP', 'Weight', 'Height', 'BMI', 'Examined By']],
+    body: physicalExamRows,
+    theme: 'striped',
+    margin: { left: 40, right: 40, bottom: 40 },
+    styles: {
+      fontSize: 8.5,
+      cellPadding: 5,
+      textColor: [31, 41, 55],
+      valign: 'top',
+    },
+    headStyles: {
+      fillColor: [13, 27, 42],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 78 },
+      1: { cellWidth: 70 },
+      2: { cellWidth: 55 },
+      3: { cellWidth: 58 },
+      4: { cellWidth: 58 },
+      5: { cellWidth: 48 },
+      6: { cellWidth: 120 },
     },
   });
 
@@ -423,7 +484,7 @@ export default function MyRecordPage() {
                     {profile.clinicVisits.map((visit) => (
                       <tr key={visit.id} className="border-b border-gray-50 align-top">
                         <td className="py-2 pr-3 text-gray-700">{formatDate(visit.visitDate)}</td>
-                        <td className="py-2 pr-3 text-gray-600">{visit.visitTime || 'N/A'}</td>
+                        <td className="py-2 pr-3 text-gray-600">{visit.visitTime ? formatTime12Hour(visit.visitTime) : 'N/A'}</td>
                         <td className="py-2 pr-3 text-gray-700">{normalizeComplaintDisplay(visit.chiefComplaintEnc)}</td>
                         <td className="py-2 pr-3 text-gray-600">
                           {visit.dispensedMedicines.length > 0

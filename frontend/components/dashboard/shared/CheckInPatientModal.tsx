@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus } from 'lucide-react';
 
+import { formatTime12Hour } from '@/lib/time';
+
 interface CheckInPatientModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -72,7 +74,7 @@ const CheckInPatientModal: React.FC<CheckInPatientModalProps> = ({ isOpen, onClo
       department,
       reason: reason || 'Checkup',
       remarks,
-      timeIn: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timeIn: formatTime12Hour(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })),
       status: 'WAITING'
     };
 

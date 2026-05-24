@@ -11,6 +11,7 @@ const {
   getVisits,
   dispenseMedicine,
   getNurseReports,
+  getStaffActivityLogs,
 } = require("../controllers/clinic.controller");
 const { sendEmergencySmsToGuardian } = require("../controllers/emergency.controller");
 
@@ -87,6 +88,13 @@ router.get(
   authorize("CLINIC_STAFF", "NURSE", "ADMIN"),
   auditLogger("VIEWED_NURSE_REPORTS"),
   getNurseReports
+);
+
+router.get(
+  "/activity-logs",
+  protect,
+  authorize("CLINIC_STAFF", "ADMIN"),
+  getStaffActivityLogs
 );
 
 module.exports = router;

@@ -304,6 +304,13 @@ function buildHealthAnalyticsPayload(visits, concernGroups = null) {
     ? buildTopConcernsFromGroups(concernGroups)
     : buildTopConcernsFromVisits(visits);
 
+  const inventorySummary = {
+    expired: 0,
+    expiringSoon: 0,
+    nearReorder: 0,
+    outOfStock: 0,
+  };
+
   return {
     totalVisits,
     topConcerns,
@@ -312,6 +319,7 @@ function buildHealthAnalyticsPayload(visits, concernGroups = null) {
     monthlyVisits: createMonthlySeries(visits),
     weeklyVisits: createWeeklySeries(visits),
     resourcePrediction: createResourcePrediction(visits),
+    inventorySummary,
   };
 }
 
@@ -622,6 +630,14 @@ const getHealthAnalytics = async (req, res, next) => {
       })
     ]);
 
+    const inventoryItems = await prisma.inventory.findMany({
+      select: {
+        currentStock: true,
+        reorderThreshold: true,
+        expirationDate: true,
+      },
+    });
+
     const forecastMap = new Map();
     for (const d of dispensed) {
       if (!forecastMap.has(d.inventoryId)) {
@@ -642,8 +658,27 @@ const getHealthAnalytics = async (req, res, next) => {
       };
     }).sort((a, b) => a.daysUntilDepletion - b.daysUntilDepletion);
 
+    const inventorySummary = inventoryItems.reduce((summary, item) => {
+      const expirationDate = item.expirationDate ? new Date(item.expirationDate) : null;
+      const isExpired = Boolean(expirationDate && !Number.isNaN(expirationDate.getTime()) && expirationDate < thirtyDaysAgo);
+      const isExpiringSoon = Boolean(expirationDate && !Number.isNaN(expirationDate.getTime()) && expirationDate >= thirtyDaysAgo && expirationDate <= new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)));
+
+      if (isExpired) summary.expired += 1;
+      if (isExpiringSoon) summary.expiringSoon += 1;
+      if (item.currentStock <= item.reorderThreshold) summary.nearReorder += 1;
+      if (item.currentStock === 0) summary.outOfStock += 1;
+
+      return summary;
+    }, {
+      expired: 0,
+      expiringSoon: 0,
+      nearReorder: 0,
+      outOfStock: 0,
+    });
+
     const analytics = buildHealthAnalyticsPayload(allVisits, concernGroups);
     analytics.inventoryForecast = inventoryForecast;
+    analytics.inventorySummary = inventorySummary;
 
     res.json({
       success: true,

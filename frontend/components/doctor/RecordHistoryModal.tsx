@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Clock } from 'lucide-react';
 
+import { formatDateTime12Hour } from '@/lib/time';
+
 interface HistoryEntry {
   timestamp: string;
   staffName: string;
@@ -51,7 +53,7 @@ const RecordHistoryModal: React.FC<RecordHistoryModalProps> = ({ isOpen, onClose
                   <div className="mb-3">
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Version {entry.version}</p>
                     <p className="text-sm font-semibold text-slate-800 mt-0.5">
-                      {new Date(entry.timestamp).toLocaleDateString()} at {new Date(entry.timestamp).toLocaleTimeString()}
+                      {formatDateTime12Hour(entry.timestamp)}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">By {entry.staffName}</p>
                   </div>

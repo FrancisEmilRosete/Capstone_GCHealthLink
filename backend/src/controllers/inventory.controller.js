@@ -27,6 +27,25 @@ function parsePositiveInteger(value, fieldName) {
   return { ok: true, value: parsed };
 }
 
+function parseNonNegativeInteger(value, fieldName) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return {
+      ok: false,
+      message: `${fieldName} must be a whole number 0 or greater.`,
+    };
+  }
+
+  if (parsed > MAX_INVENTORY_NUMBER) {
+    return {
+      ok: false,
+      message: `${fieldName} must be ${MAX_INVENTORY_NUMBER} or less.`,
+    };
+  }
+
+  return { ok: true, value: parsed };
+}
+
 // 1. View all inventory (Nurses need to see what's in stock)
 const getInventory = async (req, res, next) => {
   try {
@@ -141,6 +160,18 @@ const addInventoryItem = async (req, res, next) => {
       }
     });
 
+    req.auditLog = {
+      targetId: newItem.id,
+      metadata: {
+        actionType: "create",
+        itemName: newItem.itemName,
+        currentStock: newItem.currentStock,
+        reorderThreshold: newItem.reorderThreshold,
+        unit: newItem.unit,
+        expirationDate: newItem.expirationDate,
+      },
+    };
+
     res.status(201).json({
       success: true,
       message: "Item added to inventory successfully",
@@ -193,6 +224,14 @@ const removeInventoryItem = async (req, res, next) => {
 
     await prisma.inventory.delete({ where: { id: inventoryId } });
 
+    req.auditLog = {
+      targetId: inventoryId,
+      metadata: {
+        actionType: "delete",
+        itemName: existing.itemName,
+      },
+    };
+
     return res.json({
       success: true,
       message: `${existing.itemName} was removed from inventory.`,
@@ -202,4 +241,99 @@ const removeInventoryItem = async (req, res, next) => {
   }
 };
 
-module.exports = { getInventory, addInventoryItem, removeInventoryItem };
+// 4. Update an existing inventory item (Admin / Clinic Staff)
+const updateInventoryItem = async (req, res, next) => {
+  try {
+    const inventoryId = normalizeText(req.params?.id);
+    if (!inventoryId) {
+      return res.status(400).json({ success: false, message: "Inventory item id is required." });
+    }
+
+    const existing = await prisma.inventory.findUnique({
+      where: { id: inventoryId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Inventory item not found." });
+    }
+
+    const itemName = normalizeText(req.body?.itemName);
+    const unit = normalizeText(req.body?.unit);
+    const currentStockValidation = parseNonNegativeInteger(req.body?.currentStock, "currentStock");
+    const reorderThresholdValidation = parsePositiveInteger(req.body?.reorderThreshold, "reorderThreshold");
+
+    if (!itemName || !unit || req.body?.currentStock === undefined || req.body?.reorderThreshold === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide itemName, currentStock, reorderThreshold, and unit.",
+      });
+    }
+
+    if (itemName.length > 150) {
+      return res.status(400).json({ success: false, message: "itemName must be 150 characters or fewer." });
+    }
+
+    if (unit.length > 40) {
+      return res.status(400).json({ success: false, message: "unit must be 40 characters or fewer." });
+    }
+
+    if (!currentStockValidation.ok) {
+      return res.status(400).json({ success: false, message: currentStockValidation.message });
+    }
+
+    if (!reorderThresholdValidation.ok) {
+      return res.status(400).json({ success: false, message: reorderThresholdValidation.message });
+    }
+
+    const expirationDateStr = normalizeText(req.body?.expirationDate);
+    let expirationDate = null;
+    if (expirationDateStr) {
+      expirationDate = new Date(expirationDateStr);
+      if (isNaN(expirationDate.getTime())) {
+        return res.status(400).json({ success: false, message: "Invalid expirationDate format." });
+      }
+    }
+
+    const updatedItem = await prisma.inventory.update({
+      where: { id: inventoryId },
+      data: {
+        itemName,
+        currentStock: currentStockValidation.value,
+        reorderThreshold: reorderThresholdValidation.value,
+        unit,
+        expirationDate,
+      },
+    });
+
+    req.auditLog = {
+      targetId: inventoryId,
+      metadata: {
+        actionType: "update",
+        before: {
+          itemName: existing.itemName,
+        },
+        after: {
+          itemName: updatedItem.itemName,
+          currentStock: updatedItem.currentStock,
+          reorderThreshold: updatedItem.reorderThreshold,
+          unit: updatedItem.unit,
+          expirationDate: updatedItem.expirationDate,
+        },
+      },
+    };
+
+    return res.json({
+      success: true,
+      message: "Inventory item updated successfully.",
+      data: updatedItem,
+    });
+  } catch (error) {
+    if (error.code === "P2002") {
+      return res.status(400).json({ success: false, message: "This item name already exists in the inventory." });
+    }
+    next(error);
+  }
+};
+
+module.exports = { getInventory, addInventoryItem, removeInventoryItem, updateInventoryItem };

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import PaginationControls from '@/components/ui/PaginationControls';
+import { formatDateTime12Hour } from '@/lib/time';
 
 interface AdminAlert {
   id: string;
@@ -74,13 +75,7 @@ function toLevel(severity: string): AdminAlert['level'] {
 }
 
 function formatTime(iso: string) {
-  const date = new Date(iso);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatDateTime12Hour(iso);
 }
 
 export default function AdminNotifications() {

@@ -322,6 +322,8 @@ export default function ClinicConsultForm({
               <input
                 id="clinic-visit-time"
                 type="time"
+                min="07:00"
+                max="19:00"
                 value={visitTime}
                 onChange={(event) => setVisitTime(event.target.value)}
                 className={INPUT_CLASS}

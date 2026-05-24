@@ -299,9 +299,17 @@ body {
 
 /* === Print Styles === */
 @media print {
+  @page {
+    size: legal portrait;
+    margin: 10mm;
+  }
+
+  html,
   body {
     background: white;
     color: black;
+    width: 100%;
+    height: auto;
   }
   
   .no-print {

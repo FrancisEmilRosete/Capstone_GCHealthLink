@@ -65,6 +65,14 @@ function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function formatDateLabel(value) {
+  return new Date(value).toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 function parseDate(value) {
   if (typeof value !== "string" || !value.trim()) {
     return null;
@@ -269,6 +277,117 @@ function toExamRow(exam) {
     bp: exam.bp || "",
     examinedBy: exam.examinedBy || "",
   };
+}
+
+function truncateText(value, maxLength = 2000) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength - 3)}...`;
+}
+
+function buildPhysicalExamFindings(exam) {
+  const lines = [
+    `Year Level: ${YEAR_LEVEL_LABEL[exam.yearLevel] || exam.yearLevel}`,
+    `Exam Date: ${formatDateLabel(exam.examDate)}`,
+    exam.bp ? `BP: ${exam.bp}` : null,
+    exam.cr ? `CR: ${exam.cr}` : null,
+    exam.rr ? `RR: ${exam.rr}` : null,
+    exam.temp ? `Temp: ${exam.temp}` : null,
+    exam.weight ? `Weight: ${exam.weight}` : null,
+    exam.height ? `Height: ${exam.height}` : null,
+    exam.bmi ? `BMI: ${exam.bmi}` : null,
+    exam.visualAcuity ? `Visual Acuity: ${exam.visualAcuity}` : null,
+    exam.skin ? `Skin: ${exam.skin}` : null,
+    exam.heent ? `HEENT: ${exam.heent}` : null,
+    exam.chestLungs ? `Chest/Lungs: ${exam.chestLungs}` : null,
+    exam.heart ? `Heart: ${exam.heart}` : null,
+    exam.abdomen ? `Abdomen: ${exam.abdomen}` : null,
+    exam.extremities ? `Extremities: ${exam.extremities}` : null,
+    exam.others ? `Others: ${exam.others}` : null,
+    exam.examinedBy ? `Examined By: ${exam.examinedBy}` : null,
+  ].filter(Boolean);
+
+  return truncateText(lines.join("\n"));
+}
+
+function buildPhysicalExamRemarks(exam) {
+  const remarks = [
+    `Physical examination completed on ${formatDateLabel(exam.examDate)}.`,
+    exam.examinedBy ? `Examined by ${exam.examinedBy}.` : null,
+    "Refer to the clinic record for the complete physical examination form.",
+  ].filter(Boolean);
+
+  return truncateText(remarks.join(" "));
+}
+
+async function autoIssuePhysicalExamCertificate(tx, { studentProfile, exam, issuedById, issuedByRole, ipAddress }) {
+  const dayStart = new Date(exam.examDate);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const existingCertificate = await tx.medicalCertificate.findFirst({
+    where: {
+      studentProfileId: studentProfile.id,
+      certificateType: "PHYSICAL_EXAMINATION",
+      issuedAt: {
+        gte: dayStart,
+        lt: dayEnd,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (existingCertificate) {
+    return { created: false, certificate: null };
+  }
+
+  const certificate = await tx.medicalCertificate.create({
+    data: {
+      studentProfileId: studentProfile.id,
+      issuedById,
+      issuedByRole: issuedByRole || "DOCTOR",
+      certificateType: "PHYSICAL_EXAMINATION",
+      diagnosisFindings: buildPhysicalExamFindings(exam),
+      recommendationsRemarks: buildPhysicalExamRemarks(exam),
+      remarks: buildPhysicalExamRemarks(exam),
+      issuedAt: exam.examDate,
+    },
+    include: {
+      studentProfile: {
+        select: {
+          studentNumber: true,
+          firstName: true,
+          lastName: true,
+          courseDept: true,
+        },
+      },
+      issuedBy: { select: { email: true } },
+    },
+  });
+
+  await tx.auditLog.create({
+    data: {
+      userId: issuedById,
+      action: "ISSUED_MED_CERTIFICATE",
+      targetId: studentProfile.id,
+      ipAddress,
+      metadata: {
+        studentProfileId: studentProfile.id,
+        studentNumber: studentProfile.studentNumber,
+        certificateType: "PHYSICAL_EXAMINATION",
+        source: "PHYSICAL_EXAMINATION",
+        examId: exam.id,
+        examDate: exam.examDate.toISOString(),
+        autoIssued: true,
+      },
+    },
+  });
+
+  return { created: true, certificate };
 }
 
 const listPhysicalExams = async (req, res, next) => {
@@ -491,6 +610,16 @@ const createPhysicalExam = async (req, res, next) => {
       });
     }
 
+    const autoCertificateResult = await prisma.$transaction((tx) =>
+      autoIssuePhysicalExamCertificate(tx, {
+        studentProfile,
+        exam,
+        issuedById: req.user.userId,
+        issuedByRole: req.user.clinicStaffType || "DOCTOR",
+        ipAddress: req.ip,
+      })
+    );
+
     await prisma.auditLog.create({
       data: {
         userId: req.user.userId,
@@ -512,6 +641,7 @@ const createPhysicalExam = async (req, res, next) => {
       data: {
         exam: toExamRow(exam),
         labResult,
+        autoCertificateIssued: autoCertificateResult.created,
       },
     });
   } catch (error) {

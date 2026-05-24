@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { parseConsultationDisplay } from '@/lib/complaint';
+import { formatTime12Hour } from '@/lib/time';
 
 interface VisitRecord {
   id: string;
@@ -87,7 +88,7 @@ function fmtDate(iso: string) {
 }
 
 function fmtTime(row: ConsultRow) {
-  if (row.visitTime) return row.visitTime;
+  if (row.visitTime) return formatTime12Hour(row.visitTime);
   return new Date(row.dateIso).toLocaleTimeString('en-US', {
     hour: 'numeric', minute: '2-digit', hour12: true,
   });

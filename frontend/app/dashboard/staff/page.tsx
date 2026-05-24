@@ -8,12 +8,14 @@ import Toast from '@/components/ui/Toast';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
+import HealthConcernsByDepartmentCard from '@/components/dashboard/shared/HealthConcernsByDepartmentCard';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 import ConsultationModal, {
   type ConsultationForm,
   type InventoryOption,
   type ConsultationPatient,
 } from '@/components/modals/ConsultationModal';
+import { formatTime12Hour } from '@/lib/time';
 
 interface QueueItem {
   id: string;
@@ -21,7 +23,18 @@ interface QueueItem {
   preferredTime: string;
   serviceType: string;
   symptoms: string;
-  status: 'WAITING' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  status: 'WAITING' | 'PENDING' | 'IN_PROGRESS' | 'FOR_DISPENSING' | 'COMPLETED' | 'CANCELLED';
+  pendingMedicines?: Array<{
+    id: string;
+    quantity: number;
+    status: 'PRESCRIBED' | 'DISPENSED' | 'CANCELLED' | string;
+    inventoryId: string;
+    inventory?: {
+      itemName?: string;
+      unit?: string | null;
+      currentStock?: number;
+    } | null;
+  }>;
   studentProfile: {
     id: string;
     studentNumber: string;
@@ -50,7 +63,7 @@ interface InventoryResponse {
   data: InventoryOption[];
 }
 
-type LiveQueueFilter = 'all' | 'incoming' | 'waiting' | 'pending';
+type LiveQueueFilter = 'all' | 'incoming' | 'waiting' | 'pending' | 'for-dispensing' | 'done';
 
 function isFollowUpAppointment(item: QueueItem) {
   const service = (item.serviceType || '').toLowerCase();
@@ -98,6 +111,8 @@ export default function NurseDashboardPage() {
   const [consultingPatient, setConsultingPatient] = useState<QueueItem | null>(null);
   const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [selectedDoneIds, setSelectedDoneIds] = useState<string[]>([]);
+  const [isDoneSelectMode, setIsDoneSelectMode] = useState(false);
 
   function showToast(message: string) {
     setToastConfig({ isVisible: true, message });
@@ -115,7 +130,7 @@ export default function NurseDashboardPage() {
     try {
       setLoading(true);
       setError('');
-      const response = await api.get<QueueResponse>('/appointments/queue?limit=100&status=WAITING,PENDING,IN_PROGRESS,COMPLETED', token);
+      const response = await api.get<QueueResponse>('/appointments/queue?limit=100&status=WAITING,PENDING,IN_PROGRESS,FOR_DISPENSING,COMPLETED', token);
       setQueue(response.data || []);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -164,20 +179,28 @@ export default function NurseDashboardPage() {
 
   const liveQueueCandidates = filteredQueue.filter(
     (item) =>
-      (item.status === 'WAITING' || item.status === 'PENDING')
+      (item.status === 'WAITING' || item.status === 'PENDING' || item.status === 'FOR_DISPENSING')
       && (!isFollowUpAppointment(item) || !isFutureFollowUp(item))
+  );
+
+  const doneQueueCandidates = filteredQueue.filter(
+    (item) => item.status === 'COMPLETED' && (!isFollowUpAppointment(item) || !isFutureFollowUp(item))
   );
 
   const incomingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'INCOMING').length;
   const waitingQueueCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'WAITING').length;
   const pendingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'PENDING').length;
+  const forDispensingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'FOR_DISPENSING').length;
+  const doneCount = doneQueueCandidates.length;
   const allPatientsCount = liveQueueCandidates.length;
 
-  const liveQueue = liveQueueCandidates.filter((item) => {
+  const liveQueue = (liveQueueFilter === 'done' ? doneQueueCandidates : liveQueueCandidates).filter((item) => {
     const status = resolveLiveQueueStatus(item);
+    if (liveQueueFilter === 'done') return item.status === 'COMPLETED';
     if (liveQueueFilter === 'all') return true;
     if (liveQueueFilter === 'incoming') return status === 'INCOMING';
     if (liveQueueFilter === 'waiting') return status === 'WAITING';
+    if (liveQueueFilter === 'for-dispensing') return status === 'FOR_DISPENSING';
     return status === 'PENDING';
   });
 
@@ -185,6 +208,33 @@ export default function NurseDashboardPage() {
   const followUps = filteredQueue
     .filter((item) => (item.status === 'WAITING' || item.status === 'PENDING') && isFutureFollowUp(item))
     .slice(0, 10);
+
+  const selectedDoneSet = useMemo(() => new Set(selectedDoneIds), [selectedDoneIds]);
+  const selectedDoneCount = selectedDoneIds.length;
+
+  useEffect(() => {
+    if (liveQueueFilter !== 'done') {
+      if (selectedDoneIds.length > 0) setSelectedDoneIds([]);
+      if (isDoneSelectMode) setIsDoneSelectMode(false);
+    }
+  }, [liveQueueFilter, selectedDoneIds.length, isDoneSelectMode]);
+
+  useEffect(() => {
+    if (selectedDoneIds.length === 0) return;
+    const validIds = new Set(doneQueueCandidates.map((item) => item.id));
+    const next = selectedDoneIds.filter((id) => validIds.has(id));
+    if (next.length !== selectedDoneIds.length) {
+      setSelectedDoneIds(next);
+    }
+  }, [doneQueueCandidates, selectedDoneIds]);
+
+  function toggleDoneSelection(id: string) {
+    setSelectedDoneIds((current) => (
+      current.includes(id)
+        ? current.filter((itemId) => itemId !== id)
+        : [...current, id]
+    ));
+  }
 
   function parseScheduleDateTime(item: QueueItem): Date | null {
     const datePart = new Date(item.preferredDate);
@@ -221,7 +271,8 @@ export default function NurseDashboardPage() {
     return scheduled.getTime() > Date.now() ? 'INCOMING' : 'WAITING';
   }
 
-  function resolveLiveQueueStatus(item: QueueItem): 'INCOMING' | 'WAITING' | 'PENDING' {
+  function resolveLiveQueueStatus(item: QueueItem): 'INCOMING' | 'WAITING' | 'PENDING' | 'FOR_DISPENSING' {
+    if (item.status === 'FOR_DISPENSING') return 'FOR_DISPENSING';
     if (item.status === 'PENDING') return 'PENDING';
     return getDisplayQueueStatus(item);
   }
@@ -310,6 +361,119 @@ export default function NurseDashboardPage() {
     }
   }
 
+  async function handleDispenseMedicines(patient: QueueItem) {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    const prescribed = (patient.pendingMedicines || []).filter((medicine) => medicine.status === 'PRESCRIBED');
+    if (prescribed.length === 0) {
+      setError('No prescribed medicines found for this patient.');
+      return;
+    }
+
+    try {
+      setError('');
+
+      for (const medicine of prescribed) {
+        const response = await api.put<{ warning?: string }>(`/clinic/visits/dispense/${medicine.id}`, {}, token);
+        if (response.warning) {
+          showToast(response.warning);
+        }
+      }
+
+      await api.put(`/appointments/queue/${patient.id}`, { status: 'COMPLETED' }, token);
+
+      showToast('Medicines dispensed. Queue item marked as completed.');
+      await loadQueue();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to dispense medicines.');
+      }
+    }
+  }
+
+  async function issueConsultationCertificate(patient: QueueItem) {
+    const token = getToken();
+    if (!token) {
+      setError('You are not logged in. Please sign in again.');
+      return;
+    }
+
+    const diagnosisFindings = (patient.symptoms || '').trim() || 'Consultation completed';
+
+    await api.post('/certificates', {
+      studentIdentifier: patient.studentProfile.studentNumber,
+      certificateType: 'CONSULTATION',
+      diagnosisFindings,
+      recommendationsRemarks: '',
+      dateIssued: new Date().toISOString(),
+    }, token);
+  }
+
+  async function handleIssueSingleConsultationCertificate(patient: QueueItem) {
+    try {
+      setError('');
+      await issueConsultationCertificate(patient);
+      showToast('Medical certificate issued.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to issue medical certificate.');
+      }
+    }
+  }
+
+  async function handleIssueBulkConsultationCertificates() {
+    if (selectedDoneIds.length === 0) {
+      showToast('Select at least one completed consultation.');
+      return;
+    }
+
+    const selectedPatients = doneQueueCandidates.filter((item) => selectedDoneSet.has(item.id));
+    if (selectedPatients.length === 0) {
+      showToast('No valid completed consultations selected.');
+      return;
+    }
+
+    try {
+      setError('');
+      for (const patient of selectedPatients) {
+        await issueConsultationCertificate(patient);
+      }
+      setSelectedDoneIds([]);
+      setIsDoneSelectMode(false);
+      showToast(`Issued ${selectedPatients.length} medical certificate${selectedPatients.length > 1 ? 's' : ''}.`);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to issue bulk medical certificates.');
+      }
+    }
+  }
+
+  async function handleDoneSelectPrimaryAction() {
+    if (!isDoneSelectMode) {
+      setIsDoneSelectMode(true);
+      setSelectedDoneIds([]);
+      return;
+    }
+
+    if (selectedDoneCount > 0) {
+      await handleIssueBulkConsultationCertificates();
+      return;
+    }
+
+    setIsDoneSelectMode(false);
+    setSelectedDoneIds([]);
+  }
+
   return (
     <div className="min-h-screen bg-[hsl(var(--background))] flex flex-col">
       <div className="px-6 py-5 border-b border-[hsl(var(--border))] flex items-center justify-between">
@@ -335,7 +499,7 @@ export default function NurseDashboardPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="card p-5">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-[hsl(var(--primary-soft))] text-[hsl(var(--primary))] rounded-[var(--radius-lg)]">
@@ -380,19 +544,30 @@ export default function NurseDashboardPage() {
                 </div>
               </div>
             </div>
+            <div className="card p-5">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))] rounded-[var(--radius-lg)]">
+                  <Activity size={20} strokeWidth={1.5} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">For Dispensing</p>
+                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{forDispensingCount}</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div className="xl:col-span-2 card overflow-hidden flex flex-col h-[600px]">
-              <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between">
+              <div className="px-4 pt-1 pb-2.5 border-b border-[hsl(var(--border))] flex flex-col lg:flex-row lg:items-start lg:justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <h2 className="text-h3 text-[hsl(var(--foreground))]">Live Patient Queue</h2>
                   {isPending && (
                     <Loader2 size={16} className="text-[hsl(var(--primary))] animate-spin" />
                   )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="inline-flex items-center rounded-[var(--radius-lg)] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1">
+                <div className="w-fit max-w-full flex flex-col gap-1.5 lg:items-stretch">
+                  <div className="inline-flex w-max max-w-full items-center rounded-[var(--radius-lg)] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1">
                     <button
                       type="button"
                       onClick={() => startTransition(() => setLiveQueueFilter('all'))}
@@ -429,26 +604,58 @@ export default function NurseDashboardPage() {
                     >
                       Pending
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => startTransition(() => setLiveQueueFilter('for-dispensing'))}
+                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
+                        liveQueueFilter === 'for-dispensing' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
+                      }`}
+                    >
+                      For Dispensing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startTransition(() => setLiveQueueFilter('done'))}
+                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
+                        liveQueueFilter === 'done' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
+                      }`}
+                    >
+                      Done ({doneCount})
+                    </button>
                   </div>
 
-                  <div className="relative">
-                    <Search size={16} strokeWidth={1.5} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted))]" />
-                    <input
-                      type="text"
-                      placeholder="Search queue..."
-                      value={searchQuery}
-                      onChange={(e) => startTransition(() => setSearchQuery(e.target.value))}
-                      className="pl-10 pr-4 py-2 bg-[hsl(var(--background))] border border-[hsl(var(--input-border))] rounded-[var(--radius-md)] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus-ring)_/_0.4)] focus:border-[hsl(var(--primary))] w-64 transition-all"
-                    />
+                  <div className="w-full flex items-center gap-3">
+                    <div className="relative flex-1">
+                      <Search size={16} strokeWidth={1.5} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted))]" />
+                      <input
+                        type="text"
+                        placeholder="Search queue..."
+                        value={searchQuery}
+                        onChange={(e) => startTransition(() => setSearchQuery(e.target.value))}
+                        className="pl-10 pr-4 py-2 bg-[hsl(var(--background))] border border-[hsl(var(--input-border))] rounded-[var(--radius-md)] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus-ring)_/_0.4)] focus:border-[hsl(var(--primary))] w-full transition-all"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setQrModalOpen(true)}
+                      className="text-xs font-medium border border-[hsl(var(--border))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-soft))] px-3 py-2 rounded-[var(--radius-md)] transition-colors"
+                    >
+                      Use QR
+                    </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setQrModalOpen(true)}
-                    className="text-xs font-medium border border-[hsl(var(--border))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-soft))] px-3 py-2 rounded-[var(--radius-md)] transition-colors"
-                  >
-                    Use QR
-                  </button>
+                  {liveQueueFilter === 'done' && (
+                    <div className="flex items-center gap-2 lg:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void handleDoneSelectPrimaryAction()}
+                        className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-2 rounded-[var(--radius-md)] transition-colors"
+                      >
+                        {!isDoneSelectMode ? 'Select' : selectedDoneCount > 0 ? `Give Med Cert (${selectedDoneCount})` : 'Cancel Select'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -460,6 +667,9 @@ export default function NurseDashboardPage() {
                     <table className="w-full table-fixed text-sm">
                     <thead>
                       <tr>
+                        {liveQueueFilter === 'done' && isDoneSelectMode && (
+                          <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Select</th>
+                        )}
                         <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Student</th>
                         <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Department</th>
                         <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Preferred Slot</th>
@@ -471,7 +681,7 @@ export default function NurseDashboardPage() {
                     <tbody className="divide-y divide-[hsl(var(--border)_/_0.5)]">
                       {liveQueue.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-10 text-center text-[hsl(var(--muted))] text-sm">No patients found.</td>
+                          <td colSpan={liveQueueFilter === 'done' && isDoneSelectMode ? 7 : 6} className="px-4 py-10 text-center text-[hsl(var(--muted))] text-sm">No patients found.</td>
                         </tr>
                       ) : (
                         liveQueue.map((patient) => (
@@ -479,6 +689,15 @@ export default function NurseDashboardPage() {
                             key={patient.id}
                             className="hover:bg-[hsl(var(--primary-soft)_/_0.3)] transition-colors"
                           >
+                            {liveQueueFilter === 'done' && isDoneSelectMode && (
+                              <td className="px-4 py-3 text-left">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDoneSet.has(patient.id)}
+                                  onChange={() => toggleDoneSelection(patient.id)}
+                                />
+                              </td>
+                            )}
                             <td className="px-4 py-3 text-left">
                               <div>
                                 <p className="font-semibold text-[hsl(var(--foreground))]">{patient.studentProfile.lastName}, {patient.studentProfile.firstName}</p>
@@ -487,36 +706,71 @@ export default function NurseDashboardPage() {
                             </td>
                             <td className="px-4 py-3 text-left text-[hsl(var(--muted-foreground))]">{patient.studentProfile.courseDept || 'N/A'}</td>
                             <td className="px-4 py-3 text-left text-[hsl(var(--muted-foreground))] tabular-nums">
-                              {formatDate(patient.preferredDate)} at {patient.preferredTime}
+                              {formatDate(patient.preferredDate)} at {formatTime12Hour(patient.preferredTime)}
                             </td>
                             <td className="px-4 py-3 text-left">
                               <p className="text-xs font-medium text-[hsl(var(--primary))]">{patient.serviceType}</p>
                               <p className="text-[hsl(var(--foreground))] break-words leading-snug">{patient.symptoms || 'N/A'}</p>
+                              {resolveLiveQueueStatus(patient) === 'FOR_DISPENSING' && (patient.pendingMedicines?.length || 0) > 0 && (
+                                <p className="text-xs text-[hsl(var(--warning))] mt-1">
+                                  Rx: {patient.pendingMedicines?.map((medicine) => `${medicine.inventory?.itemName || 'Medicine'} x${medicine.quantity}`).join(', ')}
+                                </p>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-left">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                patient.status === 'COMPLETED'
+                                  ? 'bg-[hsl(var(--success-soft))] text-[hsl(var(--success))]'
+                                  :
                                 resolveLiveQueueStatus(patient) === 'INCOMING'
                                   ? 'bg-[hsl(var(--info-soft))] text-[hsl(var(--info))]'
+                                  : resolveLiveQueueStatus(patient) === 'FOR_DISPENSING'
+                                    ? 'bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))]'
                                   : resolveLiveQueueStatus(patient) === 'PENDING'
                                     ? 'bg-[hsl(var(--success-soft))] text-[hsl(var(--success))]'
                                     : 'bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))]'
                               }`}>
-                                {resolveLiveQueueStatus(patient) === 'INCOMING'
+                                {patient.status === 'COMPLETED'
+                                  ? 'Done'
+                                  : resolveLiveQueueStatus(patient) === 'INCOMING'
                                   ? 'Incoming'
+                                  : resolveLiveQueueStatus(patient) === 'FOR_DISPENSING'
+                                    ? 'For Dispensing'
                                   : resolveLiveQueueStatus(patient) === 'PENDING'
                                     ? 'Pending'
                                     : 'Waiting'}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => openConsultModal(patient)}
-                                disabled={resolveLiveQueueStatus(patient) === 'PENDING'}
-                                className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-1.5 rounded-[var(--radius-md)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                              >
-                                {resolveLiveQueueStatus(patient) === 'PENDING' ? 'Sent' : 'Consult'}
-                              </button>
+                              {patient.status === 'COMPLETED' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleIssueSingleConsultationCertificate(patient)}
+                                  className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-1.5 rounded-[var(--radius-md)] transition-colors"
+                                >
+                                  Give Med Cert
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (resolveLiveQueueStatus(patient) === 'FOR_DISPENSING') {
+                                      void handleDispenseMedicines(patient);
+                                      return;
+                                    }
+
+                                    openConsultModal(patient);
+                                  }}
+                                  disabled={resolveLiveQueueStatus(patient) === 'PENDING'}
+                                  className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-1.5 rounded-[var(--radius-md)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  {resolveLiveQueueStatus(patient) === 'FOR_DISPENSING'
+                                    ? 'Dispense'
+                                    : resolveLiveQueueStatus(patient) === 'PENDING'
+                                      ? 'Sent'
+                                      : 'Consult'}
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -595,6 +849,7 @@ export default function NurseDashboardPage() {
       />
 
       <PredictiveInsightsCard role="doctor" className="mx-8 mb-8" />
+      <HealthConcernsByDepartmentCard className="mx-8 mb-8" />
     </div>
   );
 }

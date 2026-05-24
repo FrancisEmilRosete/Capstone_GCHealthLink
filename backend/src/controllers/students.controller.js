@@ -269,6 +269,30 @@ const getMyProfile = async (req, res, next) => {
             }
           },
           orderBy: { visitDate: 'desc' } // Newest visits first
+        },
+        physicalExaminations: {
+          orderBy: { examDate: 'desc' },
+          select: {
+            id: true,
+            examDate: true,
+            yearLevel: true,
+            bp: true,
+            cr: true,
+            rr: true,
+            temp: true,
+            weight: true,
+            height: true,
+            bmi: true,
+            visualAcuity: true,
+            skin: true,
+            heent: true,
+            chestLungs: true,
+            heart: true,
+            abdomen: true,
+            extremities: true,
+            others: true,
+            examinedBy: true,
+          }
         }
       }
     });
@@ -287,6 +311,7 @@ const getMyProfile = async (req, res, next) => {
         ...visit,
         chiefComplaintEnc: decryptStringSafe(visit.chiefComplaintEnc),
       })),
+      physicalExaminations: profile.physicalExaminations || [],
     };
 
     res.json({ 

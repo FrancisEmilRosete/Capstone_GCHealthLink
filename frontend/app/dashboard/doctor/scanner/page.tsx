@@ -64,6 +64,18 @@ interface InventoryResponse {
   data: InventoryOption[];
 }
 
+interface VisitRecordSummary {
+  id: string;
+  visitDate?: string;
+  createdAt?: string;
+  chiefComplaintEnc?: string;
+}
+
+interface VisitsResponse {
+  success: boolean;
+  data: VisitRecordSummary[];
+}
+
 interface QueueCreateResponse {
   success: boolean;
   data: {
@@ -218,6 +230,18 @@ function parseQrPayload(raw: string): {
   return { fallbackText: trimmed };
 }
 
+function normalizeYearLevelForPhysicalExam(value?: string | null) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+
+  if (['yr. 1', 'yr 1', 'yr.1', 'yr1', '1', '1st year', 'yr_1'].includes(normalized)) return 'Yr. 1';
+  if (['yr. 2', 'yr 2', 'yr.2', 'yr2', '2', '2nd year', 'yr_2'].includes(normalized)) return 'Yr. 2';
+  if (['yr. 3', 'yr 3', 'yr.3', 'yr3', '3', '3rd year', 'yr_3'].includes(normalized)) return 'Yr. 3';
+  if (['yr. 4', 'yr 4', 'yr.4', 'yr4', '4', '4th year', 'yr_4'].includes(normalized)) return 'Yr. 4';
+
+  return value?.trim?.() || '';
+}
+
 function mapProfileToStudent(userId: string, profile: ScanProfile): UiStudent {
   const resolvedYearLevel = profile.yearLevel
     || profile.physicalExaminations?.[0]?.yearLevel
@@ -304,9 +328,14 @@ export default function ScannerPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const roleSegment = pathname.split('/')[2] || 'staff';
-  const isNurseScanner = roleSegment === 'doctor';
+  const isNurseScanner = roleSegment === 'staff';
   const isDentalScanner = roleSegment === 'dental';
-  const recordBasePath = roleSegment === 'staff' ? '/dashboard/doctor/record' : `/dashboard/${roleSegment}/records`;
+  const recordBasePath =
+    roleSegment === 'staff'
+      ? '/dashboard/staff/students'
+      : roleSegment === 'dental'
+        ? '/dashboard/dental/records'
+        : '/dashboard/doctor/records';
   const studentIdParam = (searchParams.get('studentId') || '').trim();
 
   const [studentInput, setStudentInput] = useState('');
@@ -316,6 +345,7 @@ export default function ScannerPage() {
 
   const [showExamModal, setShowExamModal] = useState(false);
   const [showConsultModal, setShowConsultModal] = useState(false);
+  const [consultInitialValues, setConsultInitialValues] = useState<Partial<ConsultationForm> | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -392,6 +422,7 @@ export default function ScannerPage() {
     setToastType(null);
     setShowConsultModal(false);
     setShowExamModal(false);
+    setConsultInitialValues(null);
     setCameraActive(true);
   }
 
@@ -543,6 +574,69 @@ export default function ScannerPage() {
 
     setCameraActive(false);
     await resolveLookup(query);
+  }
+
+  async function loadLatestNurseTriage(patient: UiStudent) {
+    const token = getToken();
+    if (!token) return null;
+
+    const response = await api.get<VisitsResponse>(
+      `/clinic/visits?studentProfileId=${encodeURIComponent(patient.studentProfileId)}&limit=20`,
+      token,
+    );
+
+    for (const visit of response.data || []) {
+      const raw = visit.chiefComplaintEnc || '';
+      if (!raw) continue;
+
+      try {
+        const parsed = JSON.parse(raw) as {
+          chiefComplaint?: string;
+          symptoms?: string;
+          vitals?: { bp?: string; temperature?: string };
+        };
+
+        const chiefComplaint = parsed.chiefComplaint || parsed.symptoms || '';
+        const bp = parsed.vitals?.bp || '';
+        const temperature = parsed.vitals?.temperature || '';
+
+        if (chiefComplaint || bp || temperature) {
+          return {
+            chiefComplaint,
+            bp,
+            temperature,
+          } as Partial<ConsultationForm>;
+        }
+      } catch {
+        if (raw.trim()) {
+          return {
+            chiefComplaint: raw.trim(),
+          } as Partial<ConsultationForm>;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  async function openConsultModal() {
+    if (!foundStudent) return;
+
+    setConsultInitialValues(null);
+    setShowConsultModal(true);
+
+    if (isNurseScanner) {
+      return;
+    }
+
+    try {
+      const triage = await loadLatestNurseTriage(foundStudent);
+      if (triage) {
+        setConsultInitialValues(triage);
+      }
+    } catch {
+      // Keep consult accessible even when triage preload fails.
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -740,8 +834,34 @@ export default function ScannerPage() {
         );
       }
 
+      if (dispensedMedicines.length > 0) {
+        const queueDate = new Date().toISOString();
+        const queueTime = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const queueResponse = await api.post<QueueCreateResponse>(
+          '/appointments/queue',
+          {
+            studentProfileId: foundStudent.studentProfileId,
+            preferredDate: queueDate,
+            preferredTime: form.visitTime?.trim() || queueTime,
+            serviceType: 'Medical Consultation',
+            symptoms: `For Dispensing: ${normalizedDiagnosis || normalizedChiefComplaint || 'Prescribed medicines'}`,
+          },
+          token,
+        );
+
+        if (queueResponse.data?.id) {
+          await api.put(`/appointments/queue/${queueResponse.data.id}`, { status: 'FOR_DISPENSING' }, token);
+        }
+      }
+
       const skipped = medicines.length - dispensedMedicines.length;
-      if (skipped > 0) {
+      if (dispensedMedicines.length > 0) {
+        if (skipped > 0) {
+          setActionMessage(`Consultation saved. Sent back to nurse for dispensing. ${skipped} medicine item(s) were not in inventory and were skipped.`);
+        } else {
+          setActionMessage('Consultation saved. Patient returned to nurse queue for dispensing.');
+        }
+      } else if (skipped > 0) {
         setActionMessage(`Consultation saved. ${skipped} medicine item(s) were not in inventory and were skipped.`);
       } else {
         setActionMessage(
@@ -816,16 +936,27 @@ export default function ScannerPage() {
     try {
       setError('');
 
-      await api.post(
+      const response = await api.post<{
+        success: boolean;
+        data?: {
+          autoCertificateIssued?: boolean;
+        };
+      }>(
         '/physical-exams',
         {
           studentProfileId: foundStudent.studentProfileId,
           ...form,
+          // Always bind the saved physical exam to the student's current year level.
+          yearLevel: normalizeYearLevelForPhysicalExam(foundStudent.yearLevel) || form.yearLevel,
         },
         token,
       );
 
-      setActionMessage('Physical examination recorded successfully.');
+      setActionMessage(
+        response.data?.autoCertificateIssued
+          ? 'Physical examination recorded successfully. Medical certificate issued automatically.'
+          : 'Physical examination recorded successfully.',
+      );
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -883,6 +1014,7 @@ export default function ScannerPage() {
           mode={isNurseScanner ? 'nurse-triage' : isDentalScanner ? 'dental' : 'full'}
           saveLabel={isNurseScanner ? 'Send to Doctor' : isDentalScanner ? 'Save Dental Consult' : 'Save Doctor Consult'}
           requireDoctorFields={!isNurseScanner}
+          initialValues={consultInitialValues || undefined}
           onClose={() => setShowConsultModal(false)}
           onSave={(data, medicines) => {
             void handleConsultSave(data, medicines);
@@ -969,7 +1101,7 @@ export default function ScannerPage() {
 
           <div className="grid grid-cols-2 gap-3 mt-6">
             <button
-              onClick={() => setShowConsultModal(true)}
+              onClick={() => { void openConsultModal(); }}
               className="bg-teal-500 hover:bg-teal-600 text-white font-semibold text-sm px-4 py-3 rounded-xl transition-colors"
             >
               Consult

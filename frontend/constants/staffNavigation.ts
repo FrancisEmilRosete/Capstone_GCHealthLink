@@ -20,6 +20,7 @@
 import React from 'react';
 import { NavGroup } from '@/types/navigation';
 import {
+  CalendarIcon,
   DashboardIcon,
   ScannerIcon,
   InventoryIcon,
@@ -64,12 +65,6 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
         icon:  ScannerIcon,
       },
       {
-        id:    'logs',
-        label: 'Logs',
-        href:  '/dashboard/staff/logs',
-        icon:  CertificatesIcon,
-      },
-      {
         id:    'inventory',
         label: 'Medical Inventory',
         href:  '/dashboard/staff/inventory',
@@ -89,9 +84,21 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
       },
       {
         id:    'notifications',
-        label: 'Notification',
+        label: 'Notifications',
         href:  '/dashboard/staff/notifications',
         icon:  NotificationsIcon,
+      },
+      {
+        id:    'calendar',
+        label: 'Calendar',
+        href:  '/dashboard/staff/calendar',
+        icon:  CalendarIcon,
+      },
+      {
+        id:    'logs',
+        label: 'Logs',
+        href:  '/dashboard/staff/logs',
+        icon:  CertificatesIcon,
       },
     ],
   },

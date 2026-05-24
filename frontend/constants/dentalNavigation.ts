@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { CertificatesIcon, DashboardIcon, NotificationsIcon, ReportsIcon, ScannerIcon, UsersIcon } from '@/components/icons/NavIcons';
+import { CalendarIcon, CertificatesIcon, DashboardIcon, NotificationsIcon, ReportsIcon, ScannerIcon, UsersIcon } from '@/components/icons/NavIcons';
 
 export interface DentalNavItem {
   id:     string;
@@ -43,12 +43,6 @@ export const DENTAL_NAV_GROUPS: DentalNavGroup[] = [
         icon:  UsersIcon,
       },
       {
-        id:    'logs',
-        label: 'Logs',
-        href:  '/dashboard/dental/logs',
-        icon:  CertificatesIcon,
-      },
-      {
         id:    'reports',
         label: 'Reports',
         href:  '/dashboard/dental/reports',
@@ -59,6 +53,18 @@ export const DENTAL_NAV_GROUPS: DentalNavGroup[] = [
         label: 'Notifications',
         href:  '/dashboard/dental/notifications',
         icon:  NotificationsIcon,
+      },
+      {
+        id:    'calendar',
+        label: 'Calendar',
+        href:  '/dashboard/dental/calendar',
+        icon:  CalendarIcon,
+      },
+      {
+        id:    'logs',
+        label: 'Logs',
+        href:  '/dashboard/dental/logs',
+        icon:  CertificatesIcon,
       },
     ],
   },

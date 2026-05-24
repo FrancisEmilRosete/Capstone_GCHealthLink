@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Clock, Activity, Search, ChevronRight, Loader2 } from 'lucide-react';
 import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
+import HealthConcernsByDepartmentCard from '@/components/dashboard/shared/HealthConcernsByDepartmentCard';
 import ConsultationModal, { type ConsultationForm, type ConsultationPatient } from '@/components/modals/ConsultationModal';
+import { formatTime12Hour } from '@/lib/time';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -411,7 +413,7 @@ export default function DentalDashboardPage() {
                         liveQueue.map((patient) => (
                           <tr key={patient.id} className="hover:bg-[hsl(var(--primary-soft)_/_0.3)] transition-colors group">
                             <td className="px-4 py-3">
-                              <span className="text-sm font-medium text-[hsl(var(--muted-foreground))] tabular-nums">{formatDate(patient.preferredDate)} {patient.preferredTime}</span>
+                              <span className="text-sm font-medium text-[hsl(var(--muted-foreground))] tabular-nums">{formatDate(patient.preferredDate)} {formatTime12Hour(patient.preferredTime)}</span>
                             </td>
                             <td className="px-4 py-3">
                               <div>
@@ -508,6 +510,7 @@ export default function DentalDashboardPage() {
       )}
 
       <PredictiveInsightsCard role="dental" className="mx-8 mb-8" />
+      <HealthConcernsByDepartmentCard className="mx-8 mb-8" />
     </div>
   );
 }

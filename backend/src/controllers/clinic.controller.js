@@ -265,6 +265,8 @@ const getVisits = async (req, res, next) => {
             select: {
               id: true,
               email: true,
+              role: true,
+              clinicStaffType: true,
             },
           },
           dispensedMedicines: {
@@ -295,6 +297,114 @@ const getVisits = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+function toActorName(user) {
+  const firstName = normalizeText(user?.studentProfile?.firstName);
+  const lastName = normalizeText(user?.studentProfile?.lastName);
+  if (firstName || lastName) {
+    return `${firstName} ${lastName}`.trim();
+  }
+
+  const email = normalizeText(user?.email);
+  if (!email) return "Clinic Staff";
+
+  const localPart = email.split("@")[0] || "";
+  const humanized = localPart
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!humanized) return email;
+  return humanized
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function toActorRole(user) {
+  if (user?.clinicStaffType) {
+    return user.clinicStaffType;
+  }
+  return user?.role || "CLINIC_STAFF";
+}
+
+function toActionLabel(action) {
+  return normalizeText(action)
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+const getStaffActivityLogs = async (req, res, next) => {
+  try {
+    const requestedStaffType = normalizeText(req.query?.staffType).toUpperCase();
+    const allowedStaffTypes = ["NURSE", "DOCTOR", "DENTIST"];
+    const staffType = allowedStaffTypes.includes(requestedStaffType) ? requestedStaffType : "NURSE";
+
+    const { page, limit, skip } = parsePaginationParams(req.query, {
+      defaultLimit: 200,
+      maxLimit: 500,
+    });
+
+    const where = {
+      user: {
+        role: "CLINIC_STAFF",
+        clinicStaffType: staffType,
+      },
+      action: {
+        notIn: ["RECORDED_CLINIC_VISIT", "RECORDED_PHYSICAL_EXAM"],
+      },
+    };
+
+    const [logs, total] = await prisma.$transaction([
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { timestamp: "desc" },
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: {
+              email: true,
+              role: true,
+              clinicStaffType: true,
+              studentProfile: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+
+    const rows = logs.map((log) => ({
+      id: log.id,
+      action: log.action,
+      actionLabel: toActionLabel(log.action),
+      timestamp: log.timestamp,
+      targetId: log.targetId || null,
+      ipAddress: log.ipAddress || null,
+      metadata: log.metadata || null,
+      actorName: toActorName(log.user),
+      actorRole: toActorRole(log.user),
+    }));
+
+    return res.json({
+      success: true,
+      message: "Clinic staff activity logs retrieved successfully.",
+      data: rows,
+      pagination: buildPaginationMeta({ page, limit, total }),
+    });
+  } catch (error) {
+    return next(error);
   }
 };
 
@@ -732,6 +842,35 @@ const dispenseMedicine = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Medicine has already been dispensed." });
     }
 
+    const now = new Date();
+    const expirationDate = visitMedicine.inventory.expirationDate ? new Date(visitMedicine.inventory.expirationDate) : null;
+    const isExpired = Boolean(expirationDate && !Number.isNaN(expirationDate.getTime()) && expirationDate < now);
+    const isExpiringSoon = Boolean(expirationDate && !Number.isNaN(expirationDate.getTime()) && expirationDate >= now && expirationDate <= new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)));
+
+    if (isExpired) {
+      await prisma.auditLog.create({
+        data: {
+          userId: req.user.userId,
+          action: "BLOCKED_EXPIRED_MEDICINE_DISPENSE",
+          targetId: visitMedicineId,
+          ipAddress: req.ip,
+          metadata: {
+            inventoryId: visitMedicine.inventoryId,
+            inventoryItemName: visitMedicine.inventory.itemName,
+            quantity: visitMedicine.quantity,
+            visitId: visitMedicine.visitId,
+            expirationDate: visitMedicine.inventory.expirationDate,
+            reason: "Medicine expired",
+          },
+        },
+      });
+
+      return res.status(409).json({
+        success: false,
+        message: `Cannot dispense ${visitMedicine.inventory.itemName} because it is expired.`,
+      });
+    }
+
     if (visitMedicine.inventory.currentStock < visitMedicine.quantity) {
       return res.status(400).json({ 
         success: false, 
@@ -767,6 +906,9 @@ const dispenseMedicine = async (req, res, next) => {
     res.json({
       success: true,
       message: "Medicine dispensed successfully.",
+      warning: isExpiringSoon
+        ? `${visitMedicine.inventory.itemName} is nearing expiry. Please monitor stock usage and restocking.`
+        : undefined,
       data: updated[1],
     });
   } catch (error) {
@@ -844,6 +986,32 @@ const getNurseReports = async (req, res, next) => {
 
     // Forecast logic
     const forecastMap = new Map();
+
+      const inventoryItems = await prisma.inventory.findMany({
+        select: {
+        currentStock: true,
+        reorderThreshold: true,
+        expirationDate: true,
+        },
+      });
+
+      const inventorySummary = inventoryItems.reduce((summary, item) => {
+        const expirationDate = item.expirationDate ? new Date(item.expirationDate) : null;
+        const isExpired = Boolean(expirationDate && !Number.isNaN(expirationDate.getTime()) && expirationDate < today);
+        const isExpiringSoon = Boolean(expirationDate && !Number.isNaN(expirationDate.getTime()) && expirationDate >= today && expirationDate <= new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000)));
+
+        if (isExpired) summary.expired += 1;
+        if (isExpiringSoon) summary.expiringSoon += 1;
+        if (item.currentStock <= item.reorderThreshold) summary.nearReorder += 1;
+        if (item.currentStock === 0) summary.outOfStock += 1;
+
+        return summary;
+      }, {
+        expired: 0,
+        expiringSoon: 0,
+        nearReorder: 0,
+        outOfStock: 0,
+      });
     for (const d of dispensed) {
       if (!forecastMap.has(d.inventoryId)) {
         forecastMap.set(d.inventoryId, { name: d.inventory.itemName, currentStock: d.inventory.currentStock, unit: d.inventory.unit, totalUsed: 0 });
@@ -924,6 +1092,7 @@ const getNurseReports = async (req, res, next) => {
         totalVisits30Days: allVisits.length === 0 ? 87 : visits30Days.length,
         totalMedicinesDispensed: allVisits.length === 0 ? 134 : dispensed.reduce((acc, curr) => acc + curr.quantity, 0),
         inventoryForecast,
+        inventorySummary,
         quarterlyVisits: finalQuarterlyVisits,
         topHealthConcernsPerDept: finalTopHealthConcerns,
         aiInsights
@@ -944,4 +1113,5 @@ module.exports = {
   sendEmergencyAlert,
   dispenseMedicine,
   getNurseReports,
+  getStaffActivityLogs,
 };

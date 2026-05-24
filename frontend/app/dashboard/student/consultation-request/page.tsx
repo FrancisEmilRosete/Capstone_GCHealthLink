@@ -5,6 +5,7 @@ import { Clock3, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { formatTime12Hour } from '@/lib/time';
 
 interface AppointmentResponse {
   success: boolean;
@@ -22,7 +23,10 @@ interface AppointmentResponse {
 
 interface AvailabilityResponse {
   success: boolean;
-  data: Record<string, number>;
+  data: {
+    counts: Record<string, number>;
+    dayAvailability: Record<string, { isAvailable: boolean; slots: string[] }>;
+  };
 }
 
 const SERVICE_OPTIONS = ['Medical Consultation', 'Dental Check-up', 'Medical Clearance'] as const;
@@ -46,8 +50,13 @@ export default function ConsultationRequestPage() {
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1); // 1-12
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
-  const [availability, setAvailability] = useState<Record<string, number>>({});
+  const [availabilityCounts, setAvailabilityCounts] = useState<Record<string, number>>({});
+  const [dayAvailability, setDayAvailability] = useState<Record<string, { isAvailable: boolean; slots: string[] }>>({});
   const [loadingCalendar, setLoadingCalendar] = useState(false);
+
+  function getScopeByServiceType(value: ServiceType): 'medical' | 'dental' {
+    return value === 'Dental Check-up' ? 'dental' : 'medical';
+  }
 
   useEffect(() => {
     async function fetchAvailability() {
@@ -56,8 +65,9 @@ export default function ConsultationRequestPage() {
       
       setLoadingCalendar(true);
       try {
-        const res = await api.get<AvailabilityResponse>(`/appointments/availability?month=${currentMonth}&year=${currentYear}`, token);
-        setAvailability(res.data);
+        const res = await api.get<AvailabilityResponse>(`/appointments/availability?month=${currentMonth}&year=${currentYear}&serviceType=${encodeURIComponent(serviceType)}`, token);
+        setAvailabilityCounts(res.data?.counts || {});
+        setDayAvailability(res.data?.dayAvailability || {});
       } catch (err) {
         console.error('Failed to load availability', err);
       } finally {
@@ -65,7 +75,15 @@ export default function ConsultationRequestPage() {
       }
     }
     fetchAvailability();
-  }, [currentMonth, currentYear]);
+  }, [currentMonth, currentYear, serviceType]);
+
+  useEffect(() => {
+    if (!preferredDate) return;
+    const selectedDay = dayAvailability[preferredDate];
+    if (!selectedDay || !selectedDay.isAvailable || !selectedDay.slots.includes(preferredTime)) {
+      setPreferredTime(selectedDay?.slots?.[0] || '09:00');
+    }
+  }, [dayAvailability, preferredDate, preferredTime]);
 
   async function submitRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -83,6 +101,23 @@ export default function ConsultationRequestPage() {
 
     if (!symptoms.trim()) {
       setError('Please provide your symptoms or reason for visit.');
+      return;
+    }
+
+    const selectedDay = dayAvailability[preferredDate];
+    if (!selectedDay || !selectedDay.isAvailable) {
+      setError(`${getScopeByServiceType(serviceType) === 'dental' ? 'Dentist' : 'Doctor'} is not available on the selected date.`);
+      return;
+    }
+
+    if (!selectedDay.slots.includes(preferredTime)) {
+      setError('Please select a valid available appointment time.');
+      return;
+    }
+
+    const selectedDateTime = new Date(`${preferredDate}T${preferredTime}:00`);
+    if (Number.isNaN(selectedDateTime.getTime()) || selectedDateTime.getTime() <= Date.now()) {
+      setError('Preferred appointment date/time must be in the future.');
       return;
     }
 
@@ -107,8 +142,9 @@ export default function ConsultationRequestPage() {
       setPreferredDate('');
       
       // Refresh calendar
-      const res = await api.get<AvailabilityResponse>(`/appointments/availability?month=${currentMonth}&year=${currentYear}`, token);
-      setAvailability(res.data);
+      const res = await api.get<AvailabilityResponse>(`/appointments/availability?month=${currentMonth}&year=${currentYear}&serviceType=${encodeURIComponent(serviceType)}`, token);
+      setAvailabilityCounts(res.data?.counts || {});
+      setDayAvailability(res.data?.dayAvailability || {});
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -199,8 +235,10 @@ export default function ConsultationRequestPage() {
             ))}
             {days.map((day) => {
               const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const count = availability[dateStr] || 0;
-              const isPast = new Date(dateStr) < new Date(today.setHours(0,0,0,0));
+              const count = availabilityCounts[dateStr] || 0;
+              const isPast = new Date(dateStr) < new Date(todayDateString());
+              const dayConfig = dayAvailability[dateStr];
+              const isDayUnavailable = !dayConfig?.isAvailable;
               
               const isFullyBooked = count >= 10;
               const isFillingUp = count >= 7 && count < 10;
@@ -212,7 +250,9 @@ export default function ConsultationRequestPage() {
               let borderClass = isSelected ? "border-2 border-teal-500" : "border border-transparent";
 
               if (!isPast) {
-                if (isFullyBooked) {
+                if (isDayUnavailable) {
+                  bgClass = "bg-gray-100 text-gray-500 cursor-not-allowed opacity-70";
+                } else if (isFullyBooked) {
                   bgClass = "bg-red-50 text-red-700 cursor-not-allowed opacity-60";
                 } else if (isFillingUp) {
                   bgClass = isSelected ? "bg-amber-400 text-white shadow-sm" : "bg-amber-100 text-amber-800 hover:bg-amber-200 cursor-pointer";
@@ -225,7 +265,7 @@ export default function ConsultationRequestPage() {
                 <button
                   key={day}
                   type="button"
-                  disabled={isPast || isFullyBooked}
+                  disabled={isPast || isFullyBooked || isDayUnavailable}
                   onClick={() => setPreferredDate(dateStr)}
                   className={`relative aspect-square rounded-xl flex items-center justify-center text-sm font-medium transition-all ${bgClass} ${borderClass}`}
                 >
@@ -270,7 +310,12 @@ export default function ConsultationRequestPage() {
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">Service Type</label>
               <select
                 value={serviceType}
-                onChange={(event) => setServiceType(event.target.value as ServiceType)}
+                onChange={(event) => {
+                  const nextService = event.target.value as ServiceType;
+                  setServiceType(nextService);
+                  setPreferredDate('');
+                  setPreferredTime('09:00');
+                }}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all cursor-pointer"
               >
                 {SERVICE_OPTIONS.map((option) => (
@@ -283,13 +328,20 @@ export default function ConsultationRequestPage() {
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">Preferred Time</label>
               <div className="relative">
                 <Clock3 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-teal-600" />
-                <input
-                  type="time"
-                  step={300}
+                <select
                   value={preferredTime}
                   onChange={(event) => setPreferredTime(event.target.value)}
                   className="w-full border border-gray-200 rounded-xl pl-12 pr-4 py-3 text-sm font-medium bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all cursor-pointer"
-                />
+                  disabled={!preferredDate}
+                >
+                  {preferredDate && dayAvailability[preferredDate]?.slots?.length ? (
+                    dayAvailability[preferredDate].slots.map((slot) => (
+                      <option key={slot} value={slot}>{formatTime12Hour(slot)}</option>
+                    ))
+                  ) : (
+                    <option value="09:00">Select date first</option>
+                  )}
+                </select>
               </div>
             </div>
 

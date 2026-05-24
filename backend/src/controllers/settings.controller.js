@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS = {
     contactNumber: "+63 47 224 2000",
     email: "clinic@gordoncollege.edu.ph",
     address: "Gordon College, Olongapo City",
-    operatingHours: "Monday - Friday, 8:00 AM - 5:00 PM",
+    operatingHours: "Monday - Friday, 7:00 AM - 7:00 PM",
   },
   notifications: {
     lowInventory: true,
@@ -27,6 +27,10 @@ const DEFAULT_SETTINGS = {
     loginActivity: false,
     exportActivity: false,
   },
+  appointmentAvailability: {
+    medical: { byDate: {} },
+    dental: { byDate: {} },
+  },
   staffPreferences: {},
 };
 
@@ -34,6 +38,10 @@ function createDefaultSettings() {
   return {
     clinic: { ...DEFAULT_SETTINGS.clinic },
     notifications: { ...DEFAULT_SETTINGS.notifications },
+    appointmentAvailability: {
+      medical: { byDate: {} },
+      dental: { byDate: {} },
+    },
     staffPreferences: {},
   };
 }
@@ -113,6 +121,7 @@ function loadSettingsStore() {
     return {
       clinic: { ...DEFAULT_SETTINGS.clinic, ...(parsed.clinic || {}) },
       notifications: { ...DEFAULT_SETTINGS.notifications, ...(parsed.notifications || {}) },
+      appointmentAvailability: parsed.appointmentAvailability || createDefaultSettings().appointmentAvailability,
       staffPreferences: parsed.staffPreferences || {},
     };
   } catch {
