@@ -69,6 +69,7 @@ export default function DentalDashboardPage() {
   const [liveQueueFilter, setLiveQueueFilter] = useState<LiveQueueFilter>('all');
   const [consultModalOpen, setConsultModalOpen] = useState(false);
   const [consultingPatient, setConsultingPatient] = useState<QueueItem | null>(null);
+  const [dentalInventory, setDentalInventory] = useState<any[]>([]);
   const [isPending, startTransition] = useTransition();
 
   async function loadQueue() {
@@ -100,14 +101,26 @@ export default function DentalDashboardPage() {
 
   useEffect(() => {
     void loadQueue();
+    void loadInventory();
   }, []);
+
+  async function loadInventory() {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const response = await api.get<{ data: any[] }>('/inventory?category=DENTAL', token);
+      setDentalInventory(response.data || []);
+    } catch (err) {
+      console.error('Failed to load dental inventory:', err);
+    }
+  }
 
   function openConsultModal(patient: QueueItem) {
     setConsultingPatient(patient);
     setConsultModalOpen(true);
   }
 
-  async function handleConsultSave(form: ConsultationForm) {
+  async function handleConsultSave(form: ConsultationForm, medicines: { inventoryId: string; qty: string }[] = []) {
     if (!consultingPatient) return;
 
     const token = getToken();
@@ -155,7 +168,11 @@ export default function DentalDashboardPage() {
           visitDate: form.visitDate?.trim() || new Date().toISOString(),
           visitTime: form.visitTime?.trim() || consultingPatient.preferredTime || undefined,
           chiefComplaintEnc: JSON.stringify(structuredComplaint),
-          dispensedMedicines: [],
+          dispensedMedicines: medicines.map((m) => ({
+            inventoryId: m.inventoryId,
+            quantity: parseInt(m.qty, 10),
+            autoDispense: true,
+          })),
         },
         token,
       );
@@ -495,7 +512,7 @@ export default function DentalDashboardPage() {
             age: consultingPatient.studentProfile.age ? String(consultingPatient.studentProfile.age) : '',
             sex: consultingPatient.studentProfile.sex || '',
           } as ConsultationPatient}
-          inventoryOptions={[]}
+          inventoryOptions={dentalInventory}
           mode="dental"
           saveLabel="Save Dental Consult"
           requireDoctorFields
@@ -503,8 +520,8 @@ export default function DentalDashboardPage() {
             chiefComplaint: consultingPatient.symptoms || '',
           }}
           onClose={() => setConsultModalOpen(false)}
-          onSave={(data) => {
-            void handleConsultSave(data);
+          onSave={(data, medicines) => {
+            void handleConsultSave(data, medicines);
           }}
         />
       )}

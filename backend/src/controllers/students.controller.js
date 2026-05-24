@@ -420,10 +420,10 @@ const submitRegistration = async (req, res, next) => {
       });
     }
 
-    if (personal.yearLevel !== undefined && personal.yearLevel !== null && personal.yearLevel !== "" && !yearLevel) {
+    if (!yearLevel) {
       return res.status(400).json({
         success: false,
-        message: "yearLevel must be one of: Yr. 1, Yr. 2, Yr. 3, Yr. 4.",
+        message: "yearLevel is required and must be one of: Yr. 1, Yr. 2, Yr. 3, Yr. 4.",
       });
     }
 
@@ -438,12 +438,60 @@ const submitRegistration = async (req, res, next) => {
       });
     }
 
-    if (personal.age !== undefined && personal.age !== null && personal.age !== "" && age === null) {
-      return res.status(400).json({ success: false, message: "age must be a whole number between 0 and 120." });
+    if (age === null || age < 0 || age > 120) {
+      return res.status(400).json({ success: false, message: "age is required and must be a whole number between 0 and 120." });
     }
 
-    if (personal.birthday && !birthday) {
-      return res.status(400).json({ success: false, message: "birthday must be a valid date." });
+    if (!birthday) {
+      return res.status(400).json({ success: false, message: "birthday is required and must be a valid date." });
+    }
+
+    if (!sex || (sex !== "Male" && sex !== "Female")) {
+      return res.status(400).json({ success: false, message: "sex is required and must be Male or Female." });
+    }
+
+    if (!civilStatus) {
+      return res.status(400).json({ success: false, message: "civilStatus is required." });
+    }
+
+    if (!contact) {
+      return res.status(400).json({ success: false, message: "contact is required." });
+    }
+
+    if (!/^[0-9\s()+-]{7,20}$/.test(contact)) {
+      return res.status(400).json({
+        success: false,
+        message: "Personal contact number must only contain digits, spaces, hyphens, and parentheses (7-20 characters).",
+      });
+    }
+
+    if (!address) {
+      return res.status(400).json({ success: false, message: "address is required." });
+    }
+
+    // Emergency Contact validation
+    let emergencyName = normalizeText(emergency.name);
+    let emergencyRelationship = normalizeText(emergency.relationship);
+    let emergencyContact = normalizeText(emergency.contact);
+    let emergencyAddress = normalizeText(emergency.address);
+
+    if (!emergencyName) {
+      return res.status(400).json({ success: false, message: "Emergency contact person name is required." });
+    }
+    if (!emergencyRelationship) {
+      return res.status(400).json({ success: false, message: "Emergency relationship is required." });
+    }
+    if (!emergencyContact) {
+      return res.status(400).json({ success: false, message: "Emergency contact number is required." });
+    }
+    if (!/^[0-9\s()+-]{7,20}$/.test(emergencyContact)) {
+      return res.status(400).json({
+        success: false,
+        message: "Emergency contact number must only contain digits, spaces, hyphens, and parentheses (7-20 characters).",
+      });
+    }
+    if (!emergencyAddress) {
+      return res.status(400).json({ success: false, message: "Emergency address is required." });
     }
 
     if (consentAgreed !== true) {
@@ -525,10 +573,10 @@ const submitRegistration = async (req, res, next) => {
       createdAccount = true;
     }
 
-    const emergencyName = normalizeText(emergency.name || emergency.contactName);
-    const emergencyRelationship = normalizeText(emergency.relationship);
-    const emergencyContact = normalizeText(emergency.contact || emergency.emergencyContact);
-    const emergencyAddress = normalizeText(emergency.address || emergency.emergencyAddress);
+    emergencyName = normalizeText(emergency.name || emergency.contactName);
+    emergencyRelationship = normalizeText(emergency.relationship);
+    emergencyContact = normalizeText(emergency.contact || emergency.emergencyContact);
+    emergencyAddress = normalizeText(emergency.address || emergency.emergencyAddress);
 
     const profilePayload = {
       studentNumber,

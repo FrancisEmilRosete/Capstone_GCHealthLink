@@ -274,6 +274,7 @@ const getAdvisories = async (req, res, next) => {
         select: {
           studentProfile: {
             select: {
+              id: true,
               courseDept: true,
             },
           },
@@ -281,9 +282,14 @@ const getAdvisories = async (req, res, next) => {
       });
 
       const studentDept = normalizeDept(student?.studentProfile?.courseDept);
+      const studentProfileId = student?.studentProfile?.id;
+      const targetTokens = ["ALL", "STUDENT"];
+      if (studentProfileId) {
+        targetTokens.push(`STUDENT_${studentProfileId}`);
+      }
 
       if (!studentDept) {
-        whereClause = buildTargetDeptWhere(["ALL", "STUDENT"]);
+        whereClause = buildTargetDeptWhere(targetTokens);
       } else {
         if (requestedDept && requestedDept !== "ALL" && requestedDept !== studentDept) {
           return res.status(403).json({
@@ -293,9 +299,9 @@ const getAdvisories = async (req, res, next) => {
         }
 
         if (requestedDept === "ALL") {
-          whereClause = buildTargetDeptWhere(["ALL", "STUDENT"]);
+          whereClause = buildTargetDeptWhere(targetTokens);
         } else {
-          whereClause = buildTargetDeptWhere(["ALL", "STUDENT", studentDept]);
+          whereClause = buildTargetDeptWhere([...targetTokens, studentDept]);
         }
       }
     } else if (requestedDept) {

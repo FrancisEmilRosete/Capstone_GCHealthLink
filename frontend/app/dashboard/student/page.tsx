@@ -306,9 +306,6 @@ export default function StudentDashboard() {
             <Link href="/dashboard/student/notifications" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
               Advisories
             </Link>
-            <Link href="/dashboard/student/certificates" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
-              Medical Certificate
-            </Link>
           </div>
         </div>
       </div>

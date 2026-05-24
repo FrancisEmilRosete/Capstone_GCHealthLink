@@ -67,6 +67,7 @@ function parseDispensedMedicines(value) {
   for (const [index, item] of value.entries()) {
     const inventoryId = normalizeText(item?.inventoryId);
     const quantity = Number(item?.quantity);
+    const autoDispense = Boolean(item?.autoDispense);
 
     if (!inventoryId) {
       return { ok: false, message: `dispensedMedicines[${index}].inventoryId is required.` };
@@ -80,12 +81,17 @@ function parseDispensedMedicines(value) {
       return { ok: false, message: `dispensedMedicines[${index}].quantity must be 1000 or less.` };
     }
 
-    aggregated.set(inventoryId, (aggregated.get(inventoryId) || 0) + quantity);
+    const existing = aggregated.get(inventoryId) || { quantity: 0, autoDispense: false };
+    aggregated.set(inventoryId, {
+      quantity: existing.quantity + quantity,
+      autoDispense: existing.autoDispense || autoDispense,
+    });
   }
 
-  const medicines = [...aggregated.entries()].map(([inventoryId, quantity]) => ({
+  const medicines = [...aggregated.entries()].map(([inventoryId, item]) => ({
     inventoryId,
-    quantity,
+    quantity: item.quantity,
+    autoDispense: item.autoDispense,
   }));
 
   for (const medicine of medicines) {
@@ -604,12 +610,30 @@ const recordVisit = async (req, res, next) => {
 
       if (medicines.medicines.length > 0) {
         for (const med of medicines.medicines) {
+          if (med.autoDispense) {
+            const inventory = await tx.inventory.findUnique({
+              where: { id: med.inventoryId },
+              select: { currentStock: true, itemName: true },
+            });
+            if (!inventory) {
+              throw new Error(`Inventory item not found for ID: ${med.inventoryId}`);
+            }
+            if (inventory.currentStock < med.quantity) {
+              throw new Error(`Insufficient stock for ${inventory.itemName}. Available: ${inventory.currentStock}`);
+            }
+
+            await tx.inventory.update({
+              where: { id: med.inventoryId },
+              data: { currentStock: { decrement: med.quantity } },
+            });
+          }
+
           await tx.visitMedicine.create({
             data: {
               visitId: newVisit.id,
               inventoryId: med.inventoryId,
               quantity: med.quantity,
-              status: "PRESCRIBED",
+              status: med.autoDispense ? "DISPENSED" : "PRESCRIBED",
             },
           });
         }
@@ -903,11 +927,16 @@ const dispenseMedicine = async (req, res, next) => {
       },
     });
 
+    const isLowStock = updated[0].currentStock <= updated[0].reorderThreshold;
+
     res.json({
       success: true,
       message: "Medicine dispensed successfully.",
       warning: isExpiringSoon
         ? `${visitMedicine.inventory.itemName} is nearing expiry. Please monitor stock usage and restocking.`
+        : undefined,
+      lowStockWarning: isLowStock
+        ? `${updated[0].itemName} stock is running low (${updated[0].currentStock} remaining).`
         : undefined,
       data: updated[1],
     });

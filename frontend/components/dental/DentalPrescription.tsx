@@ -1,5 +1,6 @@
-import React from 'react';
-import { Save, Printer, Download, Pill } from 'lucide-react';
+import React, { useState } from 'react';
+import { Save, Printer, History, PenTool, Lock } from 'lucide-react';
+import AuditHistoryModal from './AuditHistoryModal';
 
 interface DentalPrescriptionProps {
   patient: {
@@ -16,21 +17,53 @@ interface DentalPrescriptionProps {
 const DentalPrescription: React.FC<DentalPrescriptionProps> = ({ 
   patient, content, onChange, onPrint, onSave 
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl mx-auto">
+      <AuditHistoryModal 
+        moduleName="Dental Prescription" 
+        isOpen={isHistoryModalOpen} 
+        onClose={() => setIsHistoryModalOpen(false)} 
+      />
+
       <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-slate-100 shadow-sm px-8">
         <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm">Dental Prescription Pad</h3>
-        <div className="flex gap-2">
-          <button onClick={onPrint} className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition-all">
-            <Printer size={16} /> Print Rx
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setIsHistoryModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 transition-colors"
+          >
+            <History size={14} /> History
           </button>
-          <button onClick={onSave} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all">
-            <Save size={16} /> Save to Record
+          
+          <button onClick={onPrint} className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition-all">
+            <Printer size={14} /> Print
           </button>
+          
+          {isEditing ? (
+            <button 
+              onClick={() => {
+                onSave();
+                setIsEditing(false);
+              }} 
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all animate-in zoom-in-95"
+            >
+              <Save size={14} /> Save to Record
+            </button>
+          ) : (
+            <button 
+              onClick={() => setIsEditing(true)} 
+              className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 text-white rounded-xl font-bold text-xs hover:bg-slate-700 shadow-md transition-all"
+            >
+              <PenTool size={14} /> Update
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="bg-white rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden ring-1 ring-slate-100">
+      <div className={`bg-white rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden ring-1 ring-slate-100 transition-all ${!isEditing && 'opacity-90'}`}>
         {/* Pad Header */}
         <div className="p-10 border-b-2 border-dashed border-emerald-100 bg-emerald-50/20">
           <div className="flex justify-between items-start mb-12">
@@ -68,15 +101,16 @@ const DentalPrescription: React.FC<DentalPrescriptionProps> = ({
         </div>
 
         {/* Rx Body */}
-        <div className="p-10 min-h-[400px] relative bg-white flex flex-col">
+        <div className={`p-10 min-h-[400px] relative flex flex-col transition-colors ${isEditing ? 'bg-emerald-50/10' : 'bg-white'}`}>
           <div className="absolute top-10 left-10 text-7xl font-serif italic text-emerald-100/50 select-none pointer-events-none">
             Rx
           </div>
           <textarea
+            readOnly={!isEditing}
             value={content}
             onChange={(e) => onChange(e.target.value)}
             placeholder="Type prescriptions, dosage, and frequency here..."
-            className="flex-1 w-full bg-transparent border-none focus:ring-0 outline-none font-serif text-xl leading-relaxed text-slate-700 placeholder:text-slate-200 z-10 min-h-[300px]"
+            className={`flex-1 w-full bg-transparent border-none focus:ring-0 outline-none font-serif text-xl leading-relaxed text-slate-700 placeholder:text-slate-200 z-10 min-h-[300px] resize-none ${!isEditing && 'cursor-not-allowed'}`}
           />
         </div>
 

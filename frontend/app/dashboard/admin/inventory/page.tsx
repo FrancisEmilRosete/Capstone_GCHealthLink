@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { api, ApiError } from '@/lib/api';
-import { getToken } from '@/lib/auth';
+import { getToken, getNormalizedUserRole } from '@/lib/auth';
 import PaginationControls from '@/components/ui/PaginationControls';
 
 type StockStatus = 'In Stock' | 'Low Stock' | 'Out of Stock';
@@ -113,6 +113,12 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 }
 
 export default function AdminInventoryPage() {
+	const role = getNormalizedUserRole();
+	const isDental = role === 'DENTAL';
+	const itemNameLabel = isDental ? 'Supply' : 'Medicine';
+	const titleText = isDental ? 'Dental Inventory' : 'Medicine Inventory';
+	const subtitleText = isDental ? 'Dental Supply Inventory: track stock levels and expiration dates.' : 'Medicine Supply Inventory: track stock levels and expiration dates.';
+	
 	const [items, setItems] = useState<InventoryItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -156,7 +162,12 @@ export default function AdminInventoryPage() {
 		try {
 			if (showLoader) setLoading(true);
 			setError('');
-			const response = await api.get<InventoryResponse>('/inventory', token);
+			
+			let endpoint = '/inventory';
+			if (isDental) endpoint += '?category=DENTAL';
+			else if (role === 'CLINIC_STAFF' || role === 'DOCTOR') endpoint += '?category=MEDICINE';
+
+			const response = await api.get<InventoryResponse>(endpoint, token);
 			setItems(response.data ?? []);
 		} catch (err) {
 			if (err instanceof ApiError) {
@@ -217,16 +228,22 @@ export default function AdminInventoryPage() {
 			setError('');
 			setSuccessMessage('');
 
+			const role = getNormalizedUserRole();
+			let categoryPayload = {};
+			if (role === 'DENTAL') categoryPayload = { category: 'DENTAL' };
+			else if (role === 'CLINIC_STAFF' || role === 'DOCTOR') categoryPayload = { category: 'MEDICINE' };
+
 			const payload = {
 				itemName: form.itemName.trim(),
 				currentStock: Number(form.currentStock),
 				reorderThreshold: Number(form.reorderThreshold),
 				unit: form.unit.trim(),
 				expirationDate: form.expirationDate || null,
+				...categoryPayload
 			};
 
 			const response = await api.post<InventoryMutationResponse>('/inventory', payload, token);
-			setSuccessMessage(response.message || 'Medicine added successfully.');
+			setSuccessMessage(response.message || `${itemNameLabel} added successfully.`);
 			resetForm();
 			setIsAddModalOpen(false);
 			await loadInventory(false);
@@ -234,7 +251,7 @@ export default function AdminInventoryPage() {
 			if (err instanceof ApiError) {
 				setError(err.message);
 			} else {
-				setError('Failed to add medicine.');
+				setError(`Failed to add ${itemNameLabel.toLowerCase()}.`);
 			}
 		} finally {
 			setSaving(false);
@@ -256,23 +273,28 @@ export default function AdminInventoryPage() {
 			setError('');
 			setSuccessMessage('');
 
+			let categoryPayload = {};
+			if (isDental) categoryPayload = { category: 'DENTAL' };
+			else if (role === 'CLINIC_STAFF' || role === 'DOCTOR') categoryPayload = { category: 'MEDICINE' };
+
 			const payload = {
 				itemName: editForm.itemName.trim(),
 				currentStock: Number(editForm.currentStock),
 				reorderThreshold: Number(editForm.reorderThreshold),
 				unit: editForm.unit.trim(),
 				expirationDate: editForm.expirationDate || null,
+				...categoryPayload
 			};
 
 			const response = await api.put<InventoryMutationResponse>(`/inventory/${editingItem.id}`, payload, token);
-			setSuccessMessage(response.message || 'Medicine updated successfully.');
+			setSuccessMessage(response.message || `${itemNameLabel} updated successfully.`);
 			setEditingItem(null);
 			await loadInventory(false);
 		} catch (err) {
 			if (err instanceof ApiError) {
 				setError(err.message);
 			} else {
-				setError('Failed to update medicine.');
+				setError(`Failed to update ${itemNameLabel.toLowerCase()}.`);
 			}
 		} finally {
 			setUpdating(false);
@@ -298,7 +320,7 @@ export default function AdminInventoryPage() {
 			if (err instanceof ApiError) {
 				setError(err.message);
 			} else {
-				setError('Failed to remove medicine.');
+				setError(`Failed to remove ${itemNameLabel.toLowerCase()}.`);
 			}
 		} finally {
 			setDeletingId(null);
@@ -365,8 +387,8 @@ export default function AdminInventoryPage() {
 		<div className="p-4 sm:p-6 space-y-5">
 			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 				<div>
-					<h1 className="text-xl font-bold text-gray-900">Medicine Inventory</h1>
-					<p className="text-xs text-gray-400 mt-0.5">Supply Inventory: track stock levels and expiration dates.</p>
+					<h1 className="text-xl font-bold text-gray-900">{titleText}</h1>
+					<p className="text-xs text-gray-400 mt-0.5">{subtitleText}</p>
 				</div>
 				<button
 					type="button"
@@ -377,7 +399,7 @@ export default function AdminInventoryPage() {
 					}}
 					className="px-4 py-2 text-xs font-semibold rounded-xl bg-teal-500 hover:bg-teal-600 text-white"
 				>
-					Add Medicine
+					Add {itemNameLabel}
 				</button>
 			</div>
 
@@ -565,18 +587,18 @@ export default function AdminInventoryPage() {
 				<div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4">
 					<div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
 						<div className="border-b border-gray-100 px-5 py-4 flex items-center justify-between">
-							<h2 className="text-sm font-semibold text-gray-900">Add Medicine</h2>
+							<h2 className="text-sm font-semibold text-gray-900">Add {itemNameLabel}</h2>
 							<button type="button" onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600">x</button>
 						</div>
 						<form className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={handleAddMedicine}>
-							<input type="text" value={form.itemName} onChange={(event) => setForm((prev) => ({ ...prev, itemName: event.target.value }))} placeholder="Medicine name" required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300" />
+							<input type="text" value={form.itemName} onChange={(event) => setForm((prev) => ({ ...prev, itemName: event.target.value }))} placeholder={`${itemNameLabel} name`} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300" />
 							<input type="number" min={1} value={form.currentStock} onChange={(event) => setForm((prev) => ({ ...prev, currentStock: event.target.value }))} placeholder="Current stock" required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300" />
 							<input type="number" min={1} value={form.reorderThreshold} onChange={(event) => setForm((prev) => ({ ...prev, reorderThreshold: event.target.value }))} placeholder="Reorder threshold" required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300" />
 							<input type="text" value={form.unit} onChange={(event) => setForm((prev) => ({ ...prev, unit: event.target.value }))} placeholder="Unit (e.g. tablets, bottles)" required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300" />
 							<input type="date" value={form.expirationDate} onChange={(event) => setForm((prev) => ({ ...prev, expirationDate: event.target.value }))} className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 md:col-span-2" />
 							<div className="md:col-span-2 flex items-center justify-end gap-2 pt-1">
 								<button type="button" onClick={() => setIsAddModalOpen(false)} className="px-3 py-2 text-xs font-semibold rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">Cancel</button>
-								<button type="submit" disabled={saving} className="px-4 py-2 text-xs font-semibold rounded-xl bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-60">{saving ? 'Adding...' : 'Add Medicine'}</button>
+								<button type="submit" disabled={saving} className="px-4 py-2 text-xs font-semibold rounded-xl bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-60">{saving ? 'Adding...' : `Add ${itemNameLabel}`}</button>
 							</div>
 						</form>
 					</div>
@@ -587,13 +609,13 @@ export default function AdminInventoryPage() {
 				<div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4">
 					<div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
 						<div className="border-b border-gray-100 px-5 py-4 flex items-center justify-between">
-							<h2 className="text-sm font-semibold text-gray-900">Edit Medicine</h2>
+							<h2 className="text-sm font-semibold text-gray-900">Edit {itemNameLabel}</h2>
 							<button type="button" onClick={() => setEditingItem(null)} className="text-gray-400 hover:text-gray-600">x</button>
 						</div>
 						<form className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={handleUpdateMedicine}>
 							<div>
-								<label className="block mb-1 text-xs font-semibold text-gray-600">Medicine Name</label>
-								<input type="text" value={editForm.itemName} onChange={(event) => setEditForm((prev) => ({ ...prev, itemName: event.target.value }))} placeholder="Medicine name" required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300" />
+								<label className="block mb-1 text-xs font-semibold text-gray-600">{itemNameLabel} Name</label>
+								<input type="text" value={editForm.itemName} onChange={(event) => setEditForm((prev) => ({ ...prev, itemName: event.target.value }))} placeholder={`${itemNameLabel} name`} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300" />
 							</div>
 							<div>
 								<label className="block mb-1 text-xs font-semibold text-gray-600">Current Stock</label>
@@ -623,7 +645,7 @@ export default function AdminInventoryPage() {
 			{deletingItem && (
 				<div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4">
 					<div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-5 space-y-4">
-						<h2 className="text-sm font-semibold text-gray-900">Delete Medicine</h2>
+						<h2 className="text-sm font-semibold text-gray-900">Delete {itemNameLabel}</h2>
 						<p className="text-xs text-gray-600">Are you sure you want to delete <span className="font-semibold text-gray-800">{deletingItem.itemName}</span>?</p>
 						<div className="flex items-center justify-end gap-2">
 							<button type="button" onClick={() => setDeletingItem(null)} className="px-3 py-2 text-xs font-semibold rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">Cancel</button>

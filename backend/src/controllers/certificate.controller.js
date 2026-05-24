@@ -71,7 +71,11 @@ const listCertificates = async (req, res, next) => {
     const certificateType = normalizeText(req.query.type).toUpperCase();
 
     const where = {};
-    if (query) {
+    if (req.user.role === "STUDENT") {
+      where.studentProfile = {
+        userId: req.user.userId,
+      };
+    } else if (query) {
       where.OR = [
         { studentProfile: { studentNumber: { contains: query, mode: 'insensitive' } } },
         { studentProfile: { firstName: { contains: query, mode: 'insensitive' } } },
@@ -149,6 +153,7 @@ const issueCertificate = async (req, res, next) => {
 
     // Map frontend value PHYSICAL_EXAM → Prisma enum PHYSICAL_EXAMINATION
     const type = req.body?.certificateType === 'PHYSICAL_EXAM' ? 'PHYSICAL_EXAMINATION' : 'CONSULTATION';
+    const typeLabel = type === 'PHYSICAL_EXAMINATION' ? 'Physical Examination' : 'Consultation';
 
     const [cert] = await prisma.$transaction([
       prisma.medicalCertificate.create({
@@ -165,6 +170,15 @@ const issueCertificate = async (req, res, next) => {
         include: {
           studentProfile: { select: { studentNumber: true, firstName: true, lastName: true, courseDept: true } },
           issuedBy: { select: { email: true } },
+        }
+      }),
+      prisma.healthAdvisory.create({
+        data: {
+          title: "New Medical Certificate Issued",
+          message: `An official clinic medical certificate (${typeLabel}) has been issued for you. You can view or download it directly.`,
+          targetDept: `STUDENT_${student.id}`,
+          severity: "INFO",
+          createdBy: req.user.userId,
         }
       }),
       prisma.auditLog.create({

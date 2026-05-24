@@ -37,6 +37,11 @@ enum MedicalCertificateType {
   PHYSICAL_EXAMINATION @map("physical_examination")
 }
 
+enum InventoryCategory {
+  MEDICINE
+  DENTAL
+}
+
 model User {
   id               String         @id @default(cuid())
   role             UserRole       @default(STUDENT)
@@ -259,6 +264,7 @@ model Inventory {
   reorderThreshold Int
   unit             String
   expirationDate   DateTime?
+  category         InventoryCategory @default(MEDICINE)
 
   dispensedIn VisitMedicine[]
 
@@ -266,6 +272,7 @@ model Inventory {
   updatedAt DateTime @updatedAt
 
   @@index([itemName])
+  @@index([category])
 }
 
 model AuditLog {

@@ -54,14 +54,19 @@ const getInventory = async (req, res, next) => {
       maxLimit: 1000,
     });
     const q = normalizeText(req.query?.q);
-    const where = q
-      ? {
-          OR: [
-            { itemName: { contains: q, mode: "insensitive" } },
-            { unit: { contains: q, mode: "insensitive" } },
-          ],
-        }
-      : undefined;
+    const category = normalizeText(req.query?.category).toUpperCase();
+    const where = {};
+    
+    if (q) {
+      where.OR = [
+        { itemName: { contains: q, mode: "insensitive" } },
+        { unit: { contains: q, mode: "insensitive" } },
+      ];
+    }
+    
+    if (category === "MEDICINE" || category === "DENTAL") {
+      where.category = category;
+    }
 
     const [items, total] = await prisma.$transaction([
       prisma.inventory.findMany({
@@ -104,6 +109,9 @@ const addInventoryItem = async (req, res, next) => {
   try {
     const itemName = normalizeText(req.body?.itemName);
     const unit = normalizeText(req.body?.unit);
+    let category = normalizeText(req.body?.category).toUpperCase();
+    if (category !== "DENTAL") category = "MEDICINE"; // Default to MEDICINE if invalid or missing
+
     const currentStockValidation = parsePositiveInteger(req.body?.currentStock, "currentStock");
     const reorderThresholdValidation = parsePositiveInteger(req.body?.reorderThreshold, "reorderThreshold");
     
@@ -156,7 +164,8 @@ const addInventoryItem = async (req, res, next) => {
         currentStock: currentStockValidation.value,
         reorderThreshold: reorderThresholdValidation.value, // The alert level (e.g., warn when below 20)
         unit, // e.g., "pcs", "mg", "bottles"
-        expirationDate
+        expirationDate,
+        category
       }
     });
 
@@ -169,6 +178,7 @@ const addInventoryItem = async (req, res, next) => {
         reorderThreshold: newItem.reorderThreshold,
         unit: newItem.unit,
         expirationDate: newItem.expirationDate,
+        category: newItem.category,
       },
     };
 
@@ -260,6 +270,10 @@ const updateInventoryItem = async (req, res, next) => {
 
     const itemName = normalizeText(req.body?.itemName);
     const unit = normalizeText(req.body?.unit);
+    let category = normalizeText(req.body?.category).toUpperCase();
+    if (category !== "DENTAL" && category !== "MEDICINE") {
+      category = undefined; // Do not update category if invalid/missing
+    }
     const currentStockValidation = parseNonNegativeInteger(req.body?.currentStock, "currentStock");
     const reorderThresholdValidation = parsePositiveInteger(req.body?.reorderThreshold, "reorderThreshold");
 
@@ -303,6 +317,7 @@ const updateInventoryItem = async (req, res, next) => {
         reorderThreshold: reorderThresholdValidation.value,
         unit,
         expirationDate,
+        ...(category ? { category } : {}),
       },
     });
 
@@ -319,6 +334,7 @@ const updateInventoryItem = async (req, res, next) => {
           reorderThreshold: updatedItem.reorderThreshold,
           unit: updatedItem.unit,
           expirationDate: updatedItem.expirationDate,
+          category: updatedItem.category,
         },
       },
     };

@@ -46,10 +46,12 @@ const inputCls = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 r
 const selectCls = `${inputCls} appearance-none`;
 const labelCls  = 'block text-xs text-gray-500 dark:text-gray-400 mb-1';
 
-function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({ label, children, className = '', required }: { label: string; children: React.ReactNode; className?: string; required?: boolean }) {
   return (
     <div className={className}>
-      <label className={labelCls}>{label}</label>
+      <label className={labelCls}>
+        {label} {required && <span className="text-red-500 font-bold">*</span>}
+      </label>
       {children}
     </div>
   );
@@ -130,13 +132,13 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
       <h2 className="text-base font-bold text-gray-800 dark:text-gray-100 mb-5">Personal Information</h2>
       <div className="space-y-4">
         <div className="grid grid-cols-3 gap-4">
-          <Field label="Student ID">
+          <Field label="Student ID" required={true}>
             <input className={inputCls} placeholder="e.g. 2023-0001" value={data.studentId} onChange={e => set('studentId', e.target.value)} />
           </Field>
-          <Field label="First Name">
+          <Field label="First Name" required={true}>
             <input className={inputCls} placeholder="" value={data.firstName} onChange={e => set('firstName', e.target.value)} />
           </Field>
-          <Field label="Last Name">
+          <Field label="Last Name" required={true}>
             <input className={inputCls} placeholder="" value={data.lastName} onChange={e => set('lastName', e.target.value)} />
           </Field>
         </div>
@@ -145,7 +147,7 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
           <Field label="Middle Initial">
             <input className={inputCls} placeholder="" value={data.middleInitial} onChange={e => set('middleInitial', e.target.value)} />
           </Field>
-          <Field label="College (Department)">
+          <Field label="College (Department)" required={true}>
             <select
               className={selectCls}
               value={selectedDepartment}
@@ -164,7 +166,7 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
               ))}
             </select>
           </Field>
-          <Field label="Course">
+          <Field label="Course" required={true}>
             <select
               className={selectCls}
               value={data.course}
@@ -177,7 +179,7 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
               ))}
             </select>
           </Field>
-          <Field label="Year Level">
+          <Field label="Year Level" required={true}>
             <select className={selectCls} value={data.yearLevel} onChange={e => set('yearLevel', e.target.value)}>
               <option value="">Select Year Level</option>
               {YEAR_LEVELS.map((year) => (
@@ -188,12 +190,24 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
         </div>
 
         <div className="grid grid-cols-3 gap-4">
+          <Field label="Age" required={true}>
+            <input
+              type="number"
+              min="0"
+              step={1}
+              className={inputCls}
+              placeholder=""
+              value={data.age}
+              onChange={e => {
+                const val = e.target.value;
+                if (val === '' || /^\d+$/.test(val)) {
+                  set('age', val);
+                }
+              }}
+            />
+          </Field>
           <div>
-            <label className={labelCls}>Age</label>
-            <input className={inputCls} placeholder="" value={data.age} onChange={e => set('age', e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls}>Sex</label>
+            <label className={labelCls}>Sex <span className="text-red-500 font-bold">*</span></label>
             <div className="flex items-center gap-5 h-[38px]">
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                 <input type="radio" name="sex" value="Male"   checked={data.sex === 'Male'}   onChange={() => set('sex', 'Male')}   className="accent-teal-500" /> Male
@@ -203,7 +217,7 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
               </label>
             </div>
           </div>
-          <Field label="Birthday">
+          <Field label="Birthday" required={true}>
             <div className="relative">
               <input
                 ref={birthdayInputRef}
@@ -235,21 +249,31 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Civil Status">
+          <Field label="Civil Status" required={true}>
             <select className={selectCls} value={data.civilStatus} onChange={e => set('civilStatus', e.target.value)}>
               <option value="">Select Status</option>
               <option>Single</option><option>Married</option><option>Widowed</option>
             </select>
           </Field>
-          <Field label="Contact Number">
-            <input className={inputCls} placeholder="(XXX)-XXXX-XXXX" value={data.contact} onChange={e => set('contact', e.target.value)} />
+          <Field label="Contact Number" required={true}>
+            <input
+              className={inputCls}
+              placeholder="e.g. 09123456789 or (02) 123-4567"
+              value={data.contact}
+              onChange={e => {
+                const val = e.target.value;
+                if (val === '' || /^[0-9\s()+-]*$/.test(val)) {
+                  set('contact', val);
+                }
+              }}
+            />
           </Field>
         </div>
 
-        <Field label="Email Address">
+        <Field label="Email Address" required={true}>
           <input type="email" className={inputCls} placeholder="student@gchealth.edu" value={data.email} onChange={e => set('email', e.target.value)} />
         </Field>
-        <Field label="Home Address">
+        <Field label="Home Address" required={true}>
           <input className={inputCls} placeholder="" value={data.address} onChange={e => set('address', e.target.value)} />
         </Field>
       </div>
@@ -269,20 +293,30 @@ function StepEmergency({ data, set }: { data: EmergencyData; set: (k: keyof Emer
       <h2 className="text-base font-bold text-gray-800 dark:text-gray-100 mb-5">Emergency Contact</h2>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Contact Person Name">
+          <Field label="Contact Person Name" required={true}>
             <input className={inputCls} placeholder="" value={data.name} onChange={e => set('name', e.target.value)} />
           </Field>
-          <Field label="Relationship">
+          <Field label="Relationship" required={true}>
             <select className={selectCls} value={data.relationship} onChange={e => set('relationship', e.target.value)}>
               <option value="">Select Relationship</option>
               {RELATIONSHIPS.map(r => <option key={r}>{r}</option>)}
             </select>
           </Field>
         </div>
-        <Field label="Contact Number">
-          <input className={inputCls} placeholder="" value={data.contact} onChange={e => set('contact', e.target.value)} />
+        <Field label="Contact Number" required={true}>
+          <input
+            className={inputCls}
+            placeholder="e.g. 09123456789 or (02) 123-4567"
+            value={data.contact}
+            onChange={e => {
+              const val = e.target.value;
+              if (val === '' || /^[0-9\s()+-]*$/.test(val)) {
+                set('contact', val);
+              }
+            }}
+          />
         </Field>
-        <Field label="Complete Address">
+        <Field label="Complete Address" required={true}>
           <input className={inputCls} placeholder="" value={data.address} onChange={e => set('address', e.target.value)} />
         </Field>
       </div>
@@ -456,6 +490,33 @@ export default function RegistrationPage() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  function validateStep(currentStep: number): boolean {
+    setSubmitError('');
+    if (currentStep === 1) {
+      if (!personal.studentId.trim()) { setSubmitError('Student ID is required.'); return false; }
+      if (!personal.firstName.trim()) { setSubmitError('First Name is required.'); return false; }
+      if (!personal.lastName.trim()) { setSubmitError('Last Name is required.'); return false; }
+      if (!personal.department) { setSubmitError('College (Department) is required.'); return false; }
+      if (!personal.course) { setSubmitError('Course is required.'); return false; }
+      if (!personal.yearLevel) { setSubmitError('Year Level is required.'); return false; }
+      if (!personal.age.trim()) { setSubmitError('Age is required.'); return false; }
+      if (!personal.sex) { setSubmitError('Sex is required.'); return false; }
+      if (!personal.birthday) { setSubmitError('Birthday is required.'); return false; }
+      if (!personal.civilStatus) { setSubmitError('Civil Status is required.'); return false; }
+      if (!personal.contact.trim()) { setSubmitError('Contact Number is required.'); return false; }
+      if (!/^[0-9\s()+-]{7,20}$/.test(personal.contact)) { setSubmitError('Please enter a valid personal contact number (7-20 characters: digits, spaces, hyphens, and parentheses only).'); return false; }
+      if (!personal.email.trim()) { setSubmitError('Email Address is required.'); return false; }
+      if (!personal.address.trim()) { setSubmitError('Home Address is required.'); return false; }
+    } else if (currentStep === 2) {
+      if (!emergency.name.trim()) { setSubmitError('Contact Person Name is required.'); return false; }
+      if (!emergency.relationship) { setSubmitError('Relationship is required.'); return false; }
+      if (!emergency.contact.trim()) { setSubmitError('Emergency Contact Number is required.'); return false; }
+      if (!/^[0-9\s()+-]{7,20}$/.test(emergency.contact)) { setSubmitError('Please enter a valid emergency contact number (7-20 characters: digits, spaces, hyphens, and parentheses only).'); return false; }
+      if (!emergency.address.trim()) { setSubmitError('Complete Address is required.'); return false; }
+    }
+    return true;
+  }
+
   async function handleSubmit() {
     const token = getToken();
     if (!token) {
@@ -468,6 +529,10 @@ export default function RegistrationPage() {
       return;
     }
 
+    if (!validateStep(1) || !validateStep(2)) {
+      return;
+    }
+
     if (!isValidDepartmentCode(personal.department)) {
       setSubmitError('Please select a valid college (department).');
       return;
@@ -475,11 +540,6 @@ export default function RegistrationPage() {
 
     if (!isValidCourseForDepartment(personal.course, personal.department)) {
       setSubmitError('Please select a valid course for the selected college.');
-      return;
-    }
-
-    if (!personal.yearLevel) {
-      setSubmitError('Please select your year level.');
       return;
     }
 
@@ -588,7 +648,11 @@ export default function RegistrationPage() {
         </button>
 
         {step < STEPS.length ? (
-          <button onClick={() => setStep(s => s + 1)}
+          <button onClick={() => {
+            if (validateStep(step)) {
+              setStep(s => s + 1);
+            }
+          }}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold transition">
             Next Step
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

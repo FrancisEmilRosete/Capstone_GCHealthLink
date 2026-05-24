@@ -31,6 +31,7 @@ function escapeHtml(text: string): string {
 
 export function printCertificate(cert: PrintableCertificate): void {
   const isPhysical = cert.certificateType === 'PHYSICAL_EXAM';
+  const isDental = cert.certificateType === 'DENTAL' || cert.certificateType === 'DENTAL_CERTIFICATE';
 
   const formattedDate = new Date(cert.issuedAt).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -38,6 +39,237 @@ export function printCertificate(cert: PrintableCertificate): void {
     day: 'numeric',
   });
 
+  if (isDental) {
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dental Certificate &mdash; ${escapeHtml(cert.student)}</title>
+  <style>
+    @page {
+      size: A5 landscape; /* 210mm x 148mm */
+      margin: 15mm;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 11pt;
+      color: #000;
+      background: #fff;
+      line-height: 1.5;
+    }
+    .page {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .header-logos-left {
+      display: flex;
+      gap: 5px;
+      margin-right: 15px;
+    }
+    .header-logos-left img {
+      width: 60px;
+      height: 60px;
+    }
+    .header-text {
+      flex: 1;
+      text-align: center;
+    }
+    .header-text h1 {
+      font-size: 14pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin: 0;
+      padding: 0;
+    }
+    .header-text p.address {
+      font-size: 8.5pt;
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+    .header-text p.contact {
+      font-size: 8.5pt;
+      margin-top: 1px;
+      line-height: 1.2;
+    }
+    .header-text p.unit {
+      font-size: 11pt;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .header-text p.sub-unit {
+      font-size: 11pt;
+      font-weight: bold;
+      margin-top: 2px;
+    }
+    .header-logo-right {
+      width: 60px;
+      height: 60px;
+      margin-left: 15px;
+    }
+
+    /* ── Title ── */
+    .title-container {
+      text-align: center;
+      margin-top: 5px;
+      margin-bottom: 25px;
+    }
+    .title-container h2 {
+      font-size: 14pt;
+      font-weight: bold;
+      text-decoration: underline;
+      text-transform: uppercase;
+    }
+
+    /* ── Date ── */
+    .date-row {
+      display: flex;
+      justify-content: flex-end;
+      font-size: 11pt;
+      margin-bottom: 15px;
+    }
+    .underline-value {
+      border-bottom: 1px solid #000;
+      padding: 0 10px;
+      display: inline-block;
+      text-align: center;
+      min-width: 40px;
+      font-weight: bold;
+    }
+
+    /* ── Body Content ── */
+    .body-content {
+      font-size: 11pt;
+      margin-bottom: 20px;
+      flex: 1;
+    }
+    .salutation {
+      margin-bottom: 15px;
+    }
+    .paragraph {
+      text-indent: 40px;
+      margin-bottom: 15px;
+      line-height: 1.8;
+      text-align: justify;
+    }
+    .paragraph span.underline-value {
+      font-weight: bold;
+    }
+
+    /* ── Signatures ── */
+    .footer {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      margin-top: 30px;
+    }
+    .signature-line {
+      border-bottom: 1px solid #000;
+      width: 200px;
+      margin-bottom: 20px;
+    }
+    .prc-row {
+      display: flex;
+      align-items: center;
+      margin-right: 20px;
+    }
+    .prc-row span {
+      border-bottom: 1px solid #000;
+      min-width: 150px;
+      display: inline-block;
+    }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-logos-left">
+        <img src="/icons/gc-logo.png" alt="GC Logo 1" />
+        <img src="/icons/gc-logo.png" alt="GC Logo 2" />
+      </div>
+      <div class="header-text">
+        <h1>GORDON COLLEGE</h1>
+        <p class="address">Olongapo City Sports Complex, Donor Street, East Tapinac, Olongapo City</p>
+        <p class="contact">Tel. Nos.: (047) 224-2089 / (047) 602-7175<br/>Website: <span style="text-decoration:underline;">www.gordoncollege.edu.ph</span></p>
+        <p class="unit">Office of Student Welfare & Services</p>
+        <p class="sub-unit">Health Services Unit</p>
+      </div>
+      <img src="/icons/clinic-logo.png" alt="Clinic Logo" class="header-logo-right" />
+    </div>
+
+    <!-- Title -->
+    <div class="title-container">
+      <h2>DENTAL CERTIFICATE</h2>
+    </div>
+
+    <!-- Date -->
+    <div class="date-row">
+      Date: <span class="underline-value" style="min-width:150px;">${escapeHtml(formattedDate)}</span>
+    </div>
+
+    <!-- Body Content -->
+    <div class="body-content">
+      <p class="salutation">To Whom It May Concern:</p>
+      
+      <p class="paragraph">
+        This is to certify that the bearer Mr. /Ms. <span class="underline-value" style="min-width:250px;">${escapeHtml(cert.student)}</span> age <span class="underline-value">N/A</span>
+        from #<span class="underline-value" style="min-width:150px;">${escapeHtml(cert.course || '')}</span> had undergone <span class="underline-value" style="min-width:150px;">${escapeHtml(cert.diagnosisFindings || 'Dental Treatment')}</span>
+        in the clinic on <span class="underline-value" style="min-width:120px;">${escapeHtml(formattedDate)}</span> because of <span class="underline-value" style="min-width:150px;">${escapeHtml(cert.recommendationsRemarks || 'Dental Checkup')}</span>.
+      </p>
+
+      <p class="paragraph">
+        The patient is advised to: <span class="underline-value" style="min-width:300px;">${escapeHtml(cert.recommendationsRemarks || '')}</span>.
+      </p>
+
+      <p style="margin-top: 15px;">
+        This certificate is issued for whatever purpose it may serve.
+      </p>
+    </div>
+
+    <!-- Footer Signatures -->
+    <div class="footer">
+      <div class="signature-line"></div>
+      <div class="prc-row">
+        PRC Lic.# <span></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function () {
+      window.print();
+      window.onafterprint = function () { window.close(); };
+    };
+  </script>
+</body>
+</html>`;
+
+    const popup = window.open('', '_blank', 'width=1120,height=860,scrollbars=yes');
+    if (!popup) {
+      alert('Pop-up blocked. Please allow pop-ups for this site to enable printing.');
+      return;
+    }
+    popup.document.write(html);
+    popup.document.close();
+    return;
+  }
+
+  // --- MEDICAL CERTIFICATE FALLBACK ---
   const statementText = isPhysical
     ? 'This is to certify that the below-named student has undergone a physical examination and the findings are as follows:'
     : 'The student was seen by the college physician/ nurse on duty:';
@@ -51,7 +283,7 @@ export function printCertificate(cert: PrintableCertificate): void {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Medical Certificate &mdash; ${escapeHtml(cert.student)}</title>
+  <title>Medical Certificate &mdash; \${escapeHtml(cert.student)}</title>
   <style>
     @page {
       size: 5.5in 8.5in;

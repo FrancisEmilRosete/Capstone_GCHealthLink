@@ -378,9 +378,12 @@ export default function NurseDashboardPage() {
       setError('');
 
       for (const medicine of prescribed) {
-        const response = await api.put<{ warning?: string }>(`/clinic/visits/dispense/${medicine.id}`, {}, token);
+        const response = await api.put<{ warning?: string; lowStockWarning?: string }>(`/clinic/visits/dispense/${medicine.id}`, {}, token);
         if (response.warning) {
           showToast(response.warning);
+        }
+        if (response.lowStockWarning) {
+          showToast(response.lowStockWarning);
         }
       }
 

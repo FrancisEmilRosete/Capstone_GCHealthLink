@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Clock, Search, ChevronRight, PenTool } from 'lucide-react';
+import { Plus, Clock, Search, ChevronRight, PenTool, History, Lock } from 'lucide-react';
+import AuditHistoryModal from './AuditHistoryModal';
 
 interface Entry {
   id: string;
@@ -16,21 +17,46 @@ interface DentalTreatmentLogProps {
 
 const DentalTreatmentLog: React.FC<DentalTreatmentLogProps> = ({ entries, onAdd }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditingLog, setIsEditingLog] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [newEntry, setNewEntry] = useState({ treatment: '', remarks: '', staff: 'Dr. Dela Cruz' });
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <AuditHistoryModal 
+        moduleName="Treatment Log" 
+        isOpen={isHistoryModalOpen} 
+        onClose={() => setIsHistoryModalOpen(false)} 
+      />
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="space-y-1">
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">OSWS | Treatment Log</h2>
           <p className="text-xs font-bold text-slate-400">View and manage dental procedure history.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95"
-        >
-          <Plus size={18} /> Add New Entry
-        </button>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button 
+            onClick={() => setIsHistoryModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 transition-colors"
+          >
+            <History size={14} /> History
+          </button>
+          <button 
+            onClick={() => setIsEditingLog(!isEditingLog)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-colors ${isEditingLog ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          >
+            {isEditingLog ? <><Lock size={14} /> Save Mode</> : <><PenTool size={14} /> Update Mode</>}
+          </button>
+          
+          {isEditingLog && (
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-black text-xs hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 animate-in slide-in-from-right-4 duration-300 ml-2"
+            >
+              <Plus size={16} /> Add New Entry
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -73,7 +99,7 @@ const DentalTreatmentLog: React.FC<DentalTreatmentLogProps> = ({ entries, onAdd 
                       </div>
                     </td>
                     <td className="px-8 py-6 text-center">
-                      <button className="p-2 text-slate-300 hover:text-emerald-600 transition-colors">
+                      <button className={`p-2 transition-colors ${isEditingLog ? 'text-slate-400 hover:text-emerald-600' : 'text-slate-200 cursor-not-allowed'}`}>
                         <ChevronRight size={20} />
                       </button>
                     </td>

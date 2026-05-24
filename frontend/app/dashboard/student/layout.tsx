@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { ApiError, api } from '@/lib/api';
 import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
 import ConfirmLogoutModal from '@/components/ui/ConfirmLogoutModal';
+import StudentNotificationsBell from '@/components/dashboard/student/StudentNotificationsBell';
 
 interface StudentProfileSummary {
   firstName: string;
@@ -128,17 +129,6 @@ const NAV = [
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
           d="M8 10h8m-8 4h5m-7 7l-4-4m0 0l4-4m-4 4h13a4 4 0 004-4V7a4 4 0 00-4-4H7a4 4 0 00-4 4" />
-      </svg>
-    ),
-  },
-  {
-    href: '/dashboard/student/certificates',
-    label: 'Medical Certificate',
-    exact: false,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8m-6-6v6h6" />
       </svg>
     ),
   },
@@ -482,6 +472,9 @@ function StudentTopBar({
               </svg>
             )}
           </button>
+
+          {/* Notification Bell */}
+          <StudentNotificationsBell />
 
           {/* My QR */}
           <button

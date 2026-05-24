@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Info, HelpCircle } from 'lucide-react';
+import { Info, HelpCircle, History, PenTool, Lock } from 'lucide-react';
+import AuditHistoryModal from './AuditHistoryModal';
 
 const upperTeeth = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
 const lowerTeeth = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
@@ -28,18 +29,22 @@ interface DentalChartingProps {
 
 const DentalCharting: React.FC<DentalChartingProps> = ({ chartData, onUpdate }) => {
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
+  const [isEditingChart, setIsEditingChart] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   const Tooth = ({ num }: { num: number }) => (
     <div 
-      onClick={() => setSelectedTooth(num)}
-      className={`relative w-12 h-16 sm:w-16 sm:h-20 border-2 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all ${
+      onClick={() => {
+        if (isEditingChart) setSelectedTooth(num);
+      }}
+      className={`relative w-12 h-16 sm:w-16 sm:h-20 border-2 rounded-xl flex flex-col items-center justify-center transition-all ${
         selectedTooth === num 
         ? 'border-emerald-600 bg-emerald-50 scale-110 z-10 shadow-lg' 
-        : 'border-slate-100 bg-white hover:border-emerald-300'
+        : isEditingChart ? 'border-slate-100 bg-white hover:border-emerald-300 cursor-pointer' : 'border-slate-100 bg-slate-50 opacity-80 cursor-not-allowed'
       }`}
     >
       <span className="text-[10px] font-black text-slate-300 mb-2">{num}</span>
-      <div className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-slate-200 rounded-lg flex items-center justify-center font-black text-emerald-700 bg-white shadow-inner">
+      <div className={`w-8 h-8 sm:w-10 sm:h-10 border-2 border-slate-200 rounded-lg flex items-center justify-center font-black text-emerald-700 shadow-inner ${isEditingChart ? 'bg-white' : 'bg-transparent'}`}>
         {chartData[num] || ''}
       </div>
     </div>
@@ -47,6 +52,12 @@ const DentalCharting: React.FC<DentalChartingProps> = ({ chartData, onUpdate }) 
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <AuditHistoryModal 
+        moduleName="Dental Charting" 
+        isOpen={isHistoryModalOpen} 
+        onClose={() => setIsHistoryModalOpen(false)} 
+      />
+
       {/* Legend Box - Moved to Top */}
       <div className="bg-slate-900 p-6 sm:p-8 rounded-[2rem] text-white shadow-xl border border-slate-800">
         <div className="flex items-center gap-3 mb-6 border-b border-slate-800 pb-4">
@@ -75,13 +86,32 @@ const DentalCharting: React.FC<DentalChartingProps> = ({ chartData, onUpdate }) 
           <Info size={120} />
         </div>
         
-        <div className="space-y-4 mb-8">
-          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Visual Dental Charting</h3>
-          <p className="text-xs font-bold text-slate-400">Click a tooth to log diseases, abnormalities, or restorations.</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 relative z-10">
+          <div className="space-y-1">
+            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Visual Dental Charting</h3>
+            <p className="text-xs font-bold text-slate-400">Click a tooth to log diseases, abnormalities, or restorations.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsHistoryModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 transition-colors"
+            >
+              <History size={14} /> History
+            </button>
+            <button 
+              onClick={() => {
+                setIsEditingChart(!isEditingChart);
+                setSelectedTooth(null); // Reset selection on toggle
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-colors ${isEditingChart ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              {isEditingChart ? <><Lock size={14} /> Save</> : <><PenTool size={14} /> Update</>}
+            </button>
+          </div>
         </div>
 
         {/* Upper Arch */}
-        <div className="space-y-6">
+        <div className={`space-y-6 transition-opacity ${!isEditingChart && 'opacity-80'}`}>
           <div className="flex items-center gap-3 text-blue-600">
             <span className="text-[10px] font-black uppercase tracking-[0.2em]">Upper Arch (Maxilla)</span>
             <div className="h-px flex-1 bg-blue-50" />
@@ -92,7 +122,7 @@ const DentalCharting: React.FC<DentalChartingProps> = ({ chartData, onUpdate }) 
         </div>
 
         {/* Lower Arch */}
-        <div className="space-y-6 pt-8">
+        <div className={`space-y-6 pt-8 transition-opacity ${!isEditingChart && 'opacity-80'}`}>
           <div className="flex items-center gap-3 text-rose-600">
             <span className="text-[10px] font-black uppercase tracking-[0.2em]">Lower Arch (Mandible)</span>
             <div className="h-px flex-1 bg-rose-50" />
@@ -103,8 +133,8 @@ const DentalCharting: React.FC<DentalChartingProps> = ({ chartData, onUpdate }) 
         </div>
 
         {/* Code Selector (Floating when tooth selected) */}
-        {selectedTooth && (
-          <div className="mt-8 p-6 bg-slate-900 rounded-3xl text-white animate-in slide-in-from-bottom-4 duration-300 shadow-2xl ring-4 ring-emerald-500/20">
+        {selectedTooth && isEditingChart && (
+          <div className="mt-8 p-6 bg-slate-900 rounded-3xl text-white animate-in slide-in-from-bottom-4 duration-300 shadow-2xl ring-4 ring-emerald-500/20 relative z-20">
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center font-black text-xl shadow-inner">

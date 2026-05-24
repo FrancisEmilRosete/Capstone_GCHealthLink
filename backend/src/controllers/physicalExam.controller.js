@@ -387,6 +387,16 @@ async function autoIssuePhysicalExamCertificate(tx, { studentProfile, exam, issu
     },
   });
 
+  await tx.healthAdvisory.create({
+    data: {
+      title: "New Medical Certificate Issued",
+      message: `An official clinic medical certificate (Physical Examination) has been issued for you. You can view or download it directly.`,
+      targetDept: `STUDENT_${studentProfile.id}`,
+      severity: "INFO",
+      createdBy: issuedById,
+    }
+  });
+
   return { created: true, certificate };
 }
 
