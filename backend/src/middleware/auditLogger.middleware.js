@@ -20,25 +20,38 @@ function auditLogger(actionOrResolver) {
       }
 
       try {
-        const action =
+        const resolvedAction =
           typeof actionOrResolver === "function"
             ? actionOrResolver(req, res)
             : actionOrResolver;
 
-        if (!action) {
+        if (!resolvedAction) {
           return;
         }
 
-        // Filter out low-value telemetry/navigation logs
-        if (action.startsWith("VIEWED_") || action.startsWith("ADMIN_VIEWED_")) {
+        let actionType = "VIEW";
+        let description = "";
+
+        if (typeof resolvedAction === "string") {
+          // Fallback for legacy generic strings
+          actionType = "OTHER";
+          description = resolvedAction;
+        } else if (typeof resolvedAction === "object") {
+          actionType = resolvedAction.actionType || "OTHER";
+          description = resolvedAction.description || "No description provided";
+        }
+
+        // Filter out low-value telemetry/navigation logs if still using legacy strings
+        if (description.startsWith("VIEWED_") || description.startsWith("ADMIN_VIEWED_")) {
           return;
         }
 
         const candidateUserId = req.user?.userId || null;
+        const candidateUserRole = req.user?.clinicStaffType || req.user?.role || "STUDENT";
 
         // Prevent duplicate rapid-fire logging of the same action
         if (candidateUserId) {
-          const debounceKey = `${candidateUserId}:${action}`;
+          const debounceKey = `${candidateUserId}:${description}`;
           if (actionDebounceMap.has(debounceKey)) {
             return; // Ignore rapid succession
           }
@@ -60,7 +73,9 @@ function auditLogger(actionOrResolver) {
         await prisma.auditLog.create({
           data: {
             userId: safeUserId,
-            action,
+            userRole: candidateUserRole.toUpperCase(),
+            actionType,
+            description,
             targetId:
               req.auditLog?.targetId
               || req.params?.id
@@ -73,7 +88,6 @@ function auditLogger(actionOrResolver) {
             metadata: {
               method: req.method,
               path: req.originalUrl,
-              role: req.user?.role || null,
               statusCode: res.statusCode,
               ...(req.auditLog?.metadata && typeof req.auditLog.metadata === "object"
                 ? req.auditLog.metadata
@@ -91,4 +105,22 @@ function auditLogger(actionOrResolver) {
   };
 }
 
-module.exports = { auditLogger };
+async function logSpecificAction({ req, userId, userRole, actionType, description, targetId, ipAddress, metadata }) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId: userId || null,
+        userRole: userRole ? userRole.toUpperCase() : "SYSTEM",
+        actionType,
+        description,
+        targetId: targetId || null,
+        ipAddress: ipAddress || (req ? resolveClientIp(req) : null),
+        metadata: metadata || (req ? { method: req.method, path: req.originalUrl } : {}),
+      },
+    });
+  } catch (error) {
+    console.error("logSpecificAction failed:", error.message);
+  }
+}
+
+module.exports = { auditLogger, logSpecificAction };

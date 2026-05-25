@@ -281,14 +281,21 @@ model AuditLog {
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  action    String
+  userRole    String?
+  actionType  String  @default("OTHER")
+  description String  @default("Legacy Action")
+  
+  // Legacy field retained to prevent data loss
+  action      String?
+
   targetId  String?
   ipAddress String?
   metadata  Json?
   timestamp DateTime @default(now())
 
   @@index([userId, timestamp])
-  @@index([action, timestamp])
+  @@index([userRole, timestamp])
+  @@index([actionType, timestamp])
 }
 
 // NEW MODEL: Health Advisories (Phase 6 of MVP)

@@ -59,11 +59,13 @@ export default function ConsultationRequestPage() {
   }
 
   useEffect(() => {
-    async function fetchAvailability() {
+    let interval: ReturnType<typeof setInterval>;
+    
+    async function fetchAvailability(showLoader = true) {
       const token = getToken();
       if (!token) return;
       
-      setLoadingCalendar(true);
+      if (showLoader) setLoadingCalendar(true);
       try {
         const res = await api.get<AvailabilityResponse>(`/appointments/availability?month=${currentMonth}&year=${currentYear}&serviceType=${encodeURIComponent(serviceType)}`, token);
         setAvailabilityCounts(res.data?.counts || {});
@@ -71,10 +73,18 @@ export default function ConsultationRequestPage() {
       } catch (err) {
         console.error('Failed to load availability', err);
       } finally {
-        setLoadingCalendar(false);
+        if (showLoader) setLoadingCalendar(false);
       }
     }
-    fetchAvailability();
+    
+    fetchAvailability(true);
+    
+    // Poll every 15 seconds to sync availability
+    interval = setInterval(() => {
+      fetchAvailability(false);
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [currentMonth, currentYear, serviceType]);
 
   useEffect(() => {

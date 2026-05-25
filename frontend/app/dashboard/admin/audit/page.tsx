@@ -6,7 +6,10 @@ import { getToken } from '@/lib/auth';
 
 interface AuditLogEntry {
   id: string;
-  action: string;
+  action: string | null;
+  actionType: string;
+  description: string;
+  userRole: string | null;
   targetId: string | null;
   ipAddress: string | null;
   metadata: Record<string, unknown> | null;
@@ -20,10 +23,8 @@ interface AuditLogEntry {
 
 interface AuditLogsResponse {
   success: boolean;
-  data: {
-    logs: AuditLogEntry[];
-    pagination: { page: number; limit: number; total: number; totalPages: number };
-  };
+  data: AuditLogEntry[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -108,10 +109,10 @@ export default function AdminAuditPage() {
       const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
       if (search.trim())  params.set('search',   search.trim());
 
-      const res = await api.get<AuditLogsResponse>(`/admin/audit-logs?${params.toString()}`, token);
-      setLogs(res.data.logs);
-      setTotalPages(res.data.pagination.totalPages);
-      setTotal(res.data.pagination.total);
+      const res = await api.get<AuditLogsResponse>(`/audit?${params.toString()}`, token);
+      setLogs(res.data ?? []);
+      setTotalPages(res.pagination?.totalPages ?? 1);
+      setTotal(res.pagination?.total ?? 0);
       setPage(p);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load audit logs.');
@@ -187,15 +188,17 @@ export default function AdminAuditPage() {
                     {formatUserName(log.user)}
                   </td>
                   <td className="px-4 py-3">
-                    {log.user?.role ? (
+                    {log.userRole || log.user?.role ? (
                       <span className="inline-block px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">
-                        {log.user.role.replace('_', ' ')}
+                        {(log.userRole || log.user?.role || '').replace('_', ' ')}
                       </span>
                     ) : (
                       <span className="text-gray-400 text-xs">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 text-sm">{toActionLabel(log.action)}</td>
+                  <td className="px-4 py-3 text-gray-700 text-sm">
+                    {log.description !== "Legacy Action" ? log.description : toActionLabel(log.action || '')}
+                  </td>
                 </tr>
               ))}
             </tbody>

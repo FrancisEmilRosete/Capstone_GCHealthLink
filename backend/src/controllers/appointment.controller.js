@@ -18,10 +18,18 @@ const MEDICAL_SERVICE_TYPES = new Set(["Medical Consultation", "Medical Clearanc
 const DENTAL_SERVICE_TYPES = new Set(["Dental Check-up"]);
 const DEFAULT_WEEKDAY_AVAILABILITY = new Set([1, 2, 3, 4, 5]);
 const DEFAULT_SLOT_OPTIONS = [
-  "07:00", "07:30", "08:00", "08:30", "09:00", "09:30",
-  "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
-  "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
-  "16:00", "16:30", "17:00", "17:30", "18:00", "18:30",
+  "07:00", "07:10", "07:20", "07:30", "07:40", "07:50",
+  "08:00", "08:10", "08:20", "08:30", "08:40", "08:50",
+  "09:00", "09:10", "09:20", "09:30", "09:40", "09:50",
+  "10:00", "10:10", "10:20", "10:30", "10:40", "10:50",
+  "11:00", "11:10", "11:20", "11:30", "11:40", "11:50",
+  "12:00", "12:10", "12:20", "12:30", "12:40", "12:50",
+  "13:00", "13:10", "13:20", "13:30", "13:40", "13:50",
+  "14:00", "14:10", "14:20", "14:30", "14:40", "14:50",
+  "15:00", "15:10", "15:20", "15:30", "15:40", "15:50",
+  "16:00", "16:10", "16:20", "16:30", "16:40", "16:50",
+  "17:00", "17:10", "17:20", "17:30", "17:40", "17:50",
+  "18:00", "18:10", "18:20", "18:30", "18:40", "18:50",
   "19:00",
 ];
 
@@ -116,7 +124,7 @@ function normalizeTimeValue(value) {
   if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
   if (hour < 7 || hour > 19) return null;
   if (hour === 19 && minute > 0) return null;
-  if (minute !== 0 && minute !== 30) return null;
+  if (minute % 10 !== 0) return null;
 
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
@@ -397,6 +405,23 @@ const bookAppointment = async (req, res, next) => {
 
     if (!student || !student.studentProfile) {
       return res.status(404).json({ success: false, message: "Student profile not found." });
+    }
+
+    // Conflict Prevention Check
+    const existingAppointment = await prisma.appointment.findFirst({
+      where: {
+        preferredDate: parsedPreferredDate,
+        preferredTime: normalizedPreferredTime,
+        status: { in: ['WAITING', 'PENDING', 'IN_PROGRESS', 'FOR_DISPENSING'] },
+        serviceType: { in: getServiceTypesForScope(scope) },
+      }
+    });
+
+    if (existingAppointment) {
+      return res.status(409).json({
+        success: false,
+        message: `The selected time slot (${normalizedPreferredTime}) has just been booked by someone else. Please choose another slot.`,
+      });
     }
 
     // Create the appointment in the queue
@@ -775,8 +800,7 @@ const getAppointmentAvailability = async (req, res, next) => {
     const scope = normalizedServiceType ? getScopeForServiceType(normalizedServiceType) : "medical";
     const serviceTypes = normalizedServiceType ? [normalizedServiceType] : getServiceTypesForScope(scope);
 
-    const appointments = await prisma.appointment.groupBy({
-      by: ['preferredDate'],
+    const activeAppointments = await prisma.appointment.findMany({
       where: {
         preferredDate: {
           gte: startDate,
@@ -785,8 +809,10 @@ const getAppointmentAvailability = async (req, res, next) => {
         status: { in: ['WAITING', 'PENDING', 'IN_PROGRESS', 'FOR_DISPENSING'] },
         serviceType: { in: serviceTypes },
       },
-      _count: {
+      select: {
         id: true,
+        preferredDate: true,
+        preferredTime: true,
       },
     });
 
@@ -794,16 +820,26 @@ const getAppointmentAvailability = async (req, res, next) => {
     const availabilityConfig = getAppointmentAvailabilityConfig(settings);
     const counts = {};
     const dayAvailability = {};
-    for (const appt of appointments) {
+    const bookedSlotsByDate = {};
+
+    for (const appt of activeAppointments) {
       const date = appt.preferredDate;
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      counts[key] = appt._count.id;
+      counts[key] = (counts[key] || 0) + 1;
+
+      if (!bookedSlotsByDate[key]) bookedSlotsByDate[key] = new Set();
+      if (appt.preferredTime) bookedSlotsByDate[key].add(appt.preferredTime);
     }
 
     const daysInMonth = new Date(year, month, 0).getDate();
     for (let day = 1; day <= daysInMonth; day += 1) {
       const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const slots = getSlotsForScopeDate(availabilityConfig, scope, dateKey);
+      let slots = getSlotsForScopeDate(availabilityConfig, scope, dateKey);
+
+      if (bookedSlotsByDate[dateKey]) {
+        slots = slots.filter((slot) => !bookedSlotsByDate[dateKey].has(slot));
+      }
+
       dayAvailability[dateKey] = {
         isAvailable: slots.length > 0,
         slots,

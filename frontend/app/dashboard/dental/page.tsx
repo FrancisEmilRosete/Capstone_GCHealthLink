@@ -116,8 +116,11 @@ export default function DentalDashboardPage() {
   }
 
   function openConsultModal(patient: QueueItem) {
-    setConsultingPatient(patient);
-    setConsultModalOpen(true);
+    if (patient.studentProfile?.studentNumber) {
+      router.push(`/dashboard/dental/records/${patient.studentProfile.studentNumber}?queueId=${patient.id}`);
+    } else {
+      setError('Patient does not have a valid student number.');
+    }
   }
 
   async function handleConsultSave(form: ConsultationForm, medicines: { inventoryId: string; qty: string }[] = []) {

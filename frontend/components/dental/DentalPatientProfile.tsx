@@ -20,33 +20,34 @@ const DentalPatientProfile: React.FC<DentalPatientProfileProps> = ({ patient, on
   const [isEditingHistory, setIsEditingHistory] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
-  // Matrix State: map of row -> year -> value
-  const [matrixData, setMatrixData] = useState<Record<string, string[]>>({});
-  const [matrixDMF, setMatrixDMF] = useState<string[]>(['', '', '', '']);
-  const [lockedYears, setLockedYears] = useState<boolean[]>([false, false, false, false]);
+  // Matrix State: lift up to parent via onChange
+  const matrixData = patient.matrixData || {};
+  const matrixDMF = patient.matrixDMF || ['', '', '', ''];
+  const lockedYears = patient.lockedYears || [false, false, false, false];
 
   const handleMatrixChange = (row: string, yearIndex: number, value: string) => {
     if (lockedYears[yearIndex]) return;
-    setMatrixData(prev => ({
-      ...prev,
+    const newData = {
+      ...matrixData,
       [row]: {
-        ...prev[row],
+        ...(matrixData[row] || {}),
         [yearIndex]: value
       }
-    }));
+    };
+    onChange('matrixData', newData);
   };
 
   const handleDMFChange = (yearIndex: number, value: string) => {
     if (lockedYears[yearIndex]) return;
     const newDMF = [...matrixDMF];
     newDMF[yearIndex] = value;
-    setMatrixDMF(newDMF);
+    onChange('matrixDMF', newDMF);
   };
 
   const lockYear = (yearIndex: number) => {
     const newLocks = [...lockedYears];
     newLocks[yearIndex] = true;
-    setLockedYears(newLocks);
+    onChange('lockedYears', newLocks);
   };
 
   return (

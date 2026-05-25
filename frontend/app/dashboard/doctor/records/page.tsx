@@ -488,6 +488,7 @@ function hasMeaningfulVitals(vitals: VitalSnapshot) {
 export default function DoctorRecordsPage() {
   const pathname = usePathname();
   const isDentalLogs = pathname?.startsWith('/dashboard/dental/') ?? false;
+  const isNurseLogs  = pathname?.startsWith('/dashboard/staff/')  ?? false;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -521,7 +522,7 @@ export default function DoctorRecordsPage() {
     try {
       setError('');
       const ts = Date.now();
-      const activityStaffType = isDentalLogs ? 'DENTIST' : 'DOCTOR';
+      const activityStaffType = isDentalLogs ? 'DENTIST' : isNurseLogs ? 'NURSE' : 'DOCTOR';
       const [visitsResult, physicalResult, otherResult] = await Promise.allSettled([
         api.get<VisitsResponse>(`/clinic/visits?limit=500&_ts=${ts}`, token),
         api.get<PhysicalExamResponse>(`/physical-exams?limit=500&_ts=${ts}`, token),
@@ -547,8 +548,10 @@ export default function DoctorRecordsPage() {
       const visitCandidates = (visitsResponse.data || [])
         .filter((visit) => !(visit.studentProfile.studentNumber || '').toUpperCase().startsWith('EMP'))
         .filter((visit) => {
+          // Nurse sees all NON-dental consultations; Dental sees dental only; Doctor sees non-dental only
           const parsed = parseConsultationData(visit.chiefComplaintEnc);
           const isDental = isDentalConsultation(visit, parsed);
+          if (isNurseLogs) return !isDental;
           return isDentalLogs ? isDental : !isDental;
         })
         .map((visit) => {
@@ -1197,7 +1200,9 @@ export default function DoctorRecordsPage() {
                 <Link
                   href={isDentalLogs
                     ? `/dashboard/dental/records/${encodeURIComponent(selectedLog.studentNumber)}`
-                    : `/dashboard/doctor/students/${encodeURIComponent(selectedLog.studentNumber)}?returnTo=${encodeURIComponent(pathname || '/dashboard/doctor/records')}`
+                    : isNurseLogs
+                      ? `/dashboard/staff/students/${encodeURIComponent(selectedLog.studentNumber)}`
+                      : `/dashboard/doctor/students/${encodeURIComponent(selectedLog.studentNumber)}?returnTo=${encodeURIComponent(pathname || '/dashboard/doctor/records')}`
                   }
                   className="block w-full text-center px-3 py-2.5 mt-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors"
                 >

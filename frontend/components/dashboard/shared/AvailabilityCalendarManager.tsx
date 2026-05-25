@@ -27,10 +27,18 @@ interface ScopeConfigResponse {
 }
 
 const SLOT_OPTIONS = [
-  '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
-  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
-  '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
+  '07:00', '07:10', '07:20', '07:30', '07:40', '07:50',
+  '08:00', '08:10', '08:20', '08:30', '08:40', '08:50',
+  '09:00', '09:10', '09:20', '09:30', '09:40', '09:50',
+  '10:00', '10:10', '10:20', '10:30', '10:40', '10:50',
+  '11:00', '11:10', '11:20', '11:30', '11:40', '11:50',
+  '12:00', '12:10', '12:20', '12:30', '12:40', '12:50',
+  '13:00', '13:10', '13:20', '13:30', '13:40', '13:50',
+  '14:00', '14:10', '14:20', '14:30', '14:40', '14:50',
+  '15:00', '15:10', '15:20', '15:30', '15:40', '15:50',
+  '16:00', '16:10', '16:20', '16:30', '16:40', '16:50',
+  '17:00', '17:10', '17:20', '17:30', '17:40', '17:50',
+  '18:00', '18:10', '18:20', '18:30', '18:40', '18:50',
   '19:00',
 ];
 
@@ -66,31 +74,41 @@ export default function AvailabilityCalendarManager({ scope, title, subtitle }: 
   const selectedDay = days[selectedDate];
 
   useEffect(() => {
-    async function fetchScopeConfig() {
+    let interval: ReturnType<typeof setInterval>;
+
+    async function fetchScopeConfig(showLoader = true) {
       const token = getToken();
       if (!token) {
-        setError('You are not logged in. Please sign in again.');
+        if (showLoader) setError('You are not logged in. Please sign in again.');
         return;
       }
 
-      setLoading(true);
-      setError('');
+      if (showLoader) setLoading(true);
+      if (showLoader) setError('');
 
       try {
         const response = await api.get<ScopeConfigResponse>(`/appointments/availability/config?scope=${scope}&month=${month}&year=${year}`, token);
         setDays(response.data.days || {});
       } catch (err) {
-        if (err instanceof ApiError) {
-          setError(err.message);
-        } else {
-          setError('Failed to load calendar availability.');
+        if (showLoader) {
+          if (err instanceof ApiError) {
+            setError(err.message);
+          } else {
+            setError('Failed to load calendar availability.');
+          }
         }
       } finally {
-        setLoading(false);
+        if (showLoader) setLoading(false);
       }
     }
 
-    void fetchScopeConfig();
+    void fetchScopeConfig(true);
+
+    interval = setInterval(() => {
+      void fetchScopeConfig(false);
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [scope, month, year]);
 
   useEffect(() => {

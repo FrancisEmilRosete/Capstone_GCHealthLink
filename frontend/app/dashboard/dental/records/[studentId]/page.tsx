@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { 
   User, Clipboard, Activity, Pill, FileCheck, 
-  ChevronLeft, Printer, Save, Download 
+  ChevronLeft, Printer, Save, Download, CheckCircle 
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -78,6 +78,9 @@ interface DentalPatientState {
     Hygiene: boolean;
   };
   chartData: Record<number, string>;
+  matrixData?: Record<string, string[]>;
+  matrixDMF?: string[];
+  lockedYears?: boolean[];
   treatmentEntries: TreatmentEntry[];
   prescription: string;
   clearance: {
@@ -129,13 +132,16 @@ function isDentalText(value?: string | null) {
 const DentalRecordPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queueId = searchParams.get('queueId');
   const studentNumber = typeof params.studentId === 'string' ? decodeURIComponent(params.studentId) : '';
   const [activeTab, setActiveTab] = useState<'profile' | 'charting' | 'log' | 'prescription' | 'clearance'>('profile');
   const [isSaving, setIsSaving] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [patient, setPatient] = useState<DentalPatientState>({
+  const [patient, setPatient] = useState<DentalPatientState & { dbId?: string }>({
     id: studentNumber,
     firstName: '',
     lastName: '',
@@ -152,6 +158,9 @@ const DentalRecordPage = () => {
       Hygiene: false,
     },
     chartData: {},
+    matrixData: {},
+    matrixDMF: ['', '', '', ''],
+    lockedYears: [false, false, false, false],
     treatmentEntries: [],
     prescription: '',
     clearance: {
@@ -159,6 +168,21 @@ const DentalRecordPage = () => {
       reason: '',
     }
   });
+
+  // Handle setting queue item to IN_PROGRESS
+  useEffect(() => {
+    async function startConsultation() {
+      if (!queueId) return;
+      const token = getToken();
+      if (!token) return;
+      try {
+        await api.put(`/appointments/queue/${queueId}`, { status: 'IN_PROGRESS' }, token);
+      } catch (err) {
+        console.error('Failed to update queue status to IN_PROGRESS', err);
+      }
+    }
+    startConsultation();
+  }, [queueId]);
 
   useEffect(() => {
     async function loadStudentRecord() {
@@ -187,21 +211,60 @@ const DentalRecordPage = () => {
             staff: 'Dental clinic',
           }));
 
-        const dentalClinicVisits = (profile.clinicVisits || [])
-          .filter((entry) => isDentalText(entry.concernTag) || isDentalText(entry.chiefComplaintEnc))
-          .map((entry) => ({
+        const dentalClinicVisitsRaw = (profile.clinicVisits || [])
+          .filter((entry) => isDentalText(entry.concernTag) || isDentalText(entry.chiefComplaintEnc));
+
+        // Load current state from the latest comprehensive record
+        let loadedChartData = {};
+        let loadedMatrixData = {};
+        let loadedMatrixDMF = ['', '', '', ''];
+        let loadedLockedYears = [false, false, false, false];
+        let loadedPrescription = '';
+        let loadedClearance = { treatment: '', reason: '' };
+        let loadedHistory = {
+          Diabetes: isPositiveFlag(history.diabetesEnc),
+          'Heart Disease': isPositiveFlag(history.heartDisorderEnc) || isPositiveFlag(history.hypertensionEnc),
+          Allergies: isPositiveFlag(history.allergyEnc),
+          Hygiene: false,
+        };
+
+        const latestComprehensive = [...dentalClinicVisitsRaw]
+          .sort((a, b) => new Date(b.visitDate || 0).getTime() - new Date(a.visitDate || 0).getTime())
+          .find(v => v.chiefComplaintEnc?.includes('isComprehensiveDentalRecord'));
+
+        if (latestComprehensive && latestComprehensive.chiefComplaintEnc) {
+          try {
+            const parsed = JSON.parse(latestComprehensive.chiefComplaintEnc);
+            if (parsed.chartData) loadedChartData = parsed.chartData;
+            if (parsed.matrixData) loadedMatrixData = parsed.matrixData;
+            if (parsed.matrixDMF) loadedMatrixDMF = parsed.matrixDMF;
+            if (parsed.lockedYears) loadedLockedYears = parsed.lockedYears;
+            if (parsed.prescription) loadedPrescription = parsed.prescription;
+            if (parsed.clearance) loadedClearance = parsed.clearance;
+            if (parsed.history) loadedHistory = { ...loadedHistory, ...parsed.history };
+          } catch (e) {}
+        }
+
+        const dentalClinicVisits = dentalClinicVisitsRaw.map((entry) => {
+          let remarks = entry.chiefComplaintEnc || 'Dental consultation completed.';
+          if (remarks.includes('isComprehensiveDentalRecord')) {
+             remarks = 'Comprehensive Dental Record Update';
+          }
+          return {
             id: `visit-${entry.id}`,
             date: toIsoDateLabel(entry.visitDate) || new Date().toISOString().slice(0, 10),
             treatment: entry.concernTag || 'Dental Consultation',
-            remarks: entry.chiefComplaintEnc || 'Dental consultation completed.',
+            remarks,
             staff: 'Clinic staff',
-          }));
+          };
+        });
 
         const treatmentEntries = [...completedDentalAppointments, ...dentalClinicVisits]
           .sort((a, b) => b.date.localeCompare(a.date));
 
         setPatient((prev) => ({
           ...prev,
+          dbId: profile.id,
           id: profile.studentNumber || studentNumber,
           firstName: profile.firstName || prev.firstName,
           lastName: profile.lastName || prev.lastName,
@@ -211,12 +274,13 @@ const DentalRecordPage = () => {
           address: profile.presentAddress?.trim() || prev.address,
           contact: profile.telNumber?.trim() || prev.contact,
           courseYear: courseText || profile.courseDept || prev.courseYear,
-          history: {
-            ...prev.history,
-            Diabetes: isPositiveFlag(history.diabetesEnc),
-            'Heart Disease': isPositiveFlag(history.heartDisorderEnc) || isPositiveFlag(history.hypertensionEnc),
-            Allergies: isPositiveFlag(history.allergyEnc),
-          },
+          history: loadedHistory,
+          chartData: Object.keys(loadedChartData).length > 0 ? loadedChartData : prev.chartData,
+          matrixData: Object.keys(loadedMatrixData).length > 0 ? loadedMatrixData : prev.matrixData,
+          matrixDMF: loadedMatrixDMF,
+          lockedYears: loadedLockedYears,
+          prescription: loadedPrescription || prev.prescription,
+          clearance: loadedClearance.treatment ? loadedClearance : prev.clearance,
           treatmentEntries,
           resolvedAge,
         }));
@@ -244,6 +308,60 @@ const DentalRecordPage = () => {
 
   const handleAddTreatment = (entry: any) => {
     setPatient(prev => ({ ...prev, treatmentEntries: [entry, ...prev.treatmentEntries] }));
+  };
+
+  const handleSaveRecord = async () => {
+    if (!patient.dbId) {
+      setError('Cannot save: Student DB ID is missing.');
+      return;
+    }
+    setIsSaving(true);
+    const token = getToken();
+    try {
+      const payload = {
+        studentProfileId: patient.dbId,
+        visitDate: new Date().toISOString(),
+        concernTag: 'Dental Consultation Update',
+        chiefComplaintEnc: JSON.stringify({
+          isComprehensiveDentalRecord: true,
+          chartData: patient.chartData,
+          matrixData: patient.matrixData,
+          matrixDMF: patient.matrixDMF,
+          lockedYears: patient.lockedYears,
+          history: patient.history,
+          prescription: patient.prescription,
+          clearance: patient.clearance
+        }),
+      };
+      await api.post('/clinic/visits', payload, token);
+      alert('Dental record successfully saved to history.');
+      window.location.reload();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to save record.');
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const completeConsultation = async () => {
+    if (!queueId) return;
+    setIsCompleting(true);
+    const token = getToken();
+    try {
+      await api.put(`/appointments/queue/${queueId}`, { status: 'COMPLETED' }, token);
+      router.push('/dashboard/dental');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to complete consultation.');
+      }
+      setIsCompleting(false);
+    }
   };
 
   const displayName = loading
@@ -283,8 +401,13 @@ const DentalRecordPage = () => {
           </button>
           <div className="hidden sm:block h-8 w-px bg-slate-200"></div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight">
+            <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-3">
               {displayName}
+              {queueId && (
+                <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div> Active Consultation
+                </span>
+              )}
             </h2>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2 mt-0.5">
               <span>{patient.courseYear || 'N/A'}</span>
@@ -295,12 +418,27 @@ const DentalRecordPage = () => {
             </p>
           </div>
         </div>
-        <button 
-          onClick={() => setIsSaving(true)}
-          className="flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
-        >
-          <Save size={16} /> {isSaving ? 'Saving...' : 'Save Record'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleSaveRecord}
+            disabled={isSaving}
+            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save size={16} /> {isSaving ? 'Saving...' : 'Save Record'}
+          </button>
+          
+          {queueId && (
+            <button 
+              onClick={() => {
+                handleSaveRecord().then(() => completeConsultation());
+              }}
+              disabled={isCompleting || isSaving}
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCircle size={16} /> {isCompleting ? 'Completing...' : 'Complete & Release'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Content Area */}
