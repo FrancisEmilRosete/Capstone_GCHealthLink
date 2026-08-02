@@ -23,19 +23,20 @@ import {
   CalendarIcon,
   DashboardIcon,
   ScannerIcon,
-  InventoryIcon,
+  PillIcon,
   CertificatesIcon,
   NotificationsIcon,
   UsersIcon,
+  ClockIcon,
 } from '@/components/icons/NavIcons';
 
 // Extend NavItem to attach an icon component to each nav entry
 export interface StaffNavItem {
-  id:     string;
-  label:  string;
-  href:   string;
+  id: string;
+  label: string;
+  href: string;
   badge?: number;
-  icon:   React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string }>;
 }
 
 export interface StaffNavGroup {
@@ -47,58 +48,47 @@ export const STAFF_NAV_GROUPS: StaffNavGroup[] = [
   {
     items: [
       {
-        id:    'dashboard',
+        id: 'dashboard',
         label: 'Dashboard',
-        href:  '/dashboard/staff',
-        icon:  DashboardIcon,
+        href: '/dashboard/staff',
+        icon: DashboardIcon,
       },
       {
-        id:    'students',
+        id: 'students',
         label: 'Student',
-        href:  '/dashboard/staff/students',
-        icon:  UsersIcon,
+        href: '/dashboard/staff/students',
+        icon: UsersIcon,
       },
       {
-        id:    'scanner',
-        label: 'QR Scanner',
-        href:  '/dashboard/staff/scanner',
-        icon:  ScannerIcon,
-      },
-      {
-        id:    'inventory',
+        id: 'inventory',
         label: 'Medical Inventory',
-        href:  '/dashboard/staff/inventory',
-        icon:  InventoryIcon,
+        href: '/dashboard/staff/inventory',
+        icon: PillIcon,
       },
       {
-        id:    'certificates',
+        id: 'certificates',
         label: 'Certificates',
-        href:  '/dashboard/staff/certificates',
-        icon:  CertificatesIcon,
+        href: '/dashboard/staff/certificates',
+        icon: CertificatesIcon,
       },
       {
-        id:    'reports',
+        id: 'reports',
         label: 'Reports',
-        href:  '/dashboard/staff/reports',
-        icon:  DashboardIcon,
+        href: '/dashboard/staff/reports',
+        icon: DashboardIcon,
       },
+
       {
-        id:    'notifications',
-        label: 'Notifications',
-        href:  '/dashboard/staff/notifications',
-        icon:  NotificationsIcon,
-      },
-      {
-        id:    'calendar',
+        id: 'calendar',
         label: 'Calendar',
-        href:  '/dashboard/staff/calendar',
-        icon:  CalendarIcon,
+        href: '/dashboard/staff/calendar',
+        icon: CalendarIcon,
       },
       {
-        id:    'logs',
-        label: 'Logs',
-        href:  '/dashboard/staff/logs',
-        icon:  CertificatesIcon,
+        id: 'history',
+        label: 'History',
+        href: '/dashboard/staff/history',
+        icon: ClockIcon,
       },
     ],
   },

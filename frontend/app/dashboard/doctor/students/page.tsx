@@ -126,43 +126,30 @@ export default function StaffStudentsPage() {
   }, [filteredRows, currentPage, pageSize]);
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Students</h1>
-        <p className="text-sm text-gray-500 mt-1">Search and open student records without scanning a QR code.</p>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-wrap xl:flex-nowrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
             value={query}
             onChange={(event) => { void handleSearch(event.target.value); }}
             placeholder="Search by student number, name, course, department, or year level"
-            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
           />
         </div>
         <button
           type="button"
           onClick={() => setQrModalOpen(true)}
-          className="text-xs font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-3 rounded-xl transition-colors"
+          className="text-sm font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap flex-none"
         >
           Use QR
         </button>
-      </div>
 
-      {qrMessage && (
-        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs font-semibold text-teal-700">
-          {qrMessage}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <select
           value={departmentFilter}
           onChange={(event) => setDepartmentFilter(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 flex-1 min-w-[130px] xl:flex-none xl:w-[170px]"
           aria-label="Filter by department"
         >
           <option value="all">All Departments</option>
@@ -174,7 +161,7 @@ export default function StaffStudentsPage() {
         <select
           value={courseFilter}
           onChange={(event) => setCourseFilter(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 flex-1 min-w-[130px] xl:flex-none xl:w-[150px]"
           aria-label="Filter by course"
         >
           <option value="all">All Courses</option>
@@ -186,7 +173,7 @@ export default function StaffStudentsPage() {
         <select
           value={yearLevelFilter}
           onChange={(event) => setYearLevelFilter(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 flex-1 min-w-[130px] xl:flex-none xl:w-[150px]"
           aria-label="Filter by year level"
         >
           <option value="all">All Year Levels</option>
@@ -195,6 +182,12 @@ export default function StaffStudentsPage() {
           ))}
         </select>
       </div>
+
+      {qrMessage && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs font-semibold text-teal-700">
+          {qrMessage}
+        </div>
+      )}
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
 
@@ -226,7 +219,7 @@ export default function StaffStudentsPage() {
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/dashboard/doctor/records/${encodeURIComponent(student.studentNumber)}?returnTo=${encodeURIComponent('/dashboard/doctor/students')}`}
-                      className="inline-flex rounded-lg border border-gray-200 w-32 justify-center py-1.5 text-xs font-semibold text-gray-700 hover:border-teal-300 hover:text-teal-700"
+                      className="inline-flex rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-teal-300 hover:text-teal-700"
                     >
                       View Record
                     </Link>

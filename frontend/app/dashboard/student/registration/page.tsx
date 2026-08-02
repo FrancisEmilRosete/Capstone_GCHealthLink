@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import toast from 'react-hot-toast';
 import {
   DEPARTMENT_COURSE_MAP,
   getCoursesByDepartmentCode,
@@ -226,9 +227,13 @@ function StepPersonalInfo({ data, set }: { data: PersonalData; set: (k: keyof Pe
                 placeholder="mm/dd/yyyy"
                 value={data.birthday}
                 onChange={e => set('birthday', e.target.value)}
-                onFocus={(event) => {
-                  const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
-                  input.showPicker?.();
+                onClick={(event) => {
+                  try {
+                    const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                    input.showPicker?.();
+                  } catch (e) {
+                    // Ignore NotAllowedError if the browser still considers this non-user-gesture
+                  }
                 }}
               />
               <button
@@ -488,31 +493,29 @@ export default function RegistrationPage() {
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [submitError, setSubmitError] = useState('');
 
   function validateStep(currentStep: number): boolean {
-    setSubmitError('');
     if (currentStep === 1) {
-      if (!personal.studentId.trim()) { setSubmitError('Student ID is required.'); return false; }
-      if (!personal.firstName.trim()) { setSubmitError('First Name is required.'); return false; }
-      if (!personal.lastName.trim()) { setSubmitError('Last Name is required.'); return false; }
-      if (!personal.department) { setSubmitError('College (Department) is required.'); return false; }
-      if (!personal.course) { setSubmitError('Course is required.'); return false; }
-      if (!personal.yearLevel) { setSubmitError('Year Level is required.'); return false; }
-      if (!personal.age.trim()) { setSubmitError('Age is required.'); return false; }
-      if (!personal.sex) { setSubmitError('Sex is required.'); return false; }
-      if (!personal.birthday) { setSubmitError('Birthday is required.'); return false; }
-      if (!personal.civilStatus) { setSubmitError('Civil Status is required.'); return false; }
-      if (!personal.contact.trim()) { setSubmitError('Contact Number is required.'); return false; }
-      if (!/^[0-9\s()+-]{7,20}$/.test(personal.contact)) { setSubmitError('Please enter a valid personal contact number (7-20 characters: digits, spaces, hyphens, and parentheses only).'); return false; }
-      if (!personal.email.trim()) { setSubmitError('Email Address is required.'); return false; }
-      if (!personal.address.trim()) { setSubmitError('Home Address is required.'); return false; }
+      if (!personal.studentId.trim()) { toast.error('Student ID is required.'); return false; }
+      if (!personal.firstName.trim()) { toast.error('First Name is required.'); return false; }
+      if (!personal.lastName.trim()) { toast.error('Last Name is required.'); return false; }
+      if (!personal.department) { toast.error('College (Department) is required.'); return false; }
+      if (!personal.course) { toast.error('Course is required.'); return false; }
+      if (!personal.yearLevel) { toast.error('Year Level is required.'); return false; }
+      if (!personal.age.trim()) { toast.error('Age is required.'); return false; }
+      if (!personal.sex) { toast.error('Sex is required.'); return false; }
+      if (!personal.birthday) { toast.error('Birthday is required.'); return false; }
+      if (!personal.civilStatus) { toast.error('Civil Status is required.'); return false; }
+      if (!personal.contact.trim()) { toast.error('Contact Number is required.'); return false; }
+      if (!/^[0-9\s()+-]{7,20}$/.test(personal.contact)) { toast.error('Please enter a valid personal contact number.'); return false; }
+      if (!personal.email.trim()) { toast.error('Email Address is required.'); return false; }
+      if (!personal.address.trim()) { toast.error('Home Address is required.'); return false; }
     } else if (currentStep === 2) {
-      if (!emergency.name.trim()) { setSubmitError('Contact Person Name is required.'); return false; }
-      if (!emergency.relationship) { setSubmitError('Relationship is required.'); return false; }
-      if (!emergency.contact.trim()) { setSubmitError('Emergency Contact Number is required.'); return false; }
-      if (!/^[0-9\s()+-]{7,20}$/.test(emergency.contact)) { setSubmitError('Please enter a valid emergency contact number (7-20 characters: digits, spaces, hyphens, and parentheses only).'); return false; }
-      if (!emergency.address.trim()) { setSubmitError('Complete Address is required.'); return false; }
+      if (!emergency.name.trim()) { toast.error('Contact Person Name is required.'); return false; }
+      if (!emergency.relationship) { toast.error('Relationship is required.'); return false; }
+      if (!emergency.contact.trim()) { toast.error('Emergency Contact Number is required.'); return false; }
+      if (!/^[0-9\s()+-]{7,20}$/.test(emergency.contact)) { toast.error('Please enter a valid emergency contact number.'); return false; }
+      if (!emergency.address.trim()) { toast.error('Complete Address is required.'); return false; }
     }
     return true;
   }
@@ -520,12 +523,12 @@ export default function RegistrationPage() {
   async function handleSubmit() {
     const token = getToken();
     if (!token) {
-      setSubmitError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
     if (!privacyAgreed) {
-      setSubmitError('You must agree to the data privacy consent before submitting.');
+      toast.error('You must agree to the data privacy consent before submitting.');
       return;
     }
 
@@ -534,16 +537,15 @@ export default function RegistrationPage() {
     }
 
     if (!isValidDepartmentCode(personal.department)) {
-      setSubmitError('Please select a valid college (department).');
+      toast.error('Please select a valid college (department).');
       return;
     }
 
     if (!isValidCourseForDepartment(personal.course, personal.department)) {
-      setSubmitError('Please select a valid course for the selected college.');
+      toast.error('Please select a valid course for the selected college.');
       return;
     }
 
-    setSubmitError('');
     setSubmitLoading(true);
 
     const payload = {
@@ -556,12 +558,13 @@ export default function RegistrationPage() {
 
     try {
       await api.post('/students/registration', payload, token);
+      toast.success('Registration submitted successfully!');
       setSubmitted(true);
     } catch (error) {
       if (error instanceof ApiError) {
-        setSubmitError(error.message);
+        toast.error(error.message);
       } else {
-        setSubmitError('Submission failed. Please try again.');
+        toast.error('Submission failed. Please try again.');
       }
     } finally {
       setSubmitLoading(false);
@@ -593,12 +596,12 @@ export default function RegistrationPage() {
           </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Registration Submitted!</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Your health registration has been received.</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">The clinic staff will review and verify your record. You will be notified once it is approved.</p>
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-xl mb-6">
-            <svg className="w-4 h-4 text-yellow-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Your health profile is now active and updated in the system.</p>
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl mb-6">
+            <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">Pending clinic verification</span>
+            <span className="text-xs font-medium text-green-700 dark:text-green-400">Profile Active</span>
           </div>
           <br />
           <button onClick={() => router.push('/dashboard/student')}
@@ -613,11 +616,7 @@ export default function RegistrationPage() {
   return (
     <div className="p-5 max-w-3xl mx-auto">
 
-      {/* Page title */}
-      <div className="text-center mb-5">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Student Health Registration</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Please complete your health record information accurately.</p>
-      </div>
+
 
       {/* Stepper */}
       <Stepper current={step} />
@@ -630,12 +629,6 @@ export default function RegistrationPage() {
         {step === 4 && <StepSurgicalHistory data={surgical} setData={setSurgical} />}
         {step === 5 && <StepDataPrivacy  agreed={privacyAgreed} setAgreed={setPrivacyAgreed} />}
       </div>
-
-      {submitError && (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {submitError}
-        </div>
-      )}
 
       {/* Navigation */}
       <div className="flex justify-between items-center mt-5 pb-4">

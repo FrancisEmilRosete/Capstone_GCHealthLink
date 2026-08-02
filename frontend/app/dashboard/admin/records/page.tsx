@@ -72,9 +72,7 @@ export default function AdminRecordsPage() {
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Health Records</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{total.toLocaleString()} student profiles</p>
-        <p className="text-xs text-gray-400 mt-0.5">Master list of student health records with consultation and examination totals.</p>
+        <p className="text-sm text-gray-500">{total.toLocaleString()} student profiles</p>
       </div>
 
       <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3">

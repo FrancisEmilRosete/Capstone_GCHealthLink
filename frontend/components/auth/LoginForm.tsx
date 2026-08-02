@@ -19,11 +19,11 @@
  *   onSubmit          → called when Sign In button is clicked
  */
 
-import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { ErrorAlert } from '@/components/ui/ErrorAlert';
 
 type LegalModalType = 'privacy' | 'terms' | null;
 
@@ -33,39 +33,50 @@ interface LegalModalProps {
 }
 
 function LegalModal({ type, onClose }: LegalModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
   const isPrivacy = type === 'privacy';
   const title = isPrivacy ? 'Privacy Policy' : 'Terms of Agreement';
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center px-4 animate-fade-in"
+      className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm overflow-y-auto p-4 sm:p-6 animate-fade-in flex items-center justify-center"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="legal-modal-title"
-        className="w-full max-w-2xl rounded-[var(--radius-xl)] bg-[hsl(var(--card))] shadow-[var(--shadow-lg)] border border-[hsl(var(--border))] animate-scale-in"
+        className="w-full max-w-2xl my-auto max-h-[calc(100vh-3rem)] rounded-2xl bg-white shadow-2xl border border-slate-100 animate-scale-in flex flex-col"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="px-6 pt-6 pb-4 border-b border-[hsl(var(--border))] flex items-center justify-between gap-3">
+        <div className="px-6 sm:px-8 pt-8 pb-6 border-b border-slate-100 flex items-start justify-between gap-4 shrink-0">
           <div>
-            <h2 id="legal-modal-title" className="text-h3 text-[hsl(var(--foreground))]">{title}</h2>
-            <p className="text-xs text-[hsl(var(--muted))] mt-1">GC HealthLink - Gordon College Clinic</p>
+            <h2 id="legal-modal-title" className="text-2xl font-bold text-slate-900 tracking-tight">{title}</h2>
+            <p className="text-sm text-slate-500 mt-1 font-medium">GC HealthLink - Gordon College Clinic</p>
           </div>
           <button
             type="button"
             aria-label="Close legal policy"
             onClick={onClose}
-            className="rounded-[var(--radius-md)] p-2 text-[hsl(var(--muted))] hover:bg-[hsl(var(--primary-soft))] hover:text-[hsl(var(--primary))] transition-colors"
+            className="rounded-full p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors shrink-0"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="px-6 py-5 max-h-[70vh] overflow-y-auto text-sm text-[hsl(var(--muted-foreground))] space-y-3 leading-relaxed">
+        <div className="px-6 sm:px-8 py-6 overflow-y-auto text-sm text-slate-600 space-y-4 leading-relaxed">
           {isPrivacy ? (
             <>
               <p>
@@ -130,14 +141,17 @@ function LegalModal({ type, onClose }: LegalModalProps) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-[hsl(var(--border))] flex justify-end">
-          <Button onClick={onClose}>
+        <div className="px-6 sm:px-8 py-5 border-t border-slate-100 flex justify-end bg-slate-50/50 rounded-b-2xl shrink-0">
+          <Button onClick={onClose} className="px-8 rounded-full shadow-sm bg-slate-900 hover:bg-slate-800 text-white font-medium">
             Close
           </Button>
         </div>
       </div>
     </div>
   );
+
+  if (!mounted) return null;
+  return createPortal(modalContent, document.body);
 }
 
 interface LoginFormProps {
@@ -150,7 +164,6 @@ interface LoginFormProps {
   onRememberChange: (value: boolean) => void;
   onLegalChange: (value: boolean) => void;
   onSubmit: () => void;
-  error?: string;
   loading?: boolean;
 }
 
@@ -164,7 +177,6 @@ export default function LoginForm({
   onRememberChange,
   onLegalChange,
   onSubmit,
-  error,
   loading = false,
 }: LoginFormProps) {
   const emailInputId = 'login-email';
@@ -185,81 +197,66 @@ export default function LoginForm({
   return (
     <>
       {/* Email Field */}
-      <Input
-        id={emailInputId}
-        type="email"
-        label="Email Address"
-        placeholder="Enter your email"
-        value={email}
-        onChange={(e) => onEmailChange(e.target.value)}
-        containerClassName="mb-4"
-        required
-      />
+      <div className="mb-4">
+        <Input
+          id={emailInputId}
+          type="email"
+          placeholder="your@email.com"
+          value={email}
+          onChange={(e) => onEmailChange(e.target.value)}
+          prefix={<Mail className="h-4 w-4" />}
+          required
+          autoComplete="email"
+        />
+      </div>
 
       {/* Password Field */}
-      <div className="mb-4">
-        <label htmlFor={passwordInputId} className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1.5">
-          Password <span className="text-[hsl(var(--danger))]">*</span>
-        </label>
-        <div className="relative">
-          <input
-            id={passwordInputId}
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => onPasswordChange(e.target.value)}
-            className="w-full h-10 px-3 pr-10 rounded-[var(--radius-md)]
-              border border-[hsl(var(--input-border))]
-              bg-[hsl(var(--surface))]
-              text-sm text-[hsl(var(--foreground))]
-              placeholder:text-[hsl(var(--muted))]
-              transition-all
-              focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus-ring)_/_0.4)] focus:border-[hsl(var(--primary))]"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((previous) => !previous)}
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
-            className="absolute inset-y-0 right-0 px-3 text-[hsl(var(--muted))] hover:text-[hsl(var(--primary))] transition-colors"
-          >
-            {showPassword ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
-          </button>
-        </div>
+      <div className="mb-3">
+        <Input
+          id={passwordInputId}
+          type={showPassword ? 'text' : 'password'}
+          placeholder="password"
+          value={password}
+          onChange={(e) => onPasswordChange(e.target.value)}
+          prefix={<Lock className="h-4 w-4" />}
+          suffix={
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="text-[hsl(var(--muted))] hover:text-[hsl(var(--primary))] transition-colors"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
+          autoComplete="current-password"
+        />
       </div>
 
-      {/* Remember Me + Forgot Password */}
-      <div className="flex items-center justify-between mb-5">
-        <label htmlFor={rememberInputId} className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer select-none">
-          <input
-            id={rememberInputId}
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(e) => onRememberChange(e.target.checked)}
-            className="w-4 h-4 rounded-[4px] accent-[hsl(var(--primary))] cursor-pointer"
-          />
-          Remember me
-        </label>
-
-        <button type="button" className="text-sm text-[hsl(var(--primary))] font-medium hover:text-[hsl(var(--primary-hover))] hover:underline transition-colors cursor-pointer">
-          Forgot password?
-        </button>
-      </div>
+      {/* Sign In Button */}
+      <Button
+        onClick={onSubmit}
+        disabled={loading || !legalAccepted}
+        loading={loading}
+        size="lg"
+        className="w-full mt-5"
+      >
+        {loading ? 'Signing in…' : 'Sign In'}
+      </Button>
 
       {/* Privacy + Terms (Required) */}
-      <div className="mb-5">
-        <label htmlFor={legalInputId} className="flex items-start gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer select-none">
-          <input
-            id={legalInputId}
-            type="checkbox"
-            checked={legalAccepted}
-            onChange={(e) => onLegalChange(e.target.checked)}
-            className="mt-0.5 w-4 h-4 rounded-[4px] accent-[hsl(var(--primary))] cursor-pointer"
-          />
-          <span>
+      <div className="mt-6">
+        <label htmlFor={legalInputId} className="flex items-start gap-2.5 text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none group">
+          <div className="relative flex items-center justify-center mt-0.5">
+            <input
+              id={legalInputId}
+              type="checkbox"
+              checked={legalAccepted}
+              onChange={(e) => onLegalChange(e.target.checked)}
+              className="w-4 h-4 rounded border-2 border-[hsl(var(--input-border))] accent-[hsl(var(--primary))] cursor-pointer transition-all"
+            />
+          </div>
+          <span className="leading-relaxed">
             I agree to the{' '}
             <button
               type="button"
@@ -268,7 +265,7 @@ export default function LoginForm({
                 event.stopPropagation();
                 openLegalModal('privacy');
               }}
-              className="font-medium text-[hsl(var(--primary))] hover:text-[hsl(var(--primary-hover))] hover:underline"
+              className="text-[hsl(var(--primary))] font-medium hover:text-[hsl(var(--primary-hover))] hover:underline transition-colors"
             >
               Privacy Policy
             </button>{' '}
@@ -280,7 +277,7 @@ export default function LoginForm({
                 event.stopPropagation();
                 openLegalModal('terms');
               }}
-              className="font-medium text-[hsl(var(--primary))] hover:text-[hsl(var(--primary-hover))] hover:underline"
+              className="text-[hsl(var(--primary))] font-medium hover:text-[hsl(var(--primary-hover))] hover:underline transition-colors"
             >
               Terms of Agreement
             </button>
@@ -289,23 +286,19 @@ export default function LoginForm({
         </label>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <div className="mb-4">
-          <ErrorAlert message={error} variant="error" />
-        </div>
-      )}
-
-      {/* Sign In Button */}
-      <Button
-        onClick={onSubmit}
-        disabled={loading || !legalAccepted}
-        loading={loading}
-        size="lg"
-        className="w-full"
-      >
-        {loading ? 'Signing in…' : 'Sign In'}
-      </Button>
+      {/* Remember Me (moved to bottom) */}
+      <div className="mt-4">
+        <label htmlFor={rememberInputId} className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none group">
+          <input
+            id={rememberInputId}
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => onRememberChange(e.target.checked)}
+            className="w-4 h-4 rounded border-2 border-[hsl(var(--input-border))] accent-[hsl(var(--primary))] cursor-pointer transition-all"
+          />
+          <span>Remember me</span>
+        </label>
+      </div>
 
       {activeLegalModal && <LegalModal type={activeLegalModal} onClose={closeLegalModal} />}
     </>

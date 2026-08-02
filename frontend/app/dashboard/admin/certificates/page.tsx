@@ -35,15 +35,29 @@ export default function AdminCertificatesPage() {
 
       try {
         const res = await api.get<CertificatesResponse>('/certificates', token);
-        const mapped: PendingCertificateRequest[] = (res.data || []).map((cert) => ({
-          id: cert.id,
-          studentName: cert.student,
-          studentNumber: cert.studentId,
-          courseDept: cert.course,
-          reason: cert.reason || 'Medical Concern',
-          requestedDateIso: cert.dateIso,
-          status: 'doctor_approved',
-        }));
+        const mapped: PendingCertificateRequest[] = (res.data || []).map((cert: any) => {
+          const studentName = cert.studentProfile 
+             ? `${cert.studentProfile.firstName} ${cert.studentProfile.lastName}`
+             : (cert.student || 'Unknown Student');
+             
+          const studentId = cert.studentProfile 
+             ? cert.studentProfile.studentNumber 
+             : (cert.studentId || 'Unknown ID');
+             
+          const course = cert.studentProfile
+             ? (cert.studentProfile.course || cert.studentProfile.courseDept || 'N/A')
+             : (cert.course || 'N/A');
+
+          return {
+            id: cert.id,
+            studentName: studentName,
+            studentNumber: studentId,
+            courseDept: course,
+            reason: cert.diagnosisFindings || cert.reason || 'Medical Concern',
+            requestedDateIso: cert.issuedAt || cert.dateIso,
+            status: 'doctor_approved',
+          };
+        });
         setRequests(mapped);
       } catch (err) {
         if (err instanceof ApiError) {

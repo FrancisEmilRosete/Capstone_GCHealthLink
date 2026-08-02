@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Clock, Activity, Search, Loader2 } from 'lucide-react';
 
-import Toast from '@/components/ui/Toast';
 import { api, ApiError } from '@/lib/api';
+import toast from 'react-hot-toast';
 import { getToken } from '@/lib/auth';
+import { useServerEvents } from '@/lib/useServerEvents';
 import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
 import HealthConcernsByDepartmentCard from '@/components/dashboard/shared/HealthConcernsByDepartmentCard';
+import ScannerWidget from '@/components/scanner/ScannerWidget';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 import ConsultationModal, {
   type ConsultationForm,
@@ -16,6 +18,7 @@ import ConsultationModal, {
   type ConsultationPatient,
 } from '@/components/modals/ConsultationModal';
 import { formatTime12Hour } from '@/lib/time';
+import RoleWellnessTrends from '@/components/dashboard/shared/RoleWellnessTrends';
 
 interface QueueItem {
   id: string;
@@ -112,9 +115,7 @@ function formatYearLevel(value?: string | null) {
 export default function StaffCommandCenterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [toastConfig, setToastConfig] = useState({ isVisible: false, message: '' });
   const [searchQuery, setSearchQuery] = useState('');
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [liveQueueFilter, setLiveQueueFilter] = useState<LiveQueueFilter>('all');
@@ -125,48 +126,43 @@ export default function StaffCommandCenterPage() {
   const [isPending, startTransition] = useTransition();
   const [selectedDoneIds, setSelectedDoneIds] = useState<string[]>([]);
   const [isDoneSelectMode, setIsDoneSelectMode] = useState(false);
+  const [followUpPage, setFollowUpPage] = useState(1);
 
-  function showToast(message: string) {
-    setToastConfig({ isVisible: true, message });
-    setTimeout(() => setToastConfig({ isVisible: false, message: '' }), 2500);
-  }
-
-  async function loadQueue() {
+  async function loadQueue(showLoading = true) {
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
-      setLoading(false);
+      toast.error('You are not logged in. Please sign in again.');
+      if (showLoading) setLoading(false);
       return;
     }
 
     try {
-      setLoading(true);
-      setError('');
+      if (showLoading) setLoading(true);
       const response = await api.get<QueueResponse>('/appointments/queue?limit=500&status=WAITING,PENDING,IN_PROGRESS,FOR_DISPENSING,COMPLETED', token);
       setQueue(response.data || []);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to load doctor queue.');
+        toast.error('Failed to load doctor queue.');
       }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadQueue();
+    void loadQueue(true);
   }, []);
 
   useEffect(() => {
     function handleWindowFocus() {
-      void loadQueue();
+      void loadQueue(false);
     }
 
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') {
-        void loadQueue();
+        void loadQueue(false);
       }
     }
 
@@ -179,13 +175,18 @@ export default function StaffCommandCenterPage() {
     };
   }, []);
 
+  // Real-time: reload queue whenever the server signals a queue or visit change.
+  useServerEvents(['queue', 'visits'], () => {
+    startTransition(() => { void loadQueue(false); });
+  });
+
   useEffect(() => {
     async function loadInventoryLookup() {
       const token = getToken();
       if (!token) return;
 
       try {
-        const response = await api.get<InventoryResponse>('/inventory', token);
+        const response = await api.get<InventoryResponse>('/inventory?category=MEDICINE&limit=500', token);
         setInventoryOptions(response.data || []);
       } catch {
         // Keep consult flow usable even when inventory lookup fails.
@@ -211,7 +212,7 @@ export default function StaffCommandCenterPage() {
 
   const liveQueueCandidates = filteredQueue.filter(
     (item) =>
-      (item.status === 'WAITING' || item.status === 'PENDING' || item.status === 'FOR_DISPENSING')
+      (item.status === 'WAITING' || item.status === 'PENDING' || item.status === 'IN_PROGRESS' || item.status === 'FOR_DISPENSING')
       && (!isFollowUpAppointment(item) || !isFutureFollowUp(item))
   );
 
@@ -235,10 +236,10 @@ export default function StaffCommandCenterPage() {
   const forDispensingCount = liveQueueCandidates.filter((item) => resolveLiveQueueStatus(item) === 'FOR_DISPENSING').length;
   const doneCount = doneQueueCandidates.length;
   const allPatientsCount = liveQueueCandidates.length;
-  const followUps = filteredQueue
-    .filter((item) => (item.status === 'WAITING' || item.status === 'PENDING') && isFutureFollowUp(item))
-    .slice(0, 10);
-
+  const followUpsAll = filteredQueue.filter((item) => (item.status === 'WAITING' || item.status === 'PENDING') && isFutureFollowUp(item));
+  const followUpPageSize = 5;
+  const followUpTotalPages = Math.max(1, Math.ceil(followUpsAll.length / followUpPageSize));
+  const followUps = followUpsAll.slice((followUpPage - 1) * followUpPageSize, followUpPage * followUpPageSize);
   const selectedDoneSet = useMemo(() => new Set(selectedDoneIds), [selectedDoneIds]);
   const selectedDoneCount = selectedDoneIds.length;
 
@@ -269,7 +270,7 @@ export default function StaffCommandCenterPage() {
   async function issueConsultationCertificate(patient: QueueItem) {
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
@@ -286,43 +287,41 @@ export default function StaffCommandCenterPage() {
 
   async function handleIssueSingleConsultationCertificate(patient: QueueItem) {
     try {
-      setError('');
       await issueConsultationCertificate(patient);
-      showToast('Medical certificate issued.');
+      toast.success('Medical certificate issued.');
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to issue medical certificate.');
+        toast.error('Failed to issue medical certificate.');
       }
     }
   }
 
   async function handleIssueBulkConsultationCertificates() {
     if (selectedDoneIds.length === 0) {
-      showToast('Select at least one completed consultation.');
+      toast.error('Select at least one completed consultation.');
       return;
     }
 
     const selectedPatients = doneQueueCandidates.filter((item) => selectedDoneSet.has(item.id));
     if (selectedPatients.length === 0) {
-      showToast('No valid completed consultations selected.');
+      toast.error('No valid completed consultations selected.');
       return;
     }
 
     try {
-      setError('');
       for (const patient of selectedPatients) {
         await issueConsultationCertificate(patient);
       }
       setSelectedDoneIds([]);
       setIsDoneSelectMode(false);
-      showToast(`Issued ${selectedPatients.length} medical certificate${selectedPatients.length > 1 ? 's' : ''}.`);
+      toast.success(`Issued ${selectedPatients.length} medical certificate${selectedPatients.length > 1 ? 's' : ''}.`);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to issue bulk medical certificates.');
+        toast.error('Failed to issue bulk medical certificates.');
       }
     }
   }
@@ -380,7 +379,7 @@ export default function StaffCommandCenterPage() {
 
   function resolveLiveQueueStatus(item: QueueItem): 'INCOMING' | 'WAITING' | 'PENDING' | 'FOR_DISPENSING' {
     if (item.status === 'FOR_DISPENSING') return 'FOR_DISPENSING';
-    if (item.status === 'PENDING') return 'PENDING';
+    if (item.status === 'PENDING' || item.status === 'IN_PROGRESS') return 'PENDING';
     return getDisplayQueueStatus(item);
   }
 
@@ -447,6 +446,18 @@ export default function StaffCommandCenterPage() {
     setConsultingPatient(patient);
     setConsultModalOpen(true);
 
+    // Always reload inventory when the modal opens so the dropdown is never
+    // empty due to a failed initial fetch (e.g. DB cold-start on page load).
+    const token = getToken();
+    if (token) {
+      try {
+        const invResponse = await api.get<InventoryResponse>('/inventory?category=MEDICINE&limit=500', token);
+        setInventoryOptions(invResponse.data || []);
+      } catch {
+        // Non-fatal — keep whatever was loaded previously (or empty).
+      }
+    }
+
     try {
       const triage = await loadLatestNurseTriage(patient);
       if (triage) {
@@ -465,7 +476,7 @@ export default function StaffCommandCenterPage() {
 
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
@@ -514,8 +525,6 @@ export default function StaffCommandCenterPage() {
     };
 
     try {
-      setError('');
-
       await api.post<CreateVisitResponse>(
         '/clinic/visits',
         {
@@ -548,9 +557,9 @@ export default function StaffCommandCenterPage() {
       setConsultModalOpen(false);
       setConsultingPatient(null);
       if (dispensedMedicines.length > 0) {
-        showToast('Consultation saved. Patient returned to nurse queue for dispensing.');
+        toast.success('Consultation saved. Patient returned to nurse queue for dispensing.');
       } else {
-        showToast(
+        toast.success(
           form.addFollowUp
             ? 'Consultation completed and follow-up appointment scheduled.'
             : 'Consultation completed and saved to logs.'
@@ -559,97 +568,19 @@ export default function StaffCommandCenterPage() {
       await loadQueue();
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to save doctor consultation.');
+        toast.error('Failed to save doctor consultation.');
       }
     }
   }
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] flex flex-col">
-      <div className="px-6 py-5 border-b border-[hsl(var(--border))] flex items-center justify-between">
-        <div>
-          <h1 className="text-h1 text-[hsl(var(--foreground))]">Doctor Dashboard</h1>
-          <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide mt-1">Live queue • Follow-up management</p>
-        </div>
-
-        <button
-          onClick={() => router.push('/dashboard/doctor/scanner')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold rounded-[var(--radius-lg)] shadow-[var(--shadow-sm)] transition-all"
-        >
-          <UserPlus size={18} strokeWidth={1.5} />
-          Open QR Scanner
-        </button>
-      </div>
-
-      <main className="flex-1 p-6 overflow-y-auto">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {error && (
-            <div className="rounded-[var(--radius-lg)] border border-[hsl(var(--danger)_/_0.3)] bg-[hsl(var(--danger-soft))] px-4 py-3 text-sm text-[hsl(var(--danger))]">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="card p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-[hsl(var(--primary-soft))] text-[hsl(var(--primary))] rounded-[var(--radius-lg)]">
-                  <UserPlus size={20} strokeWidth={1.5} />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">All Patients</p>
-                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{allPatientsCount}</p>
-                </div>
-              </div>
-            </div>
-            <div className="card p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-[hsl(var(--info-soft))] text-[hsl(var(--info))] rounded-[var(--radius-lg)]">
-                  <Clock size={20} strokeWidth={1.5} />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">Incoming</p>
-                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{incomingCount}</p>
-                </div>
-              </div>
-            </div>
-            <div className="card p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))] rounded-[var(--radius-lg)]">
-                  <Clock size={20} strokeWidth={1.5} />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">Waiting</p>
-                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{waitingCount}</p>
-                </div>
-              </div>
-            </div>
-            <div className="card p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-[hsl(var(--success-soft))] text-[hsl(var(--success))] rounded-[var(--radius-lg)]">
-                  <Activity size={20} strokeWidth={1.5} />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">Pending</p>
-                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{pendingCount}</p>
-                </div>
-              </div>
-            </div>
-            <div className="card p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))] rounded-[var(--radius-lg)]">
-                  <Activity size={20} strokeWidth={1.5} />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[hsl(var(--muted))] uppercase tracking-wide">For Dispensing</p>
-                  <p className="text-2xl font-bold text-[hsl(var(--foreground))] tabular-nums">{forDispensingCount}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
+      <main className="flex-1 px-6 py-5 overflow-y-auto">
+        <div className="space-y-5">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            {/* ── LEFT: Live Patient Queue ────────────────────── */}
             <div className="xl:col-span-2 card overflow-hidden flex flex-col h-[600px]">
               <div className="px-4 pt-1 pb-2.5 border-b border-[hsl(var(--border))] flex flex-col lg:flex-row lg:items-start lg:justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -663,56 +594,55 @@ export default function StaffCommandCenterPage() {
                     <button
                       type="button"
                       onClick={() => startTransition(() => setLiveQueueFilter('all'))}
-                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
-                        liveQueueFilter === 'all' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
-                      }`}
+                      className={`relative px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${liveQueueFilter === 'all' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
+                        }`}
                     >
                       All
                     </button>
                     <button
                       type="button"
                       onClick={() => startTransition(() => setLiveQueueFilter('incoming'))}
-                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
-                        liveQueueFilter === 'incoming' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
-                      }`}
+                      className={`relative px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${liveQueueFilter === 'incoming' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
+                        }`}
                     >
                       Incoming
+                      {incomingCount > 0 && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[hsl(var(--surface))] -translate-y-1/2 translate-x-1/2" />}
                     </button>
                     <button
                       type="button"
                       onClick={() => startTransition(() => setLiveQueueFilter('waiting'))}
-                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
-                        liveQueueFilter === 'waiting' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
-                      }`}
+                      className={`relative px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${liveQueueFilter === 'waiting' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
+                        }`}
                     >
                       Waiting
+                      {waitingCount > 0 && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[hsl(var(--surface))] -translate-y-1/2 translate-x-1/2" />}
                     </button>
                     <button
                       type="button"
                       onClick={() => startTransition(() => setLiveQueueFilter('pending'))}
-                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
-                        liveQueueFilter === 'pending' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
-                      }`}
+                      className={`relative px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${liveQueueFilter === 'pending' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
+                        }`}
                     >
                       Pending
+                      {pendingCount > 0 && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[hsl(var(--surface))] -translate-y-1/2 translate-x-1/2" />}
                     </button>
                     <button
                       type="button"
                       onClick={() => startTransition(() => setLiveQueueFilter('for-dispensing'))}
-                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
-                        liveQueueFilter === 'for-dispensing' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
-                      }`}
+                      className={`relative px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${liveQueueFilter === 'for-dispensing' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
+                        }`}
                     >
                       For Dispensing
+                      {forDispensingCount > 0 && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[hsl(var(--surface))] -translate-y-1/2 translate-x-1/2" />}
                     </button>
                     <button
                       type="button"
                       onClick={() => startTransition(() => setLiveQueueFilter('done'))}
-                      className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${
-                        liveQueueFilter === 'done' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
-                      }`}
+                      className={`relative px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-colors ${liveQueueFilter === 'done' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))]'
+                        }`}
                     >
-                      Done ({doneCount})
+                      Done
+                      {doneCount > 0 && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[hsl(var(--surface))] -translate-y-1/2 translate-x-1/2" />}
                     </button>
                   </div>
 
@@ -727,14 +657,6 @@ export default function StaffCommandCenterPage() {
                         className="pl-10 pr-4 py-2 bg-[hsl(var(--background))] border border-[hsl(var(--input-border))] rounded-[var(--radius-md)] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus-ring)_/_0.4)] focus:border-[hsl(var(--primary))] w-full transition-all"
                       />
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setQrModalOpen(true)}
-                      className="text-xs font-medium border border-[hsl(var(--border))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-soft))] px-3 py-2 rounded-[var(--radius-md)] transition-colors"
-                    >
-                      Use QR
-                    </button>
                   </div>
 
                   {liveQueueFilter === 'done' && (
@@ -757,143 +679,185 @@ export default function StaffCommandCenterPage() {
                 ) : (
                   <div className={`transition-opacity duration-200 ${isPending ? 'opacity-60' : 'opacity-100'}`}>
                     <table className="w-full table-fixed text-sm">
-                    <thead>
-                      <tr>
-                        {liveQueueFilter === 'done' && isDoneSelectMode && (
-                          <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Select</th>
-                        )}
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Student</th>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Department</th>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Preferred Slot</th>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Reason</th>
-                        <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Status</th>
-                        <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[hsl(var(--border)_/_0.5)]">
-                      {liveQueue.length === 0 ? (
+                      <thead>
                         <tr>
-                          <td colSpan={liveQueueFilter === 'done' && isDoneSelectMode ? 7 : 6} className="px-4 py-10 text-center text-[hsl(var(--muted))] text-sm">No patients found.</td>
+                          {liveQueueFilter === 'done' && isDoneSelectMode && (
+                            <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Select</th>
+                          )}
+                          <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Student</th>
+                          <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Department</th>
+                          <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Preferred Slot</th>
+                          <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Reason</th>
+                          <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Status</th>
+                          <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">Actions</th>
                         </tr>
-                      ) : (
-                        liveQueue.map((patient) => (
-                          <tr
-                            key={patient.id}
-                            className="hover:bg-[hsl(var(--primary-soft)_/_0.3)] transition-colors"
-                          >
-                            {liveQueueFilter === 'done' && isDoneSelectMode && (
-                              <td className="px-4 py-3 text-left">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedDoneSet.has(patient.id)}
-                                  onChange={() => toggleDoneSelection(patient.id)}
-                                />
-                              </td>
-                            )}
-                            <td className="px-4 py-3 text-left">
-                              <div>
-                                <p className="font-semibold text-[hsl(var(--foreground))]">{patient.studentProfile.lastName}, {patient.studentProfile.firstName}</p>
-                                <p className="text-xs text-[hsl(var(--primary))] font-medium mt-0.5 tabular-nums">{patient.studentProfile.studentNumber}</p>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-left text-[hsl(var(--muted-foreground))]">{patient.studentProfile.courseDept || 'N/A'}</td>
-                            <td className="px-4 py-3 text-left text-[hsl(var(--muted-foreground))] tabular-nums">
-                              {formatDate(patient.preferredDate)} at {formatTime12Hour(patient.preferredTime)}
-                            </td>
-                            <td className="px-4 py-3 text-left">
-                              <p className="text-xs font-medium text-[hsl(var(--primary))]">{patient.serviceType}</p>
-                              <p className="text-[hsl(var(--foreground))] break-words leading-snug">{patient.symptoms || 'N/A'}</p>
-                              {resolveLiveQueueStatus(patient) === 'FOR_DISPENSING' && (patient.pendingMedicines?.length || 0) > 0 && (
-                                <p className="text-xs text-[hsl(var(--warning))] mt-1">
-                                  Rx: {patient.pendingMedicines?.map((medicine) => `${medicine.inventory?.itemName || 'Medicine'} x${medicine.quantity}`).join(', ')}
-                                </p>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-left">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                patient.status === 'COMPLETED'
-                                  ? 'bg-[hsl(var(--success-soft))] text-[hsl(var(--success))]'
-                                  :
-                                resolveLiveQueueStatus(patient) === 'INCOMING'
-                                  ? 'bg-[hsl(var(--info-soft))] text-[hsl(var(--info))]'
-                                  : resolveLiveQueueStatus(patient) === 'FOR_DISPENSING'
-                                    ? 'bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))]'
-                                  : resolveLiveQueueStatus(patient) === 'PENDING'
-                                    ? 'bg-[hsl(var(--success-soft))] text-[hsl(var(--success))]'
-                                    : 'bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))]'
-                              }`}>
-                                {patient.status === 'COMPLETED'
-                                  ? 'Done'
-                                  : resolveLiveQueueStatus(patient) === 'INCOMING'
-                                  ? 'Incoming'
-                                  : resolveLiveQueueStatus(patient) === 'FOR_DISPENSING'
-                                    ? 'For Dispensing'
-                                  : resolveLiveQueueStatus(patient) === 'PENDING'
-                                    ? 'Pending'
-                                    : 'Waiting'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {patient.status === 'COMPLETED' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleIssueSingleConsultationCertificate(patient)}
-                                  className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-1.5 rounded-[var(--radius-md)] transition-colors"
-                                >
-                                  Give Med Cert
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => openConsultModal(patient)}
-                                  disabled={patient.status === 'COMPLETED' || patient.status === 'CANCELLED' || patient.status === 'FOR_DISPENSING'}
-                                  className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-1.5 rounded-[var(--radius-md)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  {patient.status === 'FOR_DISPENSING' ? 'Queued for Nurse' : 'Consult'}
-                                </button>
-                              )}
-                            </td>
+                      </thead>
+                      <tbody className="divide-y divide-[hsl(var(--border)_/_0.5)]">
+                        {liveQueue.length === 0 ? (
+                          <tr>
+                            <td colSpan={liveQueueFilter === 'done' && isDoneSelectMode ? 7 : 6} className="px-4 py-10 text-center text-[hsl(var(--muted))] text-sm">No patients found.</td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                        ) : (
+                          liveQueue.map((patient) => {
+                            const rs = resolveLiveQueueStatus(patient);
+                            const isDisp = rs === 'FOR_DISPENSING';
+                            const isPend = rs === 'PENDING';
+                            const isComp = patient.status === 'COMPLETED';
+
+                            return (
+                              <tr
+                                key={patient.id}
+                                className="hover:bg-[hsl(var(--primary-soft)_/_0.3)] transition-colors"
+                              >
+                                {liveQueueFilter === 'done' && isDoneSelectMode && (
+                                  <td className="px-4 py-3 text-left">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedDoneSet.has(patient.id)}
+                                      onChange={() => toggleDoneSelection(patient.id)}
+                                    />
+                                  </td>
+                                )}
+                                <td className="px-4 py-3 text-left">
+                                  <div>
+                                    <p className="font-semibold text-[hsl(var(--foreground))]">{patient.studentProfile.lastName}, {patient.studentProfile.firstName}</p>
+                                    <p className="text-xs text-[hsl(var(--primary))] font-medium mt-0.5 tabular-nums">{patient.studentProfile.studentNumber}</p>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-left text-[hsl(var(--muted-foreground))]">{patient.studentProfile.courseDept || 'N/A'}</td>
+                                <td className="px-4 py-3 text-left text-[hsl(var(--muted-foreground))] tabular-nums">
+                                  {formatDate(patient.preferredDate)} at {formatTime12Hour(patient.preferredTime)}
+                                </td>
+                                <td className="px-4 py-3 text-left">
+                                  <p className="text-xs font-medium text-[hsl(var(--primary))]">{patient.serviceType}</p>
+                                  <p className="text-[hsl(var(--foreground))] break-words leading-snug">{patient.symptoms || 'N/A'}</p>
+                                  {isDisp && (patient.pendingMedicines?.length || 0) > 0 && (
+                                    <p className="text-xs text-[hsl(var(--warning))] mt-1">
+                                      Rx: {patient.pendingMedicines?.map((medicine) => `${medicine.inventory?.itemName || 'Medicine'} x${medicine.quantity}`).join(', ')}
+                                    </p>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-left">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${patient.status === 'COMPLETED'
+                                      ? 'bg-[hsl(var(--success-soft))] text-[hsl(var(--success))]'
+                                      :
+                                      rs === 'INCOMING'
+                                        ? 'bg-[hsl(var(--info-soft))] text-[hsl(var(--info))]'
+                                        : rs === 'FOR_DISPENSING'
+                                          ? 'bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))]'
+                                          : rs === 'PENDING'
+                                            ? 'bg-[hsl(var(--success-soft))] text-[hsl(var(--success))]'
+                                            : 'bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning))]'
+                                    }`}>
+                                    {patient.status === 'COMPLETED'
+                                      ? 'Done'
+                                      : rs === 'INCOMING'
+                                        ? 'Incoming'
+                                        : rs === 'FOR_DISPENSING'
+                                          ? 'For Dispensing'
+                                          : rs === 'PENDING'
+                                            ? 'Pending'
+                                            : 'Waiting'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  {isComp ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleIssueSingleConsultationCertificate(patient)}
+                                      className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-1.5 rounded-[var(--radius-md)] transition-colors"
+                                    >
+                                      Give Med Cert
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => openConsultModal(patient)}
+                                      disabled={isComp || patient.status === 'CANCELLED' || isDisp}
+                                      className="text-xs font-medium bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-3 py-1.5 rounded-[var(--radius-md)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      {isDisp ? 'Queued for Nurse' : 'Consult'}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="xl:col-span-1 card overflow-hidden flex flex-col h-[600px]">
-              <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
-                <h2 className="text-h3 text-[hsl(var(--foreground))]">Follow Ups</h2>
-                <p className="text-xs text-[hsl(var(--muted))] mt-1">Scheduled follow-up appointments</p>
+            <div className="xl:col-span-1 flex flex-col gap-5">
+              {/* QR Scanner Card */}
+              <div className="card">
+                <ScannerWidget standalone={false} />
               </div>
+            </div>
+          </div>
 
-              <div className="flex-1 overflow-auto divide-y divide-[hsl(var(--border)_/_0.5)]">
-                {loading ? (
-                  <div className="px-5 py-8 text-center text-[hsl(var(--muted))] text-sm">Loading follow ups...</div>
-                ) : followUps.length === 0 ? (
-                  <div className="px-5 py-8 text-center text-[hsl(var(--muted))] text-sm">No follow ups yet.</div>
-                ) : (
-                  followUps.map((item) => (
-                    <div key={`followup-${item.id}`} className="px-5 py-4 hover:bg-[hsl(var(--primary-soft)_/_0.3)] transition-colors">
-                      <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{item.studentProfile.firstName} {item.studentProfile.lastName}</p>
-                      <p className="text-xs text-[hsl(var(--muted))] mt-0.5 tabular-nums">{item.studentProfile.studentNumber}</p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 tabular-nums">Follow-up: {formatDate(item.preferredDate)}</p>
-                    </div>
-                  ))
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+            <RoleWellnessTrends className="h-[400px]" />
+
+            {/* Follow Ups Card */}
+            <div className="card overflow-hidden flex flex-col h-[400px]">
+                <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+                  <h3 className="text-h3 text-[hsl(var(--foreground))]">Follow Ups</h3>
+                  <p className="text-xs text-[hsl(var(--muted))] mt-1">Scheduled follow-up appointments</p>
+                </div>
+
+                <div className="flex-1 overflow-auto divide-y divide-[hsl(var(--border)_/_0.5)]">
+                  {loading ? (
+                    <div className="px-5 py-8 text-center text-[hsl(var(--muted))] text-sm flex-1 flex items-center justify-center">Loading follow ups...</div>
+                  ) : followUpsAll.length === 0 ? (
+                    <div className="px-5 py-8 text-center text-[hsl(var(--muted))] text-sm flex-1 flex items-center justify-center">No follow ups yet.</div>
+                  ) : (
+                    followUps.map((item) => (
+                      <div key={`followup-${item.id}`} className="px-5 py-[14px] hover:bg-[hsl(var(--primary-soft)_/_0.3)] transition-colors h-[65px] flex flex-col justify-center">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{item.studentProfile.firstName} {item.studentProfile.lastName}</p>
+                            <p className="text-xs text-[hsl(var(--muted))] mt-0.5 tabular-nums">{item.studentProfile.studentNumber}</p>
+                          </div>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums bg-gray-100 px-2 py-1 rounded">
+                            {formatDate(item.preferredDate)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {followUpTotalPages > 1 && (
+                  <div className="px-5 py-3 border-t border-[hsl(var(--border))] flex items-center justify-between bg-[hsl(var(--surface))]">
+                    <button
+                      type="button"
+                      disabled={followUpPage === 1}
+                      onClick={() => setFollowUpPage(p => Math.max(1, p - 1))}
+                      className="text-xs font-medium px-3 py-1.5 rounded-md border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs text-[hsl(var(--muted))]">
+                      Page {followUpPage} of {followUpTotalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={followUpPage === followUpTotalPages}
+                      onClick={() => setFollowUpPage(p => Math.min(followUpTotalPages, p + 1))}
+                      className="text-xs font-medium px-3 py-1.5 rounded-md border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
           </div>
-        </div>
       </main>
-
-      <Toast
-        isVisible={toastConfig.isVisible}
-        message={toastConfig.message}
-        onClose={() => setToastConfig({ isVisible: false, message: '' })}
-      />
 
       {consultModalOpen && consultingPatient && (
         <ConsultationModal
@@ -924,15 +888,12 @@ export default function StaffCommandCenterPage() {
         onClose={() => setQrModalOpen(false)}
         onResolved={(student: QrResolvedStudent) => {
           setSearchQuery(student.studentNumber);
-          showToast(`Found ${student.lastName}, ${student.firstName}`);
+          toast.success(`Found ${student.lastName}, ${student.firstName}`);
         }}
         onNotFound={() => {
-          showToast('Student not found.');
+          toast.error('Student not found.');
         }}
       />
-
-      <PredictiveInsightsCard role="staff" className="mx-8 mb-8" />
-      <HealthConcernsByDepartmentCard className="mx-8 mb-8" />
     </div>
   );
 }

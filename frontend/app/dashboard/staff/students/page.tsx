@@ -33,6 +33,8 @@ export default function DoctorStudentsPage() {
   const [yearLevelFilter, setYearLevelFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   async function loadStudents(value?: string) {
     const token = getToken();
@@ -65,10 +67,15 @@ export default function DoctorStudentsPage() {
     void loadStudents();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [departmentFilter, courseFilter, yearLevelFilter]);
+
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function onSearch(value: string) {
     setQuery(value);
+    setCurrentPage(1);
     if (!value.trim()) {
       setQrMessage('');
     }
@@ -103,38 +110,38 @@ export default function DoctorStudentsPage() {
     [students, departmentFilter, courseFilter, yearLevelFilter],
   );
 
-  return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Students</h1>
-        <p className="text-sm text-gray-500 mt-1">Browse all registered students without using QR scan.</p>
-      </div>
+  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+  const paginatedStudents = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredStudents.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredStudents, currentPage]);
 
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+  return (
+    <div className="p-4 sm:p-6 space-y-5">
+
+      <div className="flex flex-wrap xl:flex-nowrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
             value={query}
             onChange={(event) => onSearch(event.target.value)}
-            placeholder="Search by student number, name, or department"
-            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            placeholder="Search student number, name..."
+            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
           />
         </div>
         <button
           type="button"
           onClick={() => setQrModalOpen(true)}
-          className="text-xs font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-3 rounded-xl transition-colors"
+          className="text-sm font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap flex-none"
         >
           Use QR
         </button>
-      </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <select
           value={departmentFilter}
           onChange={(event) => setDepartmentFilter(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 flex-1 min-w-[130px] xl:flex-none xl:w-[170px]"
           aria-label="Filter by department"
         >
           <option value="all">All Departments</option>
@@ -146,7 +153,7 @@ export default function DoctorStudentsPage() {
         <select
           value={courseFilter}
           onChange={(event) => setCourseFilter(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 flex-1 min-w-[130px] xl:flex-none xl:w-[150px]"
           aria-label="Filter by course"
         >
           <option value="all">All Courses</option>
@@ -158,7 +165,7 @@ export default function DoctorStudentsPage() {
         <select
           value={yearLevelFilter}
           onChange={(event) => setYearLevelFilter(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 flex-1 min-w-[130px] xl:flex-none xl:w-[150px]"
           aria-label="Filter by year level"
         >
           <option value="all">All Year Levels</option>
@@ -190,9 +197,9 @@ export default function DoctorStudentsPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400">Loading students...</td></tr>
-              ) : filteredStudents.length === 0 ? (
+              ) : paginatedStudents.length === 0 ? (
                 <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400">No students found.</td></tr>
-              ) : filteredStudents.map((student) => (
+              ) : paginatedStudents.map((student) => (
                 <tr key={student.id} className="border-b border-gray-50 hover:bg-gray-50/70">
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{student.studentNumber}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{student.lastName}, {student.firstName}</td>
@@ -210,6 +217,37 @@ export default function DoctorStudentsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+            <span className="text-sm text-gray-500">
+              Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+              <span className="font-medium text-gray-900">
+                {Math.min(currentPage * itemsPerPage, filteredStudents.length)}
+              </span>{' '}
+              of <span className="font-medium text-gray-900">{filteredStudents.length}</span> students
+            </span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <UseQrLookupModal

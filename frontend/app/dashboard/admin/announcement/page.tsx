@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import PaginationControls from '@/components/ui/PaginationControls';
+import toast from 'react-hot-toast';
 
 interface AdvisoryItem {
 	id: string;
@@ -62,8 +63,6 @@ export default function AdminAnnouncementPage() {
 	const [loadingHistory, setLoadingHistory] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
 
-	const [error, setError] = useState('');
-	const [feedback, setFeedback] = useState('');
 	const [search, setSearch] = useState('');
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(10);
@@ -71,20 +70,19 @@ export default function AdminAnnouncementPage() {
 	async function loadHistory() {
 		const token = getToken();
 		if (!token) {
-			setError('You are not logged in. Please sign in again.');
+			toast.error('You are not logged in. Please sign in again.');
 			setLoadingHistory(false);
 			return;
 		}
 
 		try {
-			setError('');
 			const response = await api.get<AdvisoryResponse>('/advisories', token);
 			setHistory(response.data || []);
 		} catch (err) {
 			if (err instanceof ApiError) {
-				setError(err.message);
+				toast.error(err.message);
 			} else {
-				setError('Failed to load announcement history logs.');
+				toast.error('Failed to load announcement history logs.');
 			}
 		} finally {
 			setLoadingHistory(false);
@@ -100,7 +98,7 @@ export default function AdminAnnouncementPage() {
 
 		const token = getToken();
 		if (!token) {
-			setError('You are not logged in. Please sign in again.');
+			toast.error('You are not logged in. Please sign in again.');
 			return;
 		}
 
@@ -110,14 +108,12 @@ export default function AdminAnnouncementPage() {
 		const fallbackTargetDept = selectedTargets.includes('ALL') ? 'ALL' : selectedTargets.join(',');
 
 		if (!normalizedTitle || !normalizedMessage) {
-			setFeedback('Title and message are required.');
+			toast.error('Title and message are required.');
 			return;
 		}
 
 		try {
 			setSubmitting(true);
-			setError('');
-			setFeedback('');
 
 			const response = await api.post<BroadcastResponse>(
 				'/advisories/broadcast',
@@ -135,13 +131,13 @@ export default function AdminAnnouncementPage() {
 			setMessage('');
 			setTargetAudience(['ALL']);
 			setSeverity('INFO');
-			setFeedback(response.message || 'Announcement posted successfully.');
+			toast.success(response.message || 'Announcement posted successfully.');
 			await loadHistory();
 		} catch (err) {
 			if (err instanceof ApiError) {
-				setFeedback(err.message);
+				toast.error(err.message);
 			} else {
-				setFeedback('Failed to publish announcement.');
+				toast.error('Failed to publish announcement.');
 			}
 		} finally {
 			setSubmitting(false);
@@ -195,12 +191,6 @@ export default function AdminAnnouncementPage() {
 				<p className="text-sm text-gray-500 mt-0.5">Publish advisories to all users or a selected group.</p>
 			</div>
 
-			{error && (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-					{error}
-				</div>
-			)}
-
 			<div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-5">
 				<div>
 					<h2 className="text-base font-bold text-gray-900">Create Announcement</h2>
@@ -230,7 +220,7 @@ export default function AdminAnnouncementPage() {
 											key={option.value}
 											className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
 												checked
-													? 'bg-teal-50 border-teal-200 text-teal-700 shadow-sm'
+													? 'bg-teal-600 border-teal-700 text-white shadow-md ring-2 ring-teal-600/20'
 													: 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
 											}`}
 										>
@@ -257,7 +247,7 @@ export default function AdminAnnouncementPage() {
 										onClick={() => setSeverity(option)}
 										className={`px-2 py-2.5 rounded-xl border text-[11px] font-bold tracking-wide uppercase transition-colors ${
 											severity === option
-												? `${SEVERITY_BADGE_CLASS[option]} shadow-sm`
+												? `${SEVERITY_BADGE_CLASS[option]} shadow-md ring-2 ring-offset-1 ring-${option === 'CRITICAL' ? 'red' : option === 'WARNING' ? 'amber' : 'blue'}-500`
 												: 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
 										}`}
 									>
@@ -280,11 +270,7 @@ export default function AdminAnnouncementPage() {
 					</div>
 
 					<div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-						{feedback ? (
-							<p className={`text-xs font-medium ${feedback.toLowerCase().includes('failed') || feedback.toLowerCase().includes('required') ? 'text-red-600' : 'text-teal-600'}`}>
-								{feedback}
-							</p>
-						) : <span className="text-xs text-gray-400">Posted announcements will appear in the history log below.</span>}
+						<span className="text-xs text-gray-400">Posted announcements will appear in the history log below.</span>
 
 						<button
 							type="submit"

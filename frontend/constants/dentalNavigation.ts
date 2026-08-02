@@ -48,12 +48,7 @@ export const DENTAL_NAV_GROUPS: DentalNavGroup[] = [
         href:  '/dashboard/dental/reports',
         icon:  ReportsIcon,
       },
-      {
-        id:    'notifications',
-        label: 'Notifications',
-        href:  '/dashboard/dental/notifications',
-        icon:  NotificationsIcon,
-      },
+
       {
         id:    'calendar',
         label: 'Calendar',

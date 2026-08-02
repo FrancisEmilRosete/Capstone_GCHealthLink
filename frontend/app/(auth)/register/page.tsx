@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
+import toast from 'react-hot-toast';
 import {
   DEPARTMENT_COURSE_MAP,
   getCoursesByDepartmentCode,
@@ -602,7 +603,6 @@ export default function RegisterPage() {
   const [agreed,     setAgreed]     = useState(false);
   const [submitted,  setSubmitted]  = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [submitError, setSubmitError] = useState('');
 
   function handleNext() {
     if (step < STEPS.length) setStep(s => s + 1);
@@ -613,8 +613,6 @@ export default function RegisterPage() {
   }
 
   async function handleSubmit() {
-    setSubmitError('');
-
     const department = (personal.department ?? '').trim();
     const course = (personal.course ?? '').trim();
     const yearLevel = (personal.yearLevel ?? '').trim();
@@ -622,32 +620,32 @@ export default function RegisterPage() {
     const confirmPassword = (personal.confirmPassword ?? '').trim();
 
     if (!isValidDepartmentCode(department)) {
-      setSubmitError('Please select a valid college (department).');
+      toast.error('Please select a valid college (department).');
       return;
     }
 
     if (!isValidCourseForDepartment(course, department)) {
-      setSubmitError('Please select a valid course for the selected college.');
+      toast.error('Please select a valid course for the selected college.');
       return;
     }
 
     if (!yearLevel) {
-      setSubmitError('Please select your year level.');
+      toast.error('Please select your year level.');
       return;
     }
 
     if (!password || password.length < 8) {
-      setSubmitError('Password is required and must be at least 8 characters.');
+      toast.error('Password is required and must be at least 8 characters.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setSubmitError('Password and confirm password do not match.');
+      toast.error('Password and confirm password do not match.');
       return;
     }
 
     if (!agreed) {
-      setSubmitError('You must agree to the data privacy consent before submitting.');
+      toast.error('You must agree to the data privacy consent before submitting.');
       return;
     }
 
@@ -682,12 +680,13 @@ export default function RegisterPage() {
     try {
       setSubmitLoading(true);
       await api.post('/students/registration/public', payload);
+      toast.success('Registration submitted successfully!');
       setSubmitted(true);
     } catch (error) {
       if (error instanceof ApiError) {
-        setSubmitError(error.message);
+        toast.error(error.message);
       } else {
-        setSubmitError('Failed to submit registration. Please try again.');
+        toast.error('Failed to submit registration. Please try again.');
       }
     } finally {
       setSubmitLoading(false);
@@ -707,8 +706,7 @@ export default function RegisterPage() {
           </div>
           <h2 className="text-xl font-bold text-gray-800">Registration Submitted!</h2>
           <p className="text-sm text-gray-500 leading-relaxed">
-            Your health registration has been successfully submitted. The clinic will review and process your
-            records. You may now log in to view your health profile.
+            Your health registration has been successfully submitted. Your health profile is now active and linked to your student account. You may now log in to view your health profile and book appointments.
           </p>
           <button
             onClick={() => router.push('/login')}
@@ -770,12 +768,6 @@ export default function RegisterPage() {
             />
           )}
           {step === 5 && <Step5 agreed={agreed} setAgreed={setAgreed} />}
-
-          {submitError && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-              {submitError}
-            </div>
-          )}
 
           {/* Navigation */}
           <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-100">

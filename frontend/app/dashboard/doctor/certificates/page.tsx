@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState, Fragment, useMemo } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { FileText, Search, Printer, PlusCircle, X, ClipboardList, Stethoscope } from 'lucide-react';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 import PaginationControls from '@/components/ui/PaginationControls';
-import { printCertificate } from '@/lib/printCertificate';
+import { printCertificate, printCertificatesBatch } from '@/lib/printCertificate';
+import toast from 'react-hot-toast';
 
 interface IssueForm {
   studentIdentifier: string;
@@ -17,29 +18,35 @@ interface IssueForm {
 }
 
 interface Certificate {
-  diagnosisFindings: string;
-  recommendationsRemarks: string;
   id: string;
   studentId: string;
   student: string;
   course: string;
   certificateType: string;
+  diagnosisFindings: string;
+  recommendationsRemarks: string;
   remarks: string;
   issuedAt: string;
   issuedBy: string;
 }
 
 export default function CertificatesPage() {
-  const [activeTab, setActiveTab] = useState<'CONSULTATION' | 'PHYSICAL_EXAM'>('CONSULTATION');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'CONSULTATION' | 'PHYSICAL_EXAM'>('ALL');
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
-  
+
   // QR State
   const [qrModalOpen, setQrModalOpen] = useState(false);
+
+  // Batch Print Modal State
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchTypeFilter, setBatchTypeFilter] = useState<'CONSULTATION' | 'PHYSICAL_EXAM'>('CONSULTATION');
+  const [batchSearch, setBatchSearch] = useState('');
+  const [selectedCerts, setSelectedCerts] = useState<Set<string>>(new Set());
 
   // Batch Print Filters
   const [dateFrom, setDateFrom] = useState('');
@@ -50,7 +57,6 @@ export default function CertificatesPage() {
   // Issue Certificate modal
   const [issueModalOpen, setIssueModalOpen] = useState(false);
   const [issueLoading, setIssueLoading] = useState(false);
-  const [issueError, setIssueError] = useState('');
   const [issueQrOpen, setIssueQrOpen] = useState(false);
   const [issueForm, setIssueForm] = useState<IssueForm>({
     studentIdentifier: '',
@@ -60,20 +66,55 @@ export default function CertificatesPage() {
     dateIssued: new Date().toISOString().split('T')[0],
   });
 
+  const isMounted = useRef(false);
+
   useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
     loadCertificates(search);
-  }, [activeTab]);
+  }, [typeFilter]);
 
   async function loadCertificates(q = '') {
     try {
       const token = getToken();
       if (!token) return;
       setLoading(true);
-      const res = await api.get<{ data: Certificate[] }>(`/certificates?q=${encodeURIComponent(q)}`, token);
-      setCertificates(res.data);
-      setError('');
+      const res = await api.get<{ data: any[] }>(`/certificates?q=${encodeURIComponent(q)}`, token);
+      
+      const mapped = res.data.map(cert => {
+         const studentName = cert.studentProfile 
+            ? `${cert.studentProfile.firstName} ${cert.studentProfile.lastName}`
+            : (cert.student || 'Unknown Student');
+            
+         const studentId = cert.studentProfile 
+            ? cert.studentProfile.studentNumber 
+            : (cert.studentId || 'Unknown ID');
+            
+         const course = cert.studentProfile
+            ? (cert.studentProfile.course || cert.studentProfile.courseDept || 'N/A')
+            : (cert.course || 'N/A');
+
+         return {
+            id: cert.id,
+            studentId: studentId,
+            student: studentName,
+            course: course,
+            certificateType: cert.certificateType,
+            diagnosisFindings: cert.diagnosisFindings,
+            recommendationsRemarks: cert.recommendationsRemarks,
+            remarks: cert.remarks,
+            issuedAt: cert.issuedAt,
+            issuedBy: typeof cert.issuedBy === 'string' 
+                ? cert.issuedBy 
+                : (cert.issuedBy?.email || cert.issuedByRole || 'Unknown'),
+         };
+      });
+      
+      setCertificates(mapped);
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
+      if (err instanceof ApiError) toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -88,14 +129,6 @@ export default function CertificatesPage() {
 
   const handlePrint = (cert: Certificate) => printCertificate(cert);
 
-  const handleBatchPrint = () => {
-    if (filtered.length === 0) {
-      alert('No certificates match the current filters.');
-      return;
-    }
-    filtered.forEach(cert => printCertificate(cert));
-  };
-
   const openIssueModal = () => {
     setIssueForm({
       studentIdentifier: '',
@@ -104,16 +137,14 @@ export default function CertificatesPage() {
       recommendationsRemarks: '',
       dateIssued: new Date().toISOString().split('T')[0],
     });
-    setIssueError('');
     setIssueModalOpen(true);
   };
 
   const handleIssueCertificate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!issueForm.studentIdentifier.trim()) { setIssueError('Student ID is required.'); return; }
-    if (!issueForm.diagnosisFindings.trim()) { setIssueError('Diagnosis / Findings are required.'); return; }
+    if (!issueForm.studentIdentifier.trim()) { toast.error('Student ID is required.'); return; }
+    if (!issueForm.diagnosisFindings.trim()) { toast.error('Diagnosis / Findings are required.'); return; }
     setIssueLoading(true);
-    setIssueError('');
     try {
       const token = getToken();
       await api.post<{ data: Certificate }>('/certificates', {
@@ -124,10 +155,11 @@ export default function CertificatesPage() {
         dateIssued: issueForm.dateIssued,
       }, token!);
       setIssueModalOpen(false);
+      toast.success('Certificate issued successfully.');
       loadCertificates(search);
     } catch (err) {
-      if (err instanceof ApiError) setIssueError(err.message);
-      else setIssueError('Failed to issue certificate.');
+      if (err instanceof ApiError) toast.error(err.message);
+      else toast.error('Failed to issue certificate.');
     } finally {
       setIssueLoading(false);
     }
@@ -135,9 +167,27 @@ export default function CertificatesPage() {
 
   const isConsultationType = issueForm.certificateType === 'CONSULTATION';
 
-  // Filtering Logic
+  // Filtering Logic for main table
   const filtered = useMemo(() => certificates.filter(c => {
-    if (c.certificateType !== activeTab) return false;
+    if (typeFilter !== 'ALL' && c.certificateType !== typeFilter) return false;
+    return true;
+  }), [certificates, typeFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, typeFilter, certificates.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedCertificates = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
+  // Filtering Logic for batch modal
+  const batchFiltered = certificates.filter(c => {
+    if (c.certificateType !== batchTypeFilter) return false;
+    if (batchSearch && !c.student.toLowerCase().includes(batchSearch.toLowerCase()) && !c.studentId.includes(batchSearch)) return false;
     
     if (dateFrom && new Date(c.issuedAt) < new Date(dateFrom)) return false;
     if (dateTo) {
@@ -146,7 +196,6 @@ export default function CertificatesPage() {
         if (new Date(c.issuedAt) >= toDate) return false;
     }
     
-    // Time filter logic (basic string comparison for HH:mm)
     if (timeFrom || timeTo) {
       const dateObj = new Date(c.issuedAt);
       const hours = dateObj.getHours().toString().padStart(2, '0');
@@ -158,79 +207,69 @@ export default function CertificatesPage() {
     }
     
     return true;
-  }), [certificates, activeTab, dateFrom, dateTo, timeFrom, timeTo]);
+  }).sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
+
+  const [batchPage, setBatchPage] = useState(1);
+  const BATCH_PAGE_SIZE = 15;
 
   useEffect(() => {
-    setPage(1);
-  }, [search, activeTab, dateFrom, dateTo, timeFrom, timeTo, certificates.length]);
+    setBatchPage(1);
+  }, [batchTypeFilter, batchSearch, dateFrom, dateTo, timeFrom, timeTo]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const pagedCertificates = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, currentPage, pageSize]);
+  const totalBatchPages = Math.max(1, Math.ceil(batchFiltered.length / BATCH_PAGE_SIZE));
+  const batchPaginated = batchFiltered.slice((batchPage - 1) * BATCH_PAGE_SIZE, batchPage * BATCH_PAGE_SIZE);
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedCerts(new Set(batchFiltered.map(c => c.id)));
+    } else {
+      setSelectedCerts(new Set());
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    const newSet = new Set(selectedCerts);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedCerts(newSet);
+  };
+
+  const executeBatchPrint = () => {
+    if (selectedCerts.size === 0) {
+      toast.error('Please select at least one certificate to print.');
+      return;
+    }
+    const certsToPrint = batchFiltered.filter(c => selectedCerts.has(c.id));
+    printCertificatesBatch(certsToPrint);
+  };
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText className="text-teal-600" /> Medical Certificates
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Issue and manage medical certificates for students.</p>
-        </div>
-        <button
-          onClick={openIssueModal}
-          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition-colors"
-        >
-          <PlusCircle size={16} /> Issue Certificate
-        </button>
-      </div>
+    <div className="p-4 sm:p-6 space-y-5">
 
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-700">Batch Print Filters</h2>
-        <div className="flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Date From</label>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Date To</label>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Time From</label>
-            <input type="time" value={timeFrom} onChange={e => setTimeFrom(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Time To</label>
-            <input type="time" value={timeTo} onChange={e => setTimeTo(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
-          </div>
-          <button onClick={handleBatchPrint} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Certificates</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage and print medical and consultation certificates.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => setBatchModalOpen(true)} 
+            className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-colors"
+          >
             <Printer size={16} /> Batch Print
+          </button>
+          <button
+            onClick={openIssueModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-colors"
+          >
+            <PlusCircle size={16} /> Issue Certificate
           </button>
         </div>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        <div className="flex border-b border-gray-100 bg-gray-50">
-          <button
-            onClick={() => setActiveTab('CONSULTATION')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors ${activeTab === 'CONSULTATION' ? 'text-teal-700 bg-white border-b-2 border-teal-500' : 'text-gray-500 hover:bg-gray-100/50'}`}
-          >
-            Consultation Certificates
-          </button>
-          <button
-            onClick={() => setActiveTab('PHYSICAL_EXAM')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors ${activeTab === 'PHYSICAL_EXAM' ? 'text-teal-700 bg-white border-b-2 border-teal-500' : 'text-gray-500 hover:bg-gray-100/50'}`}
-          >
-            Physical Exam (PE) Certificates
-          </button>
-        </div>
-
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
+        <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-wrap sm:flex-nowrap items-center gap-3 bg-white">
+          <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input 
               type="text" 
@@ -240,10 +279,19 @@ export default function CertificatesPage() {
               className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all"
             />
           </div>
+          <select 
+             value={typeFilter}
+             onChange={e => setTypeFilter(e.target.value as any)}
+             className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all min-w-[160px]"
+          >
+             <option value="ALL">All Certificates</option>
+             <option value="CONSULTATION">Consultation</option>
+             <option value="PHYSICAL_EXAM">Physical Exam</option>
+          </select>
           <button
             type="button"
             onClick={() => setQrModalOpen(true)}
-            className="text-sm font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-xl transition-colors"
+            className="text-sm font-semibold border border-teal-200 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-xl transition-colors ml-auto sm:ml-0"
           >
             Use QR
           </button>
@@ -254,6 +302,7 @@ export default function CertificatesPage() {
             <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
               <tr>
                 <th className="px-4 py-3">Student</th>
+                <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Department</th>
                 <th className="px-4 py-3">Issued By</th>
                 <th className="px-4 py-3">Date Issued</th>
@@ -262,51 +311,238 @@ export default function CertificatesPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No certificates found.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No certificates found.</td></tr>
               ) : (
-                pagedCertificates.map(cert => (
-                  <tr key={cert.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-gray-900">{cert.student}</div>
-                      <div className="text-xs text-gray-500">{cert.studentId}</div>
-                    </td>
-                    <td className="px-4 py-3">{cert.course}</td>
-                    <td className="px-4 py-3">{cert.issuedBy}</td>
-                    <td className="px-4 py-3">{new Date(cert.issuedAt).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => handlePrint(cert)} className="text-teal-600 hover:text-teal-800 font-semibold text-xs border border-teal-200 px-3 py-1 rounded-lg">Print</button>
-                    </td>
-                  </tr>
-                ))
+                pagedCertificates.map(cert => {
+                  const isConsult = cert.certificateType === 'CONSULTATION';
+                  let rowClasses = 'transition-colors hover:bg-gray-50/80';
+                  if (typeFilter === 'ALL') {
+                    rowClasses = isConsult 
+                      ? 'bg-blue-50/40 hover:bg-blue-50/80 transition-colors' 
+                      : 'bg-emerald-50/30 hover:bg-emerald-50/70 transition-colors';
+                  }
+
+                  return (
+                    <tr key={cert.id} className={rowClasses}>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-gray-900">{cert.student}</div>
+                        <div className="text-xs text-gray-500">{cert.studentId}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${isConsult ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {isConsult ? 'Consultation' : 'Physical Exam'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">{cert.course}</td>
+                      <td className="px-4 py-3">{cert.issuedBy}</td>
+                      <td className="px-4 py-3">{new Date(cert.issuedAt).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => handlePrint(cert)} className="text-teal-600 hover:text-teal-800 font-semibold text-xs border border-teal-200 px-3 py-1 rounded-lg bg-white">Print</button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
         {!loading && filtered.length > 0 && (
-          <PaginationControls
-            page={currentPage}
-            totalPages={totalPages}
-            totalItems={filtered.length}
-            pageSize={pageSize}
-            pageSizeOptions={[8, 12, 20, 30]}
-            itemLabel="certificates"
-            onPageChange={setPage}
-            onPageSizeChange={(next) => {
-              setPageSize(next);
-              setPage(1);
-            }}
-          />
+          <div className="border-t border-gray-100 p-3">
+            <PaginationControls
+              page={currentPage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={pageSize}
+              pageSizeOptions={[8, 12, 20, 30]}
+              itemLabel="certificates"
+              onPageChange={setPage}
+              onPageSizeChange={(next) => {
+                setPageSize(next);
+                setPage(1);
+              }}
+            />
+          </div>
         )}
       </div>
       
       <UseQrLookupModal
         open={qrModalOpen}
         onClose={() => setQrModalOpen(false)}
-        onResolved={(student: QrResolvedStudent) => setSearch(student.studentNumber)}
-        onNotFound={() => alert('Student not found. Please try another QR.')}
+        onResolved={(student: QrResolvedStudent) => {
+          setSearch(student.studentNumber);
+        }}
+        onNotFound={() => {
+          toast.error('Student not found. Please try another QR.');
+        }}
       />
+
+      {batchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Printer className="text-teal-600" size={24} />
+                Batch Print Certificates
+              </h2>
+              <button onClick={() => setBatchModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 border-b border-gray-100 space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Certificate Type</label>
+                  <select
+                    value={batchTypeFilter}
+                    onChange={(e) => setBatchTypeFilter(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                  >
+                    <option value="CONSULTATION">Consultation</option>
+                    <option value="PHYSICAL_EXAM">Physical Exam</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Search Student</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Name or ID..."
+                      value={batchSearch}
+                      onChange={(e) => setBatchSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Date From</label>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Date To</label>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Time From</label>
+                  <input type="time" value={timeFrom} onChange={e => setTimeFrom(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Time To</label>
+                  <input type="time" value={timeTo} onChange={e => setTimeTo(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto bg-gray-50/30 p-4 sm:p-6">
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left text-sm text-gray-600">
+                  <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 w-12">
+                        <input
+                          type="checkbox"
+                          checked={batchFiltered.length > 0 && selectedCerts.size === batchFiltered.length}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 cursor-pointer"
+                        />
+                      </th>
+                      <th className="px-4 py-3">Student</th>
+                      <th className="px-4 py-3">Department</th>
+                      <th className="px-4 py-3">Date Issued</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {batchPaginated.length === 0 ? (
+                      <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">No certificates match filters.</td></tr>
+                    ) : (
+                      (() => {
+                        let lastDateStr = '';
+                        return batchPaginated.map(cert => {
+                          const dateStr = new Date(cert.issuedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                          const showHeader = dateStr !== lastDateStr;
+                          if (showHeader) lastDateStr = dateStr;
+
+                          return (
+                            <Fragment key={cert.id}>
+                              {showHeader && (
+                                <tr className="bg-gray-100/50 border-t border-gray-200">
+                                  <td colSpan={4} className="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    {dateStr}
+                                  </td>
+                                </tr>
+                              )}
+                              <tr className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => handleSelectOne(cert.id)}>
+                                <td className="px-4 py-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCerts.has(cert.id)}
+                                    onChange={() => handleSelectOne(cert.id)}
+                                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 pointer-events-none"
+                                  />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="font-semibold text-gray-900">{cert.student}</div>
+                                  <div className="text-xs text-gray-500">{cert.studentId}</div>
+                                </td>
+                                <td className="px-4 py-3">{cert.course}</td>
+                                <td className="px-4 py-3">{new Date(cert.issuedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                              </tr>
+                            </Fragment>
+                          );
+                        });
+                      })()
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-6 border-t border-gray-100 bg-white flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-600 font-medium">
+                  {selectedCerts.size} selected
+                </div>
+                {totalBatchPages > 1 && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <button 
+                      disabled={batchPage === 1} 
+                      onClick={() => setBatchPage(p => Math.max(1, p - 1))}
+                      className="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                    >Prev</button>
+                    <span className="text-gray-500">Page {batchPage} of {totalBatchPages}</span>
+                    <button 
+                      disabled={batchPage === totalBatchPages} 
+                      onClick={() => setBatchPage(p => Math.min(totalBatchPages, p + 1))}
+                      className="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                    >Next</button>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setBatchModalOpen(false)}
+                  className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeBatchPrint}
+                  disabled={selectedCerts.size === 0}
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors flex items-center gap-2 shadow-sm"
+                >
+                  <Printer size={16} /> Print Selected
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Issue Certificate Modal ── */}
       {issueModalOpen && (
@@ -386,9 +622,6 @@ export default function CertificatesPage() {
                   onChange={e => setIssueForm(f => ({ ...f, dateIssued: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none" required />
               </div>
-              {issueError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">{issueError}</div>
-              )}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setIssueModalOpen(false)}
                   className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
@@ -412,7 +645,7 @@ export default function CertificatesPage() {
           setIssueForm(f => ({ ...f, studentIdentifier: student.studentNumber }));
           setIssueQrOpen(false);
         }}
-        onNotFound={() => alert('Student not found. Please try another QR.')}
+        onNotFound={() => toast.error('Student not found. Please try another QR.')}
       />
     </div>
   );

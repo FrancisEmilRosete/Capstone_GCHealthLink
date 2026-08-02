@@ -9,62 +9,71 @@ interface ToastProps {
   variant?: 'success' | 'error' | 'info';
 }
 
+const toastConfig = {
+  success: {
+    icon: CheckCircle,
+    strip: 'bg-[hsl(var(--success))]',
+    iconColor: 'text-[hsl(var(--success))]',
+    label: 'Success',
+  },
+  error: {
+    icon: AlertCircle,
+    strip: 'bg-[hsl(var(--danger))]',
+    iconColor: 'text-[hsl(var(--danger))]',
+    label: 'Error',
+  },
+  info: {
+    icon: Info,
+    strip: 'bg-[hsl(var(--info))]',
+    iconColor: 'text-[hsl(var(--info))]',
+    label: 'Info',
+  },
+};
+
 const Toast: React.FC<ToastProps> = ({
   message,
   isVisible,
   onClose,
   duration = 4000,
-  variant = 'success'
+  variant = 'success',
 }) => {
   useEffect(() => {
-    if (isVisible) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, duration);
-      return () => clearTimeout(timer);
-    }
+    if (!isVisible) return;
+    const timer = setTimeout(onClose, duration);
+    return () => clearTimeout(timer);
   }, [isVisible, duration, onClose]);
 
   if (!isVisible) return null;
 
-  const getIcon = () => {
-    switch (variant) {
-      case 'success':
-        return <CheckCircle size={20} />;
-      case 'error':
-        return <AlertCircle size={20} />;
-      case 'info':
-        return <Info size={20} />;
-      default:
-        return <CheckCircle size={20} />;
-    }
-  };
-
-  const getStyles = () => {
-    switch (variant) {
-      case 'success':
-        return 'bg-[hsl(var(--success))] text-white';
-      case 'error':
-        return 'bg-[hsl(var(--danger))] text-white';
-      case 'info':
-        return 'bg-[hsl(var(--info))] text-white';
-      default:
-        return 'bg-[hsl(var(--success))] text-white';
-    }
-  };
+  const { icon: Icon, strip, iconColor, label } = toastConfig[variant];
 
   return (
-    <div className="fixed top-4 right-4 z-50 animate-slide-down">
-      <div className={`px-4 py-3 rounded-[var(--radius-lg)] shadow-[var(--shadow-lg)] flex items-center gap-3 min-w-[320px] max-w-md ${getStyles()}`}>
-        {getIcon()}
-        <span className="font-medium text-sm flex-1">{message}</span>
-        <button
-          onClick={onClose}
-          className="ml-2 opacity-80 hover:opacity-100 transition-opacity"
-          aria-label="Close"
-        >
-          <X size={16} />
-        </button>
+    <div
+      className="fixed top-4 right-4 z-50 animate-slide-down"
+      role="alert"
+      aria-live="polite"
+      aria-label={label}
+    >
+      <div
+        className="flex items-stretch overflow-hidden rounded-[var(--radius-lg)] bg-[hsl(var(--surface))] border border-[hsl(var(--border))]"
+        style={{ boxShadow: 'var(--shadow-lg)', minWidth: '320px', maxWidth: '420px' }}
+      >
+        {/* Left colour strip */}
+        <div className={`w-1 shrink-0 ${strip}`} aria-hidden="true" />
+
+        <div className="flex items-start gap-3 px-4 py-3.5 flex-1 min-w-0">
+          <Icon className={`h-5 w-5 shrink-0 mt-0.5 ${iconColor}`} aria-hidden="true" />
+          <span className="text-sm font-medium text-[hsl(var(--foreground))] flex-1 leading-snug">
+            {message}
+          </span>
+          <button
+            onClick={onClose}
+            className="shrink-0 ml-1 p-0.5 rounded text-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--border))] transition-colors"
+            aria-label="Dismiss notification"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

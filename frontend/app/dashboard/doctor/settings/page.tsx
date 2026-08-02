@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import toast from 'react-hot-toast';
 
 interface StaffProfile {
   id: string;
@@ -121,8 +122,6 @@ function initialsFromName(name: string): string {
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
 
   const [profile, setProfile] = useState<StaffProfile>({
@@ -136,30 +135,27 @@ export default function SettingsPage() {
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
-  const [pwError, setPwError] = useState('');
-  const [pwSaved, setPwSaved] = useState(false);
 
   useEffect(() => {
     async function loadSettings() {
       const token = getToken();
       if (!token) {
-        setError('You are not logged in. Please sign in again.');
+        toast.error('You are not logged in. Please sign in again.');
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        setError('');
 
         const response = await api.get<StaffSettingsResponse>('/settings/staff', token);
         setProfile(response.data.profile);
         setDarkMode(Boolean(response.data.preference?.darkMode));
       } catch (err) {
         if (err instanceof ApiError) {
-          setError(err.message);
+          toast.error(err.message);
         } else {
-          setError('Failed to load settings.');
+          toast.error('Failed to load settings.');
         }
       } finally {
         setLoading(false);
@@ -176,23 +172,21 @@ export default function SettingsPage() {
   async function handleThemeToggle(value: boolean) {
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
     try {
       setSavingTheme(true);
-      setError('');
 
       await api.put('/settings/staff', { darkMode: value }, token);
       setDarkMode(value);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      toast.success('Theme preference saved');
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to save appearance setting.');
+        toast.error('Failed to save appearance setting.');
       }
     } finally {
       setSavingTheme(false);
@@ -200,26 +194,24 @@ export default function SettingsPage() {
   }
 
   async function handleChangePassword() {
-    setPwError('');
-
     if (!currentPw) {
-      setPwError('Enter your current password.');
+      toast.error('Enter your current password.');
       return;
     }
 
     if (newPw.length < 8) {
-      setPwError('New password must be at least 8 characters.');
+      toast.error('New password must be at least 8 characters.');
       return;
     }
 
     if (newPw !== confirmPw) {
-      setPwError('Passwords do not match.');
+      toast.error('Passwords do not match.');
       return;
     }
 
     const token = getToken();
     if (!token) {
-      setPwError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
@@ -236,13 +228,12 @@ export default function SettingsPage() {
       setCurrentPw('');
       setNewPw('');
       setConfirmPw('');
-      setPwSaved(true);
-      setTimeout(() => setPwSaved(false), 2000);
+      toast.success('Password updated successfully');
     } catch (err) {
       if (err instanceof ApiError) {
-        setPwError(err.message);
+        toast.error(err.message);
       } else {
-        setPwError('Failed to update password.');
+        toast.error('Failed to update password.');
       }
     }
   }
@@ -260,13 +251,9 @@ export default function SettingsPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Settings</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Manage your preferences and data exports</p>
-      </div>
+
 
       {loading && <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">Loading settings...</div>}
-      {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
 
       <Section title="Account" description="Your current account information">
         <div className="flex items-center gap-4">
@@ -286,7 +273,6 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-400">{darkMode ? 'Dark background, light text' : 'Light background, dark text'}</p>
           </div>
           <div className="flex items-center gap-2">
-            {(saved || savingTheme) && <span className="text-xs text-teal-500 font-medium">{savingTheme ? 'Saving...' : 'Saved'}</span>}
             <Toggle checked={darkMode} onChange={handleThemeToggle} disabled={savingTheme || loading} />
           </div>
         </div>
@@ -294,8 +280,6 @@ export default function SettingsPage() {
 
       <Section title="Change Password" description="Update your account password">
         <div className="space-y-2">
-          {pwError && <p className="text-xs text-red-600">{pwError}</p>}
-          {pwSaved && <p className="text-xs text-teal-600">Password updated successfully.</p>}
           <input
             type="password"
             value={currentPw}

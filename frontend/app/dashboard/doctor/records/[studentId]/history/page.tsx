@@ -163,10 +163,9 @@ export default function DoctorHistoryPage() {
 
   return (
     <div className="p-5 space-y-5 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Health History</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm font-semibold text-gray-700">
             {loading
               ? 'Loading student history...'
               : `${student?.lastName || ''}, ${student?.firstName || ''} • ${student?.studentNumber || studentNumber}`}
@@ -174,7 +173,7 @@ export default function DoctorHistoryPage() {
         </div>
         <Link
           href={`/dashboard/doctor/records/${encodeURIComponent(studentNumber)}`}
-          className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:border-teal-300 hover:text-teal-600"
+          className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:border-teal-300 hover:text-teal-600 bg-white"
         >
           Back to Record
         </Link>

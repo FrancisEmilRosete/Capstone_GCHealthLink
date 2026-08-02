@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import toast from 'react-hot-toast';
 
 interface AdvisoryItem {
 	id: string;
@@ -61,27 +62,24 @@ export default function StaffAnnouncementPage() {
 	const [loadingHistory, setLoadingHistory] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
 
-	const [error, setError] = useState('');
-	const [feedback, setFeedback] = useState('');
 	const [search, setSearch] = useState('');
 
 	async function loadHistory() {
 		const token = getToken();
 		if (!token) {
-			setError('You are not logged in. Please sign in again.');
+			toast.error('You are not logged in. Please sign in again.');
 			setLoadingHistory(false);
 			return;
 		}
 
 		try {
-			setError('');
 			const response = await api.get<AdvisoryResponse>('/advisories', token);
 			setHistory(response.data || []);
 		} catch (err) {
 			if (err instanceof ApiError) {
-				setError(err.message);
+				toast.error(err.message);
 			} else {
-				setError('Failed to load announcement history logs.');
+				toast.error('Failed to load announcement history logs.');
 			}
 		} finally {
 			setLoadingHistory(false);
@@ -97,7 +95,7 @@ export default function StaffAnnouncementPage() {
 
 		const token = getToken();
 		if (!token) {
-			setError('You are not logged in. Please sign in again.');
+			toast.error('You are not logged in. Please sign in again.');
 			return;
 		}
 
@@ -107,14 +105,12 @@ export default function StaffAnnouncementPage() {
 		const fallbackTargetDept = selectedTargets.includes('ALL') ? 'ALL' : selectedTargets.join(',');
 
 		if (!normalizedTitle || !normalizedMessage) {
-			setFeedback('Title and message are required.');
+			toast.error('Title and message are required.');
 			return;
 		}
 
 		try {
 			setSubmitting(true);
-			setError('');
-			setFeedback('');
 
 			const response = await api.post<BroadcastResponse>(
 				'/advisories/broadcast',
@@ -132,13 +128,13 @@ export default function StaffAnnouncementPage() {
 			setMessage('');
 			setTargetAudience(['ALL']);
 			setSeverity('INFO');
-			setFeedback(response.message || 'Announcement posted successfully.');
+			toast.success(response.message || 'Announcement posted successfully.');
 			await loadHistory();
 		} catch (err) {
 			if (err instanceof ApiError) {
-				setFeedback(err.message);
+				toast.error(err.message);
 			} else {
-				setFeedback('Failed to publish announcement.');
+				toast.error('Failed to publish announcement.');
 			}
 		} finally {
 			setSubmitting(false);
@@ -181,12 +177,6 @@ export default function StaffAnnouncementPage() {
 				<p className="text-sm text-gray-500 mt-1">Publish clinic advisories to students and staff.</p>
 			</div>
 
-			{error && (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-					{error}
-				</div>
-			)}
-
 			<div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row">
 				<div className="w-full md:w-1/3 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-100 p-6 space-y-6">
 					<div>
@@ -199,7 +189,7 @@ export default function StaffAnnouncementPage() {
 										key={option.value}
 										className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-semibold cursor-pointer transition-all ${
 											checked
-												? 'bg-teal-500 border-teal-600 text-white shadow-md transform scale-[1.02]'
+												? 'bg-teal-600 border-teal-700 text-white shadow-md ring-2 ring-teal-600/20 transform scale-[1.02]'
 												: 'bg-white border-gray-200 text-gray-600 hover:border-teal-300'
 										}`}
 									>
@@ -229,7 +219,7 @@ export default function StaffAnnouncementPage() {
 									onClick={() => setSeverity(option)}
 									className={`px-4 py-3 rounded-xl border text-sm font-bold tracking-wide transition-all text-left ${
 										severity === option
-											? `${SEVERITY_BADGE_CLASS[option]} shadow-sm ring-2 ring-offset-1 ring-${option === 'CRITICAL' ? 'red' : option === 'WARNING' ? 'amber' : 'blue'}-300`
+											? `${SEVERITY_BADGE_CLASS[option]} shadow-md ring-2 ring-offset-2 ring-${option === 'CRITICAL' ? 'red' : option === 'WARNING' ? 'amber' : 'blue'}-500 transform scale-[1.02]`
 											: 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
 									}`}
 								>
@@ -264,11 +254,7 @@ export default function StaffAnnouncementPage() {
 						</div>
 
 						<div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-100">
-							{feedback ? (
-								<p className={`text-sm font-medium ${feedback.toLowerCase().includes('failed') || feedback.toLowerCase().includes('required') ? 'text-red-600' : 'text-teal-600'}`}>
-									{feedback}
-								</p>
-							) : <span className="text-xs text-gray-400">Posted announcements appear instantly.</span>}
+							<span className="text-xs text-gray-400">Posted announcements appear instantly.</span>
 
 							<button
 								type="submit"

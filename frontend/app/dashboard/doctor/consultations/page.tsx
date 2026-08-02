@@ -356,11 +356,7 @@ export default function ConsultationsPage() {
     <div className="p-4 sm:p-6 space-y-5">
       {selected && <DetailModal row={selected} onClose={() => setSelected(null)} onDispense={handleDispense} />}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Consultations</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Live records from clinic visits</p>
-        </div>
+      <div className="flex flex-col sm:flex-row justify-end gap-3">
         <div className="flex items-center gap-2 shrink-0">
           <Link
             href="/dashboard/doctor/scanner"

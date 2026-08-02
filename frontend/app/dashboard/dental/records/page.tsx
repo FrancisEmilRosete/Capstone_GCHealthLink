@@ -204,13 +204,6 @@ export default function DentalRecordsPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dental Records</h1>
-          <p className="text-sm text-gray-500 mt-1">Track dental visit history and patient timelines.</p>
-        </div>
-      </div>
-
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}

@@ -118,6 +118,11 @@ export default function AiOutbreakForecastClient() {
   }, []);
 
   const chartData = useMemo(() => mapAiForecastToChartData(forecastRows), [forecastRows]);
+  const serviceUnavailable = !!error && (
+    error.includes('502')
+    || error.includes('503')
+    || error.toLowerCase().includes('unavailable')
+  );
 
   return (
     <section className="space-y-3">
@@ -135,7 +140,7 @@ export default function AiOutbreakForecastClient() {
         )}
       </div>
 
-      {error && error.includes('502') || error.includes('503') || error.includes('unavailable') ? (
+      {serviceUnavailable ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-6 flex flex-col items-center justify-center space-y-3">
           <div className="flex items-center gap-2 font-bold text-amber-700 text-sm">
             <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />

@@ -26,9 +26,14 @@ function readSessionValue(key: string): string | null {
   return null;
 }
 
-function writeSessionValue(key: string, value: string): void {
+function writeSessionValue(key: string, value: string, rememberMe: boolean = false): void {
   if (typeof window === 'undefined') return;
   window.sessionStorage.setItem(key, value);
+  if (rememberMe) {
+    window.localStorage.setItem(key, value);
+  } else {
+    window.localStorage.removeItem(key);
+  }
 }
 
 function clearSessionValue(key: string): void {
@@ -104,10 +109,10 @@ export function getUserId(): string | null {
   return readSessionValue(USER_ID_KEY);
 }
 
-function saveSession(token: string, user: AuthUser): void {
-  writeSessionValue(TOKEN_KEY, token);
-  writeSessionValue(ROLE_KEY, user.role);
-  writeSessionValue(USER_ID_KEY, user.id);
+function saveSession(token: string, user: AuthUser, rememberMe: boolean = false): void {
+  writeSessionValue(TOKEN_KEY, token, rememberMe);
+  writeSessionValue(ROLE_KEY, user.role, rememberMe);
+  writeSessionValue(USER_ID_KEY, user.id, rememberMe);
 }
 
 /**
@@ -138,14 +143,14 @@ function clearSession(): void {
 export async function authLogin(credentials: {
   email: string;
   password: string;
-}): Promise<{ token: string; user: AuthUser }> {
+}, rememberMe: boolean = false): Promise<{ token: string; user: AuthUser }> {
   const data = await api.post<LoginResponse>('/auth/login', credentials);
 
   if (!data.success || !data.token || !data.user?.id || !data.user?.role) {
     throw new Error('Invalid login response from server.');
   }
 
-  saveSession(data.token, data.user);
+  saveSession(data.token, data.user, rememberMe);
   return { token: data.token, user: data.user };
 }
 

@@ -8,11 +8,20 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { ApiError, api } from '@/lib/api';
-import { authLogout, getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
-import ConfirmLogoutModal from '@/components/ui/ConfirmLogoutModal';
+import { getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
 import StudentNotificationsBell from '@/components/dashboard/student/StudentNotificationsBell';
+import Sidebar from '@/components/layout/Sidebar';
+import {
+  DashboardIcon,
+  AuditIcon,
+  CertificatesIcon,
+  ConsultationsIcon,
+  NotificationsIcon,
+} from '@/components/icons/NavIcons';
+import AiAssistantModal from '@/components/dashboard/AiAssistantModal';
+import { Sparkles } from 'lucide-react';
+import MessengerWidget from '@/components/messaging/MessengerWidget';
 
 interface StudentProfileSummary {
   firstName: string;
@@ -87,208 +96,38 @@ function writeCachedQrPayload(payload: CachedQrPayload) {
 
 // ── Nav items ─────────────────────────────────────────────────
 
-const NAV = [
+const REGISTRATION_NAV_ITEM = {
+  id: 'registration',
+  label: 'Registration',
+  href: REGISTRATION_ROUTE,
+  icon: CertificatesIcon,
+};
+
+const getStudentNavGroups = (showRegistration: boolean) => [
   {
-    href:  '/dashboard/student',
-    label: 'Dashboard',
-    exact: true,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-      </svg>
-    ),
-  },
-  {
-    href:  '/dashboard/student/my-record',
-    label: 'My Record',
-    exact: false,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    ),
-  },
-  {
-    href:  REGISTRATION_ROUTE,
-    label: 'Registration',
-    exact: false,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-      </svg>
-    ),
-  },
-  {
-    href:  '/dashboard/student/consultation-request',
-    label: 'Consultation Request',
-    exact: false,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M8 10h8m-8 4h5m-7 7l-4-4m0 0l4-4m-4 4h13a4 4 0 004-4V7a4 4 0 00-4-4H7a4 4 0 00-4 4" />
-      </svg>
-    ),
-  },
-  {
-    href: '/dashboard/student/notifications',
-    label: 'Notifications',
-    exact: false,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0m6 0H9"
-        />
-      </svg>
-    ),
+    items: [
+      {
+        id: 'dashboard',
+        label: 'Dashboard',
+        href: '/dashboard/student',
+        icon: DashboardIcon,
+      },
+      {
+        id: 'my-record',
+        label: 'My Record',
+        href: '/dashboard/student/my-record',
+        icon: AuditIcon,
+      },
+      ...(showRegistration ? [REGISTRATION_NAV_ITEM] : []),
+      {
+        id: 'consultation-request',
+        label: 'My Consultations',
+        href: '/dashboard/student/consultation-request',
+        icon: ConsultationsIcon,
+      },
+    ],
   },
 ];
-
-// ── Sidebar ───────────────────────────────────────────────────
-
-function StudentSidebar({
-  open,
-  onClose,
-  profileName,
-  roleLabel,
-  showRegistration,
-}: {
-  open: boolean;
-  onClose: () => void;
-  profileName: string;
-  roleLabel: string;
-  showRegistration: boolean;
-}) {
-  const pathname = usePathname();
-  const router   = useRouter();
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const navItems = showRegistration
-    ? NAV
-    : NAV.filter((item) => item.href !== REGISTRATION_ROUTE);
-
-  const initials = profileName
-    .split(' ')
-    .map((word) => word[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-
-  function isActive(href: string, exact: boolean) {
-    return exact ? pathname === href : pathname?.startsWith(href);
-  }
-
-  return (
-    <>
-      {/* Mobile overlay */}
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={onClose}
-        />
-      )}
-
-      {/* Sidebar panel */}
-      <aside
-        className={`
-          fixed top-0 left-0 h-full w-64 z-40
-          bg-[#0d1b2a] flex flex-col
-          transition-transform duration-300
-          ${open ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:static lg:z-auto lg:h-screen
-        `}
-      >
-        {/* Logo row */}
-        <div className="flex items-center justify-between px-5 pt-6 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-teal-400 rounded-xl flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                  d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <div className="leading-tight">
-              <p className="text-white font-bold text-sm">GC HealthLink</p>
-              <p className="text-gray-400 text-[10px]">Campus Clinic System</p>
-            </div>
-          </div>
-          {/* X — mobile only */}
-          <button
-            onClick={onClose}
-            aria-label="Close menu"
-            className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-3 pt-4 space-y-1">
-          {navItems.map(item => {
-            const active = isActive(item.href, item.exact);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors
-                  ${active
-                    ? 'bg-teal-500 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
-              >
-                {item.icon}
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Bottom — profile + sign out */}
-        <div className="px-3 pb-6 space-y-1 border-t border-white/10 pt-4">
-          {/* Profile */}
-          <div className="flex items-center gap-3 px-4 py-3">
-            <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
-              {initials || 'SU'}
-            </div>
-            <div className="min-w-0">
-              <p className="text-white text-sm font-semibold truncate">{profileName}</p>
-              <p className="text-gray-400 text-xs">{roleLabel}</p>
-            </div>
-          </div>
-
-          {/* Sign Out */}
-          <button
-            onClick={() => setShowLogoutConfirm(true)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Sign Out
-          </button>
-        </div>
-      </aside>
-
-      <ConfirmLogoutModal
-        open={showLogoutConfirm}
-        onCancel={() => setShowLogoutConfirm(false)}
-        onConfirm={() => {
-          authLogout();
-          setShowLogoutConfirm(false);
-          onClose();
-          router.push('/login');
-        }}
-      />
-    </>
-  );
-}
 
 // ── QR Modal ─────────────────────────────────────────────────
 
@@ -341,7 +180,7 @@ function QRModal({
         {/* Header */}
         <div className="w-full flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-gray-900">My Student QR Code</h2>
-          <button aria-label="Close QR code" onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
+          <button aria-label="Close QR code" onClick={onClose} className="p-1.5 rounded-lg text-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--primary-soft))] transition">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -380,7 +219,7 @@ function QRModal({
         {/* Close button */}
         <div className="w-full border-t border-gray-100 pt-4">
           <button onClick={onClose}
-            className="w-full py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-xl transition">
+            className="w-full py-2.5 text-sm font-medium text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--primary-soft))] rounded-xl transition">
             Close
           </button>
         </div>
@@ -409,10 +248,42 @@ function StudentTopBar({
   qrImage: string;
 }) {
   const [qrOpen, setQrOpen] = useState(false);
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-  });
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [autoOpened, setAutoOpened] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const hasSeen = sessionStorage.getItem('ai_reminders_shown');
+    if (!hasSeen) {
+      setAiModalOpen(true);
+      setAutoOpened(true);
+      sessionStorage.setItem('ai_reminders_shown', 'true');
+    }
+  }, []);
+
+  function resolveStudentTitle(path: string) {
+    const seg = path.replace(/\/$/, '');
+    if (seg === '/dashboard/student') return 'Student Dashboard';
+    if (seg.startsWith('/dashboard/student/my-record')) return 'My Record';
+    if (seg.startsWith('/dashboard/student/registration')) return 'Registration';
+    if (seg.startsWith('/dashboard/student/consultation-request')) return 'Consultation Request';
+    if (seg.startsWith('/dashboard/student/notifications')) return 'Notifications';
+    return 'Student Dashboard';
+  }
+
+  function resolveStudentSubtitle(path: string) {
+    const seg = path.replace(/\/$/, '');
+    if (seg === '/dashboard/student') return 'Your Health Overview';
+    if (seg.startsWith('/dashboard/student/my-record')) return 'View Your Medical Record';
+    if (seg.startsWith('/dashboard/student/registration')) return 'Complete Registration Details';
+    if (seg.startsWith('/dashboard/student/consultation-request')) return 'Submit Consultation Requests';
+    if (seg.startsWith('/dashboard/student/notifications')) return 'View Clinic Alerts';
+    return 'Your Health Overview';
+  }
+
+  const currentPath = pathname || '/dashboard/student';
+  const title = resolveStudentTitle(currentPath);
+  const subtitle = resolveStudentSubtitle(currentPath);
 
   return (
     <>
@@ -425,68 +296,57 @@ function StudentTopBar({
           qrImage={qrImage}
         />
       )}
-      <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700 px-4 flex items-center gap-3 sticky top-0 z-20 shrink-0">
-        {/* Hamburger */}
-        <button
-          onClick={onMenuClick}
-          aria-label="Open menu"
-          className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-
-        {/* Search */}
-        <div className="relative flex-1 max-w-xs">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            className="w-full bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-500 rounded-xl pl-9 pr-4 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
-            placeholder="Search…"
-          />
-        </div>
-
-        {/* Date */}
-        <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 ml-2 shrink-0">{dateStr}</span>
-
-        <div className="ml-auto flex items-center gap-2">
-          {/* Dark mode toggle */}
-          <button
-            onClick={onToggleDark}
-            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            {isDark ? (
-              /* Sun icon */
+      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-6 py-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={onMenuClick}
+              aria-label="Open menu"
+              className="lg:hidden shrink-0 p-2 -ml-1 rounded-lg text-slate-500 hover:bg-teal-50 hover:text-teal-700 transition-colors"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-            ) : (
-              /* Moon icon */
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </button>
+            <div>
+              <h1 className="text-lg font-bold text-slate-800 tracking-tight">{title}</h1>
+              <p className="text-[11px] font-semibold text-teal-600 uppercase tracking-widest mt-0.5">{subtitle}</p>
+            </div>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            
+            <button
+              onClick={() => {
+                setAutoOpened(false);
+                setAiModalOpen(true);
+              }}
+              className="relative shrink-0 p-2 rounded-lg text-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+              title="Smart AI Assistant"
+            >
+              <Sparkles className="w-[18px] h-[18px]" strokeWidth={2} />
+            </button>
+
+            <StudentNotificationsBell />
+
+            <button
+              onClick={() => setQrOpen(true)}
+              className="flex items-center gap-1.5 bg-white hover:bg-teal-50 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition-colors border border-slate-200"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 3h7v7H3V3zm2 2v3h3V5H5zm8-2h7v7h-7V3zm2 2v3h3V5h-3zM3 13h7v7H3v-7zm2 2v3h3v-3H5zm11-2h2v2h-2v-2zm-2 2h2v2h-2v-2zm2 2h2v2h-2v-2zm2 0h2v2h-2v-2zm-4 2h2v2h-2v-2zm4 0h2v2h-2v-2z" />
               </svg>
-            )}
-          </button>
-
-          {/* Notification Bell */}
-          <StudentNotificationsBell />
-
-          {/* My QR */}
-          <button
-            onClick={() => setQrOpen(true)}
-            className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-semibold px-3 py-2 rounded-xl transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 3h7v7H3V3zm2 2v3h3V5H5zm8-2h7v7h-7V3zm2 2v3h3V5h-3zM3 13h7v7H3v-7zm2 2v3h3v-3H5zm11-2h2v2h-2v-2zm-2 2h2v2h-2v-2zm2 2h2v2h-2v-2zm2 0h2v2h-2v-2zm-4 2h2v2h-2v-2zm4 0h2v2h-2v-2z" />
-            </svg>
-            My QR
-          </button>
+              My QR
+            </button>
+          </div>
         </div>
       </header>
+
+      <AiAssistantModal 
+        isOpen={aiModalOpen} 
+        onClose={() => setAiModalOpen(false)} 
+        autoOpened={autoOpened}
+      />
     </>
   );
 }
@@ -495,17 +355,23 @@ function StudentTopBar({
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isDark,      setIsDark]      = useState(false);
   const [profileName, setProfileName] = useState(DEFAULT_PROFILE_NAME);
   const [hasCompletedProfile, setHasCompletedProfile] = useState<boolean | null>(null);
   const [studentNumber, setStudentNumber] = useState('');
   const [courseDept, setCourseDept] = useState('');
   const [qrImage, setQrImage] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   const token = getToken();
   const role = getNormalizedUserRole();
   const roleLabel = role === 'STUDENT' ? 'Student' : 'User';
   const isAuthorized = !!token && role === 'STUDENT';
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!token || !role) {
@@ -590,25 +456,28 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     };
   }, [role, router, token]);
 
-  if (!isAuthorized) {
+  if (!isMounted || !isAuthorized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <p className="text-sm text-gray-500 dark:text-gray-400">Checking session...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))]">
+        <p className="text-sm text-[hsl(var(--muted))]">Checking session...</p>
       </div>
     );
   }
 
   return (
-    <div className={`flex h-screen overflow-hidden${isDark ? ' dark' : ''}`}>
-      <StudentSidebar
-        open={sidebarOpen}
+    <div className={`flex h-screen overflow-hidden dashboard-record-theme${isDark ? ' dark' : ''}`}>
+      <Sidebar
+        isOpen={sidebarOpen}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         onClose={() => setSidebarOpen(false)}
-        profileName={profileName}
-        roleLabel={roleLabel}
-        showRegistration={hasCompletedProfile === false}
+        userName={profileName}
+        userRole={roleLabel}
+        brandSubtitle="Student Portal"
+        navGroups={getStudentNavGroups(hasCompletedProfile === false)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50 dark:bg-gray-950">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[hsl(var(--background))]">
         <StudentTopBar
           onMenuClick={() => setSidebarOpen(true)}
           isDark={isDark}
@@ -618,10 +487,13 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           courseDept={courseDept}
           qrImage={qrImage}
         />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto dashboard-uniform-width">
           {children}
         </main>
       </div>
+
+      {/* Floating Messenger Widget */}
+      <MessengerWidget />
     </div>
   );
 }

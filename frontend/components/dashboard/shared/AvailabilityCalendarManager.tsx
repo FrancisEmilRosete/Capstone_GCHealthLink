@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { api, ApiError } from '@/lib/api';
 import { formatTime12Hour } from '@/lib/time';
+import { useServerEvents } from '@/lib/useServerEvents';
+import toast from 'react-hot-toast';
 
 type AvailabilityScope = 'medical' | 'dental';
 
@@ -19,40 +21,34 @@ interface ScopeConfigResponse {
       string,
       {
         isAvailable: boolean;
-        slots: string[];
+        slots: { startTime: string; endTime: string; capacity: number }[];
         isOverride: boolean;
       }
     >;
   };
 }
 
-const SLOT_OPTIONS = [
-  '07:00', '07:10', '07:20', '07:30', '07:40', '07:50',
-  '08:00', '08:10', '08:20', '08:30', '08:40', '08:50',
-  '09:00', '09:10', '09:20', '09:30', '09:40', '09:50',
-  '10:00', '10:10', '10:20', '10:30', '10:40', '10:50',
-  '11:00', '11:10', '11:20', '11:30', '11:40', '11:50',
-  '12:00', '12:10', '12:20', '12:30', '12:40', '12:50',
-  '13:00', '13:10', '13:20', '13:30', '13:40', '13:50',
-  '14:00', '14:10', '14:20', '14:30', '14:40', '14:50',
-  '15:00', '15:10', '15:20', '15:30', '15:40', '15:50',
-  '16:00', '16:10', '16:20', '16:30', '16:40', '16:50',
-  '17:00', '17:10', '17:20', '17:30', '17:40', '17:50',
-  '18:00', '18:10', '18:20', '18:30', '18:40', '18:50',
-  '19:00',
-];
+type DayState = ScopeConfigResponse['data']['days'][string];
 
 interface AvailabilityCalendarManagerProps {
   scope: AvailabilityScope;
   title: string;
   subtitle: string;
+  hideHeader?: boolean;
+  containerClassName?: string;
 }
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function AvailabilityCalendarManager({ scope, title, subtitle }: AvailabilityCalendarManagerProps) {
+export default function AvailabilityCalendarManager({
+  scope,
+  title,
+  subtitle,
+  hideHeader = false,
+  containerClassName = 'p-5 max-w-6xl mx-auto space-y-6',
+}: AvailabilityCalendarManagerProps) {
   const now = new Date();
 
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -60,12 +56,30 @@ export default function AvailabilityCalendarManager({ scope, title, subtitle }: 
   const [days, setDays] = useState<ScopeConfigResponse['data']['days']>({});
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [enabled, setEnabled] = useState(true);
-  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [selectedSlots, setSelectedSlots] = useState<{ startTime: string; endTime: string; capacity: number }[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newSlotStartTime, setNewSlotStartTime] = useState('08:00');
+  const [newSlotEndTime, setNewSlotEndTime] = useState('09:00');
+  const [newSlotCapacity, setNewSlotCapacity] = useState<number | string>(1);
   const [isOverride, setIsOverride] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  
+  const isSelectedPast = selectedDate < todayIso();
+
+  const [editingSlotIndex, setEditingSlotIndex] = useState<number | null>(null);
+  const [editSlotStartTime, setEditSlotStartTime] = useState('');
+  const [editSlotEndTime, setEditSlotEndTime] = useState('');
+  const [editSlotCapacity, setEditSlotCapacity] = useState<number | string>(1);
+  const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
+
+  const [removingSlotIndex, setRemovingSlotIndex] = useState<number | null>(null);
+  const [showRemoveConfirmModal, setShowRemoveConfirmModal] = useState(false);
+
+  const [showForceConfirmModal, setShowForceConfirmModal] = useState(false);
+  const [forceReason, setForceReason] = useState('');
+  const [droppedCount, setDroppedCount] = useState(0);
+  const [pendingConfig, setPendingConfig] = useState<{enabled: boolean, slots: any[]} | null>(null);
 
   const daysInMonth = useMemo(() => new Date(year, month, 0).getDate(), [month, year]);
   const firstDayOfMonth = useMemo(() => new Date(year, month - 1, 1).getDay(), [month, year]);
@@ -73,43 +87,55 @@ export default function AvailabilityCalendarManager({ scope, title, subtitle }: 
 
   const selectedDay = days[selectedDate];
 
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-
-    async function fetchScopeConfig(showLoader = true) {
-      const token = getToken();
-      if (!token) {
-        if (showLoader) setError('You are not logged in. Please sign in again.');
-        return;
-      }
-
-      if (showLoader) setLoading(true);
-      if (showLoader) setError('');
-
-      try {
-        const response = await api.get<ScopeConfigResponse>(`/appointments/availability/config?scope=${scope}&month=${month}&year=${year}`, token);
-        setDays(response.data.days || {});
-      } catch (err) {
-        if (showLoader) {
-          if (err instanceof ApiError) {
-            setError(err.message);
-          } else {
-            setError('Failed to load calendar availability.');
-          }
+  function processFetchedDays(fetchedDays: Record<string, DayState>) {
+    const today = todayIso();
+    const updatedDays: Record<string, DayState> = {};
+    for (const [dateKey, dayState] of Object.entries(fetchedDays)) {
+      let isAvailable = dayState.isAvailable;
+      if (!dayState.isOverride) {
+        const dateObj = new Date(`${dateKey}T00:00:00`);
+        const isSunday = dateObj.getDay() === 0;
+        if (dateKey >= today && !isSunday) {
+          isAvailable = true;
         }
-      } finally {
-        if (showLoader) setLoading(false);
       }
+      updatedDays[dateKey] = { ...dayState, isAvailable };
+    }
+    return updatedDays;
+  }
+
+  async function fetchScopeConfig(showLoader = true) {
+    const token = getToken();
+    if (!token) {
+      if (showLoader) toast.error('You are not logged in. Please sign in again.');
+      return;
     }
 
+    if (showLoader) setLoading(true);
+
+    try {
+      const response = await api.get<ScopeConfigResponse>(`/appointments/availability/config?scope=${scope}&month=${month}&year=${year}`, token);
+      setDays(processFetchedDays(response.data.days || {}));
+    } catch (err) {
+      if (showLoader) {
+        if (err instanceof ApiError) {
+          toast.error(err.message);
+        } else {
+          toast.error('Failed to load calendar availability.');
+        }
+      }
+    } finally {
+      if (showLoader) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
     void fetchScopeConfig(true);
-
-    interval = setInterval(() => {
-      void fetchScopeConfig(false);
-    }, 15000);
-
-    return () => clearInterval(interval);
   }, [scope, month, year]);
+
+  useServerEvents(['calendar'], () => {
+    void fetchScopeConfig(false);
+  });
 
   useEffect(() => {
     if (!selectedDay) return;
@@ -119,88 +145,141 @@ export default function AvailabilityCalendarManager({ scope, title, subtitle }: 
     setIsOverride(selectedDay.isOverride);
   }, [selectedDay]);
 
-  async function saveDateAvailability() {
+  async function saveDateAvailability(newEnabled: boolean, newSlots: typeof selectedSlots, force = false, reason = '') {
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
     if (!selectedDate) {
-      setError('Please select a date first.');
-      return;
-    }
-
-    if (enabled && selectedSlots.length === 0) {
-      setError('Select at least one time slot when availability is enabled.');
       return;
     }
 
     setSaving(true);
-    setError('');
-    setSuccess('');
 
     try {
-      await api.put(
-        '/appointments/availability/config',
-        {
-          scope,
-          date: selectedDate,
-          enabled,
-          slots: selectedSlots,
-        },
-        token,
-      );
+      const payload: any = {
+        scope,
+        date: selectedDate,
+        enabled: newEnabled,
+        slots: newSlots,
+      };
+      if (force) {
+        payload.force = true;
+        payload.reason = reason;
+      }
+      
+      await api.put('/appointments/availability/config', payload, token);
 
-      setSuccess('Calendar availability updated.');
-
-      const response = await api.get<ScopeConfigResponse>(`/appointments/availability/config?scope=${scope}&month=${month}&year=${year}`, token);
-      setDays(response.data.days || {});
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
+      toast.success('Calendar availability auto-saved.');
+      void fetchScopeConfig(false);
+      setShowForceConfirmModal(false);
+      setPendingConfig(null);
+    } catch (err: any) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Conflict! Need to ask for reason.
+        setDroppedCount(err.data?.droppedCount || 0);
+        setPendingConfig({ enabled: newEnabled, slots: newSlots });
+        setShowForceConfirmModal(true);
+      } else if (err instanceof ApiError) {
+        toast.error(err.message);
       } else {
-        setError('Failed to save calendar availability.');
+        toast.error('Failed to auto-save calendar availability.');
       }
     } finally {
       setSaving(false);
     }
   }
 
-  async function resetToDefault() {
-    const token = getToken();
-    if (!token || !selectedDate) {
+  function handleAddSlot() {
+    if (!newSlotStartTime || !newSlotEndTime) return;
+
+    if (selectedDate === todayIso()) {
+      const now = new Date();
+      const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (newSlotStartTime <= currentHHMM) {
+        toast.error('Cannot add a time slot in the past.');
+        return;
+      }
+    }
+
+    if (selectedSlots.some((s) => s.startTime === newSlotStartTime && s.endTime === newSlotEndTime)) {
+      toast.error('This exact time range already exists.');
       return;
     }
 
-    setSaving(true);
-    setError('');
-    setSuccess('');
+    const capacity = typeof newSlotCapacity === 'number' && newSlotCapacity > 0 ? newSlotCapacity : 1;
+    const newSlots = [...selectedSlots, { startTime: newSlotStartTime, endTime: newSlotEndTime, capacity }].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    
+    setSelectedSlots(newSlots);
+    setIsAdding(false);
+    void saveDateAvailability(enabled, newSlots);
+  }
 
-    try {
-      await api.put(
-        '/appointments/availability/config',
-        {
-          scope,
-          date: selectedDate,
-          useDefault: true,
-        },
-        token,
-      );
+  function handleRemoveSlot(indexToRemove: number) {
+    setRemovingSlotIndex(indexToRemove);
+    setShowRemoveConfirmModal(true);
+  }
 
-      setSuccess('Date reset to default schedule.');
+  function handleRemoveConfirm() {
+    if (removingSlotIndex === null) return;
+    const newSlots = selectedSlots.filter((_, i) => i !== removingSlotIndex);
+    setSelectedSlots(newSlots);
+    setRemovingSlotIndex(null);
+    setShowRemoveConfirmModal(false);
+    void saveDateAvailability(enabled, newSlots);
+  }
 
-      const response = await api.get<ScopeConfigResponse>(`/appointments/availability/config?scope=${scope}&month=${month}&year=${year}`, token);
-      setDays(response.data.days || {});
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Failed to reset date availability.');
+  function handleRemoveCancel() {
+    setRemovingSlotIndex(null);
+    setShowRemoveConfirmModal(false);
+  }
+
+  function handleStartEdit(index: number) {
+    const slot = selectedSlots[index];
+    setEditingSlotIndex(index);
+    setEditSlotStartTime(slot.startTime);
+    setEditSlotEndTime(slot.endTime);
+    setEditSlotCapacity(slot.capacity);
+  }
+
+  function handleCancelEdit() {
+    setEditingSlotIndex(null);
+    setShowEditConfirmModal(false);
+  }
+
+  function handleSaveEditConfirm() {
+    if (editingSlotIndex === null) return;
+
+    if (selectedDate === todayIso()) {
+      const now = new Date();
+      const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (editSlotStartTime <= currentHHMM) {
+        toast.error('Cannot update time slot to the past.');
+        setShowEditConfirmModal(false);
+        return;
       }
-    } finally {
-      setSaving(false);
     }
+
+    const capacity = typeof editSlotCapacity === 'number' && editSlotCapacity > 0 ? editSlotCapacity : 1;
+    const newSlots = [...selectedSlots];
+    newSlots[editingSlotIndex] = {
+      startTime: editSlotStartTime,
+      endTime: editSlotEndTime,
+      capacity,
+    };
+    newSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    
+    setSelectedSlots(newSlots);
+    setEditingSlotIndex(null);
+    setShowEditConfirmModal(false);
+    void saveDateAvailability(enabled, newSlots);
+  }
+
+  function handleEnabledChange(checked: boolean) {
+    setEnabled(checked);
+    void saveDateAvailability(checked, selectedSlots);
   }
 
   function prevMonth() {
@@ -224,21 +303,11 @@ export default function AvailabilityCalendarManager({ scope, title, subtitle }: 
   }
 
   return (
-    <div className="p-5 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">{title}</h1>
-        <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
-      </div>
-
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          {success}
+    <div className={containerClassName}>
+      {!hideHeader && (
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
         </div>
       )}
 
@@ -277,6 +346,7 @@ export default function AvailabilityCalendarManager({ scope, title, subtitle }: 
               const dayState = days[dateKey];
               const selected = selectedDate === dateKey;
               const available = !!dayState?.isAvailable;
+              const isPast = dateKey < todayIso();
 
               return (
                 <button
@@ -284,11 +354,13 @@ export default function AvailabilityCalendarManager({ scope, title, subtitle }: 
                   type="button"
                   onClick={() => setSelectedDate(dateKey)}
                   className={`relative aspect-square rounded-xl text-sm font-medium transition-all border ${
-                    selected
-                      ? 'border-teal-500 bg-teal-500 text-white'
-                      : available
-                        ? 'border-teal-100 bg-teal-50 text-teal-700 hover:bg-teal-100'
-                        : 'border-gray-200 bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    isPast
+                      ? selected ? 'border-gray-500 bg-gray-400 text-white shadow-inner' : 'border-gray-100 bg-gray-50 text-gray-400 opacity-60'
+                      : selected
+                        ? 'border-teal-700 bg-teal-600 text-white shadow-md ring-2 ring-teal-600/30 ring-offset-1'
+                        : available
+                          ? 'border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 hover:border-teal-300'
+                          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   {day}
@@ -319,66 +391,315 @@ export default function AvailabilityCalendarManager({ scope, title, subtitle }: 
             </p>
           </div>
 
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-800">
+          <label className={`flex items-center gap-2 text-sm font-medium ${isSelectedPast ? 'text-gray-400' : 'text-gray-800'}`}>
             <input
               type="checkbox"
               checked={enabled}
-              onChange={(event) => setEnabled(event.target.checked)}
-              className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              disabled={isSelectedPast}
+              onChange={(event) => handleEnabledChange(event.target.checked)}
+              className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 disabled:opacity-50"
             />
             Available for appointments
           </label>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Time Slots</p>
-            <div className="grid grid-cols-3 gap-2">
-              {SLOT_OPTIONS.map((slot) => {
-                const active = selectedSlots.includes(slot);
-                return (
-                  <button
-                    key={slot}
-                    type="button"
-                    disabled={!enabled}
-                    onClick={() => {
-                      setSelectedSlots((prev) => (
-                        prev.includes(slot)
-                          ? prev.filter((value) => value !== slot)
-                          : [...prev, slot].sort()
-                      ));
-                    }}
-                    className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors ${
-                      active
-                        ? 'border-teal-500 bg-teal-500 text-white'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                    } disabled:opacity-40 disabled:cursor-not-allowed`}
-                  >
-                    {formatTime12Hour(slot)}
-                  </button>
-                );
-              })}
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Time Slots</p>
+              {enabled && !isAdding && !isSelectedPast && (
+                <button
+                  type="button"
+                  onClick={() => setIsAdding(true)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 text-xs font-semibold hover:bg-teal-100 transition-colors border border-teal-200"
+                >
+                  <span className="text-lg leading-none mb-0.5">+</span> Add Slot
+                </button>
+              )}
+            </div>
+            
+            <div className="space-y-4">
+              {/* Add new slot form */}
+              {enabled && isAdding && (
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                  <p className="text-xs font-semibold text-gray-700">Add New Time Slot</p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">From</label>
+                      <input
+                        type="time"
+                        value={newSlotStartTime}
+                        onChange={(e) => setNewSlotStartTime(e.target.value)}
+                        className="w-full rounded-xl border-gray-200 bg-white py-3 px-4 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm font-medium transition-colors hover:border-gray-300"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">To</label>
+                      <input
+                        type="time"
+                        value={newSlotEndTime}
+                        onChange={(e) => setNewSlotEndTime(e.target.value)}
+                        className="w-full rounded-xl border-gray-200 bg-white py-3 px-4 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm font-medium transition-colors hover:border-gray-300"
+                      />
+                    </div>
+                    <div className="w-28">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Slots</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newSlotCapacity}
+                        onChange={(e) => setNewSlotCapacity(e.target.value === '' ? '' : parseInt(e.target.value) || '')}
+                        className="w-full rounded-xl border-gray-200 bg-white py-3 px-4 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm font-medium transition-colors hover:border-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAdding(false)}
+                      className="px-4 py-1.5 rounded-lg text-gray-600 text-sm font-medium hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddSlot}
+                      className="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
+                    >
+                      Add Slot
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* List existing slots */}
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+                {selectedSlots.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic py-2">No slots configured for this date.</p>
+                ) : (
+                  selectedSlots.map((slot, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-xl border ${
+                        enabled ? 'border-gray-200 bg-white shadow-sm hover:border-teal-300 transition-colors' : 'border-gray-200 bg-gray-50 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-gray-900 mb-1">
+                            {formatTime12Hour(slot.startTime)} - {formatTime12Hour(slot.endTime)}
+                          </p>
+                          <span className="inline-flex items-center rounded-md bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 ring-1 ring-inset ring-teal-600/20">
+                            {slot.capacity} {slot.capacity === 1 ? 'slot available' : 'slots available'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={!enabled || isSelectedPast}
+                            onClick={() => handleStartEdit(index)}
+                            className="text-xs font-semibold text-teal-600 hover:text-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!enabled || isSelectedPast}
+                            onClick={() => handleRemoveSlot(index)}
+                            className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => void saveDateAvailability()}
-              disabled={saving || !selectedDate}
-              className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Saving...' : 'Save Date'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void resetToDefault()}
-              disabled={saving || !selectedDate}
-              className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Reset to Default
-            </button>
-          </div>
+
         </div>
       </div>
+
+      {/* Edit Slot Modal */}
+      {editingSlotIndex !== null && !showEditConfirmModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-sm space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gray-900">Edit Time Slot</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">From</label>
+                <input
+                  type="time"
+                  value={editSlotStartTime}
+                  onChange={(e) => setEditSlotStartTime(e.target.value)}
+                  className="w-full rounded-xl border-gray-200 bg-gray-50 py-3 px-4 shadow-sm focus:bg-white focus:border-teal-500 focus:ring-teal-500 font-medium transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">To</label>
+                <input
+                  type="time"
+                  value={editSlotEndTime}
+                  onChange={(e) => setEditSlotEndTime(e.target.value)}
+                  className="w-full rounded-xl border-gray-200 bg-gray-50 py-3 px-4 shadow-sm focus:bg-white focus:border-teal-500 focus:ring-teal-500 font-medium transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Number of Slots</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editSlotCapacity}
+                  onChange={(e) => setEditSlotCapacity(e.target.value === '' ? '' : parseInt(e.target.value) || '')}
+                  className="w-full rounded-xl border-gray-200 bg-gray-50 py-3 px-4 shadow-sm focus:bg-white focus:border-teal-500 focus:ring-teal-500 font-medium transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="px-4 py-2 rounded-lg text-gray-600 font-medium hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditConfirmModal(true)}
+                className="px-4 py-2 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Confirm Modal */}
+      {showEditConfirmModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gray-900">Confirm Edit</h3>
+            <p className="text-sm text-gray-600">
+              Are you sure you want to save changes to this time slot? This will update the availability for the selected date.
+            </p>
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+              <p className="text-sm font-medium text-gray-800">New Schedule:</p>
+              <p className="text-sm text-gray-600">{formatTime12Hour(editSlotStartTime)} - {formatTime12Hour(editSlotEndTime)}</p>
+              <p className="text-sm text-gray-600">{editSlotCapacity} {editSlotCapacity === 1 ? 'slot' : 'slots'}</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEditConfirmModal(false)}
+                className="px-4 py-2 rounded-lg text-gray-600 font-medium hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditConfirm}
+                className="px-4 py-2 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Confirm Modal */}
+      {showRemoveConfirmModal && removingSlotIndex !== null && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gray-900">Remove Time Slot</h3>
+            <p className="text-sm text-gray-600">
+              Are you sure you want to remove this time slot? This action cannot be undone.
+            </p>
+            <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+              <p className="text-sm font-medium text-red-800">Removing:</p>
+              <p className="text-sm text-red-600">
+                {formatTime12Hour(selectedSlots[removingSlotIndex].startTime)} - {formatTime12Hour(selectedSlots[removingSlotIndex].endTime)}
+              </p>
+              <p className="text-sm text-red-600">
+                {selectedSlots[removingSlotIndex].capacity} {selectedSlots[removingSlotIndex].capacity === 1 ? 'slot' : 'slots'}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleRemoveCancel}
+                className="px-4 py-2 rounded-lg text-gray-600 font-medium hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveConfirm}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force Confirm Modal for Dropped Appointments */}
+      {showForceConfirmModal && pendingConfig && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gray-900">Confirm Slot Reduction</h3>
+            <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+              <p className="text-sm font-medium text-orange-800">Warning: Appointments will be dropped!</p>
+              <p className="text-sm text-orange-700 mt-1">
+                This action will drop <strong>{droppedCount}</strong> existing consultation(s) that are already booked by students.
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reason for cancellation <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={forceReason}
+                onChange={(e) => setForceReason(e.target.value)}
+                rows={3}
+                placeholder="e.g. Doctor had an emergency..."
+                className="w-full rounded-xl border-gray-200 bg-gray-50 py-3 px-4 shadow-sm focus:bg-white focus:border-orange-500 focus:ring-orange-500 font-medium transition-colors"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForceConfirmModal(false);
+                  setPendingConfig(null);
+                  setForceReason('');
+                }}
+                className="px-4 py-2 rounded-lg text-gray-600 font-medium hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!forceReason.trim() || saving}
+                onClick={() => {
+                  if (pendingConfig && forceReason.trim()) {
+                    void saveDateAvailability(pendingConfig.enabled, pendingConfig.slots, true, forceReason.trim());
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-orange-600 text-white font-semibold hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Dropping...' : 'Confirm & Drop'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

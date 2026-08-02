@@ -8,6 +8,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
 import { STAFF_NAV_GROUPS } from '@/constants/staffNavigation';
 import { getNormalizedUserRole, getToken } from '@/lib/auth';
+import MessengerWidget from '@/components/messaging/MessengerWidget';
 
 interface DoctorLayoutProps {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ interface DoctorLayoutProps {
 
 export default function DoctorLayout({ children }: DoctorLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const router = useRouter();
 
@@ -33,16 +35,18 @@ export default function DoctorLayout({ children }: DoctorLayoutProps) {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-500">Verifying access...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))]">
+        <p className="text-sm text-[hsl(var(--muted))]">Verifying access...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen dashboard-record-theme">
       <Sidebar
         isOpen={sidebarOpen}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         onClose={() => setSidebarOpen(false)}
         userName="Nurse"
         userRole="nurse"
@@ -50,15 +54,17 @@ export default function DoctorLayout({ children }: DoctorLayoutProps) {
         navGroups={STAFF_NAV_GROUPS}
       />
 
-      <div className="flex flex-col flex-1 min-w-0 bg-gray-50">
+      <div className="flex flex-col flex-1 min-w-0 bg-[hsl(var(--background))]">
         <TopBar
           onMenuOpen={() => setSidebarOpen(true)}
-          userName="Nurse"
         />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto dashboard-uniform-width">
           {children}
         </main>
       </div>
+
+      {/* Floating Messenger Widget */}
+      <MessengerWidget />
     </div>
   );
 }

@@ -333,7 +333,7 @@ const DentalRecordPage = () => {
           clearance: patient.clearance
         }),
       };
-      await api.post('/clinic/visits', payload, token);
+      await api.post('/clinic/visits', payload, token || undefined);
       alert('Dental record successfully saved to history.');
       window.location.reload();
     } catch (err) {
@@ -352,7 +352,7 @@ const DentalRecordPage = () => {
     setIsCompleting(true);
     const token = getToken();
     try {
-      await api.put(`/appointments/queue/${queueId}`, { status: 'COMPLETED' }, token);
+      await api.put(`/appointments/queue/${queueId}`, { status: 'COMPLETED' }, token || undefined);
       router.push('/dashboard/dental');
     } catch (err) {
       if (err instanceof ApiError) {

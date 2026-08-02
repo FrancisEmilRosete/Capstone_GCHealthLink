@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import toast from 'react-hot-toast';
 
 interface ClinicInfo {
   clinicName: string;
@@ -103,19 +104,6 @@ function Toggle({
   );
 }
 
-function SavedToast({ visible, message }: { visible: boolean; message: string }) {
-  if (!visible) return null;
-
-  return (
-    <div className="fixed bottom-6 right-6 bg-teal-600 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 z-50">
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-      </svg>
-      {message}
-    </div>
-  );
-}
-
 const DEFAULT_CLINIC: ClinicInfo = {
   clinicName: 'GC HealthLink - Clinic Management System',
   schoolYear: '2025-2026',
@@ -138,10 +126,6 @@ export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [error, setError] = useState('');
-
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastVisible, setToastVisible] = useState(false);
 
   const [clinic, setClinic] = useState<ClinicInfo>(DEFAULT_CLINIC);
   const [notifs, setNotifs] = useState<NotifPrefs>(DEFAULT_NOTIFS);
@@ -149,29 +133,27 @@ export default function AdminSettings() {
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
-  const [pwError, setPwError] = useState('');
 
   useEffect(() => {
     async function loadSettings() {
       const token = getToken();
       if (!token) {
-        setError('You are not logged in. Please sign in again.');
+        toast.error('You are not logged in. Please sign in again.');
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        setError('');
 
         const response = await api.get<AdminSettingsResponse>('/settings/admin', token);
         setClinic(response.data?.clinic || DEFAULT_CLINIC);
         setNotifs(response.data?.notifications || DEFAULT_NOTIFS);
       } catch (err) {
         if (err instanceof ApiError) {
-          setError(err.message);
+          toast.error(err.message);
         } else {
-          setError('Failed to load admin settings.');
+          toast.error('Failed to load admin settings.');
         }
       } finally {
         setLoading(false);
@@ -185,22 +167,15 @@ export default function AdminSettings() {
     setNotifs((prev) => ({ ...prev, [key]: value }));
   }
 
-  function showToast(message: string) {
-    setToastMessage(message);
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 2200);
-  }
-
   async function handleSave() {
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
     try {
       setSaving(true);
-      setError('');
 
       await api.put(
         '/settings/admin',
@@ -211,12 +186,12 @@ export default function AdminSettings() {
         token,
       );
 
-      showToast('Changes saved successfully');
+      toast.success('Changes saved successfully');
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to save settings.');
+        toast.error('Failed to save settings.');
       }
     } finally {
       setSaving(false);
@@ -224,26 +199,24 @@ export default function AdminSettings() {
   }
 
   async function handleChangePassword() {
-    setPwError('');
-
     if (!currentPw) {
-      setPwError('Enter your current password.');
+      toast.error('Enter your current password.');
       return;
     }
 
     if (newPw.length < 8) {
-      setPwError('New password must be at least 8 characters.');
+      toast.error('New password must be at least 8 characters.');
       return;
     }
 
     if (newPw !== confirmPw) {
-      setPwError('Passwords do not match.');
+      toast.error('Passwords do not match.');
       return;
     }
 
     const token = getToken();
     if (!token) {
-      setPwError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
@@ -260,12 +233,12 @@ export default function AdminSettings() {
       setCurrentPw('');
       setNewPw('');
       setConfirmPw('');
-      showToast('Password updated successfully');
+      toast.success('Password updated successfully');
     } catch (err) {
       if (err instanceof ApiError) {
-        setPwError(err.message);
+        toast.error(err.message);
       } else {
-        setPwError('Failed to update password.');
+        toast.error('Failed to update password.');
       }
     }
   }
@@ -273,13 +246,12 @@ export default function AdminSettings() {
   async function handleDownloadMonthlyPdf() {
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
     try {
       setDownloadingPdf(true);
-      setError('');
 
       const { blob, fileName } = await api.getBlob('/admin/reports/monthly-pdf', token);
       const url = URL.createObjectURL(blob);
@@ -288,12 +260,12 @@ export default function AdminSettings() {
       anchor.download = fileName || `gc-healthlink-report-${new Date().toISOString().slice(0, 10)}.pdf`;
       anchor.click();
       URL.revokeObjectURL(url);
-      showToast('Monthly PDF report exported successfully');
+      toast.success('Monthly PDF report exported successfully');
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to export monthly PDF report.');
+        toast.error('Failed to export monthly PDF report.');
       }
     } finally {
       setDownloadingPdf(false);
@@ -302,15 +274,12 @@ export default function AdminSettings() {
 
   return (
     <div className="p-6 space-y-5 max-w-3xl mx-auto">
-      <SavedToast visible={toastVisible} message={toastMessage} />
-
       <div>
         <h1 className="text-xl font-bold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-0.5">Clinic configuration and admin preferences</p>
       </div>
 
       {loading && <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">Loading settings...</div>}
-      {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
 
       <SectionCard title="Clinic Information" description="General information about the GC HealthLink clinic.">
         <div className="space-y-3">
@@ -359,7 +328,6 @@ export default function AdminSettings() {
 
         <div className="space-y-3">
           <p className="text-sm font-semibold text-gray-700">Change Password</p>
-          {pwError && <p className="text-xs text-red-500">{pwError}</p>}
 
           <FieldRow label="Current Password">
             <input

@@ -5,17 +5,17 @@ import { Download, Activity, Users, AlertTriangle, TrendingUp } from 'lucide-rea
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { useServerEvents } from '@/lib/useServerEvents';
 import { DEPARTMENT_COURSE_MAP, normalizeDepartmentCode } from '@/constants/departments';
 import AdminPredictiveAnalyticsSection from '@/components/dashboard/admin/AdminPredictiveAnalyticsSection';
 import type { HeatMapPoint } from '@/components/dashboard/admin/PredictiveHeatMap';
 import type { OutbreakForecastPoint } from '@/components/dashboard/admin/OutbreakForecastChart';
 import ResourcePredictionPanel, { type ProjectedSupplyRisk } from '@/components/dashboard/admin/ResourcePredictionPanel';
-import WellnessTrendsWidget from '@/components/dashboard/admin/WellnessTrendsWidget';
+import WellnessTrendsWidget from '@/components/dashboard/shared/WellnessTrendsWidget';
 import AiOutbreakForecastClient from '@/components/dashboard/admin/AiOutbreakForecastClient';
 import HealthConcernsByDepartmentCard from '@/components/dashboard/shared/HealthConcernsByDepartmentCard';
 
 // New UI Components
-import { StatCard } from '@/components/ui/StatCard';
 import { ErrorAlert } from '@/components/ui/ErrorAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -253,6 +253,10 @@ export default function AdminDashboard() {
     }
   }
 
+  useServerEvents(['queue', 'visits'], () => {
+    void loadAnalytics();
+  });
+
   useEffect(() => {
     void loadAnalytics();
   }, []);
@@ -331,50 +335,6 @@ export default function AdminDashboard() {
         />
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Clinic Visits"
-          value={loading ? '...' : data?.totalVisits ?? 0}
-          icon={<Activity className="h-5 w-5" />}
-          loading={loading}
-        />
-        <StatCard
-          label="Tracked Departments"
-          value={loading ? '...' : departmentRows.length}
-          icon={<Users className="h-5 w-5" />}
-          loading={loading}
-        />
-        <StatCard
-          label="Top Concern"
-          value={loading ? '...' : topConcern}
-          icon={<TrendingUp className="h-5 w-5" />}
-          loading={loading}
-        />
-        <StatCard
-          label="Outbreak Alerts"
-          value={loading ? '...' : outbreakCount}
-          icon={<AlertTriangle className="h-5 w-5" />}
-          loading={loading}
-        />
-      </div>
-
-      {inventorySummary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Expired Items" value={loading ? '...' : inventorySummary.expired} icon={<AlertTriangle className="h-5 w-5" />} loading={loading} />
-          <StatCard label="Expiring Soon" value={loading ? '...' : inventorySummary.expiringSoon} icon={<TrendingUp className="h-5 w-5" />} loading={loading} />
-          <StatCard label="Near Reorder" value={loading ? '...' : inventorySummary.nearReorder} icon={<Users className="h-5 w-5" />} loading={loading} />
-          <StatCard label="Out of Stock" value={loading ? '...' : inventorySummary.outOfStock} icon={<Activity className="h-5 w-5" />} loading={loading} />
-        </div>
-      )}
-
-      {inventorySummary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Expired Items" value={inventorySummary.expired} icon={<AlertTriangle className="h-5 w-5" />} loading={loading} />
-          <StatCard label="Expiring Soon" value={inventorySummary.expiringSoon} icon={<TrendingUp className="h-5 w-5" />} loading={loading} />
-          <StatCard label="Near Reorder" value={inventorySummary.nearReorder} icon={<Users className="h-5 w-5" />} loading={loading} />
-          <StatCard label="Out of Stock" value={inventorySummary.outOfStock} icon={<Activity className="h-5 w-5" />} loading={loading} />
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card">

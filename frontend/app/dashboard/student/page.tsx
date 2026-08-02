@@ -5,10 +5,9 @@ import Link from 'next/link';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { useServerEvents } from '@/lib/useServerEvents';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
 import PersonalWellnessTrendsCard from '@/components/dashboard/student/PersonalWellnessTrendsCard';
-import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsightsCard';
-import HealthConcernsByDepartmentCard from '@/components/dashboard/shared/HealthConcernsByDepartmentCard';
 
 interface ClinicVisit {
   id: string;
@@ -168,7 +167,7 @@ function QrCard({
         <img
           src={qrImage}
           alt="Student QR Code"
-          className={`${prominent ? 'w-56 h-56 sm:w-60 sm:h-60' : 'w-44 h-44'} rounded-[var(--radius-xl)] border border-[hsl(var(--border))]`}
+          className={`${prominent ? 'w-56 h-56 sm:w-60 sm:h-60' : 'w-44 h-44'} rounded-md border border-[hsl(var(--border))]`}
         />
       ) : (
         <p className="text-sm text-[hsl(var(--muted))] text-center">QR code is not available right now.</p>
@@ -206,7 +205,7 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function loadStudentData() {
+  async function loadStudentData(showLoader = true) {
     const cachedQr = readCachedQrPayload();
     if (cachedQr?.qrCodeImage) {
       setQrImage(cachedQr.qrCodeImage);
@@ -253,12 +252,16 @@ export default function StudentDashboard() {
         setError('Failed to load student dashboard data.');
       }
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }
 
+  useServerEvents(['visits'], () => {
+    void loadStudentData(false);
+  });
+
   useEffect(() => {
-    void loadStudentData();
+    void loadStudentData(true);
   }, []);
 
   const recentVisits = useMemo(() => {
@@ -276,14 +279,13 @@ export default function StudentDashboard() {
   return (
     <div className="p-5 space-y-5 max-w-4xl mx-auto">
       <div
-        className="relative rounded-[var(--radius-xl)] overflow-hidden px-6 py-7"
-        style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-hover)) 60%, hsl(174 72% 26%) 100%)' }}
+        className="relative rounded-[var(--radius-xl)] overflow-hidden px-6 py-8 shadow-sm bg-gradient-to-br from-blue-600 to-blue-300"
       >
         <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10" />
         <div className="absolute -bottom-6 right-16 w-24 h-24 rounded-full bg-white/5" />
 
         <div className="relative z-10">
-          <h1 className="text-xl font-bold text-white">
+          <h1 className="text-2xl font-black !text-white">
             {loading
               ? 'Loading your dashboard...'
               : `Welcome back, ${profile?.firstName || 'Student'}!`}
@@ -291,22 +293,13 @@ export default function StudentDashboard() {
           <p className="text-white/90 text-sm mt-1.5 max-w-md">
             Your profile and clinic records are now connected to the live backend.
           </p>
-          <div className="flex flex-wrap gap-3 mt-4">
-            <Link href="/dashboard/student/consultation-request" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
-              Request Consultation
-            </Link>
-            {!loading && !registrationCompleted && (
+          {!loading && !registrationCompleted && (
+            <div className="flex flex-wrap gap-3 mt-4">
               <Link href="/dashboard/student/registration" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
                 Register
               </Link>
-            )}
-            <Link href="/dashboard/student/my-record" className="px-4 py-2 bg-white text-[hsl(var(--primary))] text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/90 transition-colors">
-              View My Record
-            </Link>
-            <Link href="/dashboard/student/notifications" className="px-4 py-2 border border-white/50 text-white text-sm font-semibold rounded-[var(--radius-lg)] hover:bg-white/10 transition-colors">
-              Advisories
-            </Link>
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -324,24 +317,24 @@ export default function StudentDashboard() {
         className="lg:hidden mx-auto w-full max-w-sm"
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="card p-4">
-          <p className="text-xs text-[hsl(var(--muted))] uppercase tracking-wide font-medium">Student Number</p>
-          <p className="text-lg font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : profile?.studentNumber || '-'}</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="card p-5 border-b-4 border-b-teal-500 hover:shadow-md transition-shadow">
+          <p className="text-[11px] text-[hsl(var(--muted))] uppercase tracking-wider font-semibold">Student Number</p>
+          <p className="text-xl font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : profile?.studentNumber || '-'}</p>
         </div>
 
-        <div className="card p-4">
-          <p className="text-xs text-[hsl(var(--muted))] uppercase tracking-wide font-medium">Total Visits</p>
+        <div className="card p-5 border-b-4 border-b-amber-500 hover:shadow-md transition-shadow">
+          <p className="text-[11px] text-[hsl(var(--muted))] uppercase tracking-wider font-semibold">Total Visits</p>
           <p className="text-2xl font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : totalVisits}</p>
         </div>
 
-        <div className="card p-4">
-          <p className="text-xs text-[hsl(var(--muted))] uppercase tracking-wide font-medium">Known Allergies</p>
+        <div className="card p-5 border-b-4 border-b-rose-500 hover:shadow-md transition-shadow">
+          <p className="text-[11px] text-[hsl(var(--muted))] uppercase tracking-wider font-semibold">Known Allergies</p>
           <p className="text-2xl font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : allergyCount}</p>
         </div>
 
-        <div className="card p-4">
-          <p className="text-xs text-[hsl(var(--muted))] uppercase tracking-wide font-medium">Last Visit</p>
+        <div className="card p-5 border-b-4 border-b-sky-500 hover:shadow-md transition-shadow">
+          <p className="text-[11px] text-[hsl(var(--muted))] uppercase tracking-wider font-semibold">Last Visit</p>
           <p className="text-lg font-bold text-[hsl(var(--foreground))] mt-1 tabular-nums">{loading ? '...' : (lastVisitDate ? formatDate(lastVisitDate) : '-')}</p>
         </div>
       </div>
@@ -357,19 +350,30 @@ export default function StudentDashboard() {
           ) : (
             <div className="space-y-3">
               {recentVisits.map((visit) => (
-                <div key={visit.id} className="rounded-[var(--radius-lg)] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
+                <div key={visit.id} className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 hover:bg-white hover:shadow-sm transition-all group">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">
-                      {normalizeComplaintDisplay(visit.chiefComplaintEnc, 'General Consultation')}
-                    </p>
-                    <span className="text-xs text-[hsl(var(--muted))] whitespace-nowrap tabular-nums">{formatDate(visit.visitDate)}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path></svg>
+                      </div>
+                      <p className="text-sm font-bold text-gray-900 group-hover:text-teal-700 transition-colors">
+                        {normalizeComplaintDisplay(visit.chiefComplaintEnc, 'General Consultation')}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-gray-500 whitespace-nowrap tabular-nums bg-gray-200/50 px-2.5 py-1 rounded-md">{formatDate(visit.visitDate)}</span>
                   </div>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Handled by: {visit.handledBy?.email || 'Clinic Staff'}</p>
-                  {visit.dispensedMedicines.length > 0 && (
-                    <p className="text-xs text-[hsl(var(--primary))] mt-1">
-                      Medicines: {visit.dispensedMedicines.map((item) => `${item.inventory.itemName} x${item.quantity}`).join(', ')}
-                    </p>
-                  )}
+                  <div className="mt-3 ml-11">
+                    <p className="text-xs font-medium text-gray-600">Handled by: <span className="text-gray-900">{visit.handledBy?.email || 'Clinic Staff'}</span></p>
+                    {visit.dispensedMedicines?.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {visit.dispensedMedicines.map((item, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 text-[11px] font-medium border border-teal-100">
+                            {item.inventory?.itemName} <span className="opacity-70">x{item.quantity}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -383,12 +387,6 @@ export default function StudentDashboard() {
           className="hidden lg:flex"
         />
       </div>
-
-      <PersonalWellnessTrendsCard data={personalTrendData} />
-
-      <PredictiveInsightsCard role="student" />
-
-      <HealthConcernsByDepartmentCard />
     </div>
   );
 }

@@ -7,9 +7,12 @@ import PredictiveInsightsCard from '@/components/dashboard/shared/PredictiveInsi
 import HealthConcernsByDepartmentCard from '@/components/dashboard/shared/HealthConcernsByDepartmentCard';
 import ConsultationModal, { type ConsultationForm, type ConsultationPatient } from '@/components/modals/ConsultationModal';
 import { formatTime12Hour } from '@/lib/time';
+import RoleWellnessTrends from '@/components/dashboard/shared/RoleWellnessTrends';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { useServerEvents } from '@/lib/useServerEvents';
+import toast from 'react-hot-toast';
 
 interface QueueItem {
   id: string;
@@ -63,7 +66,6 @@ function formatDate(iso: string) {
 export default function DentalDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [liveQueueFilter, setLiveQueueFilter] = useState<LiveQueueFilter>('all');
@@ -72,17 +74,16 @@ export default function DentalDashboardPage() {
   const [dentalInventory, setDentalInventory] = useState<any[]>([]);
   const [isPending, startTransition] = useTransition();
 
-  async function loadQueue() {
+  async function loadQueue(showLoading: boolean = true) {
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
       const response = await api.get<QueueResponse>(
         '/appointments/queue?limit=500&serviceType=Dental%20Check-up&status=WAITING,PENDING,IN_PROGRESS,COMPLETED,CANCELLED',
         token,
@@ -90,18 +91,30 @@ export default function DentalDashboardPage() {
       setQueue(response.data || []);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to load dental queue.');
+        toast.error('Failed to load dental queue.');
       }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
+  useServerEvents(['queue', 'visits'], () => {
+    void loadQueue(false);
+  });
+
   useEffect(() => {
-    void loadQueue();
+    void loadQueue(true);
     void loadInventory();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadQueue(false);
+    }, 30_000);
+
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   async function loadInventory() {
@@ -119,7 +132,7 @@ export default function DentalDashboardPage() {
     if (patient.studentProfile?.studentNumber) {
       router.push(`/dashboard/dental/records/${patient.studentProfile.studentNumber}?queueId=${patient.id}`);
     } else {
-      setError('Patient does not have a valid student number.');
+      toast.error('Patient does not have a valid student number.');
     }
   }
 
@@ -128,12 +141,12 @@ export default function DentalDashboardPage() {
 
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       return;
     }
 
     if (!consultingPatient.studentProfile.id) {
-      setError('Student profile is missing. Please refresh and try again.');
+      toast.error('Student profile is missing. Please refresh and try again.');
       return;
     }
 
@@ -163,7 +176,6 @@ export default function DentalDashboardPage() {
     };
 
     try {
-      setError('');
       await api.post(
         '/clinic/visits',
         {
@@ -184,12 +196,13 @@ export default function DentalDashboardPage() {
 
       setConsultModalOpen(false);
       setConsultingPatient(null);
+      toast.success('Dental consultation saved successfully.');
       await loadQueue();
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to save dental consultation.');
+        toast.error('Failed to save dental consultation.');
       }
     }
   }
@@ -302,12 +315,6 @@ export default function DentalDashboardPage() {
 
       <main className="flex-1 p-6 overflow-y-auto">
         <div className="max-w-7xl mx-auto space-y-6">
-          {error && (
-            <div className="rounded-[var(--radius-lg)] border border-[hsl(var(--danger)_/_0.3)] bg-[hsl(var(--danger-soft))] px-4 py-3 text-sm text-[hsl(var(--danger))]">
-              {error}
-            </div>
-          )}
-
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="card p-5">
               <div className="flex items-center gap-3">
@@ -531,6 +538,7 @@ export default function DentalDashboardPage() {
 
       <PredictiveInsightsCard role="dental" className="mx-8 mb-8" />
       <HealthConcernsByDepartmentCard className="mx-8 mb-8" />
+      <RoleWellnessTrends className="mx-8 mb-8" />
     </div>
   );
 }

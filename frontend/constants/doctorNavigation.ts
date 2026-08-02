@@ -35,12 +35,7 @@ export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
         href:  '/dashboard/doctor/students',
         icon:  UsersIcon,
       },
-      {
-        id:    'scanner',
-        label: 'QR Scanner',
-        href:  '/dashboard/doctor/scanner',
-        icon:  ScannerIcon,
-      },
+
       {
         id:    'inventory',
         label: 'Medical Inventory',
@@ -59,18 +54,7 @@ export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
         href:  '/dashboard/doctor/certificates',
         icon:  CertificatesIcon,
       },
-      {
-        id:    'reports',
-        label: 'Reports',
-        href:  '/dashboard/doctor/reports',
-        icon:  DashboardIcon,
-      },
-      {
-        id:    'notifications',
-        label: 'Notifications',
-        href:  '/dashboard/doctor/notifications',
-        icon:  NotificationsIcon,
-      },
+
       {
         id:    'calendar',
         label: 'Calendar',

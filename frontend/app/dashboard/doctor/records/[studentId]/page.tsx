@@ -510,7 +510,7 @@ export default function DoctorRecordPage() {
 
       return {
         id: `consult-${visit.id}`,
-        type: 'consultation',
+        type: 'consultation' as const,
         typeLabel: 'Consultation',
         when,
         timestamp,
@@ -527,7 +527,7 @@ export default function DoctorRecordPage() {
       const timestamp = exam.examDate ? +new Date(exam.examDate) : 0;
       return {
         id: `pe-${exam.id || exam.examDate}`,
-        type: 'physical_exam',
+        type: 'physical_exam' as const,
         typeLabel: 'Physical Examination',
         when: exam.examDate ? formatDateTime12Hour(exam.examDate) : 'Date not recorded',
         timestamp,
@@ -544,7 +544,7 @@ export default function DoctorRecordPage() {
       const timestamp = certificate.issuedAt ? +new Date(certificate.issuedAt) : 0;
       return {
         id: `cert-${certificate.id}`,
-        type: 'certificate',
+        type: 'certificate' as const,
         typeLabel: 'Given Medical Certificate',
         when: certificate.issuedAt ? formatDateTime12Hour(certificate.issuedAt) : 'Date not recorded',
         timestamp,
@@ -1113,24 +1113,26 @@ export default function DoctorRecordPage() {
     <div className="bg-slate-50 min-h-screen pb-32 print:bg-white print:pb-0 print:w-full print:m-0">
       {/* Print-Only Legal Document */}
       <div id="print-medical-record" className="hidden print:block px-8 py-6 text-black">
-        <div className="flex items-start gap-4 border-b border-black pb-3">
-          <div className="flex items-center gap-2 min-w-[110px]">
-            <Image src="/icons/gc-logo.png" alt="GC Logo" width={44} height={44} />
-            <Image src="/icons/clinic-logo.png" alt="Clinic Logo" width={44} height={44} />
+        <div className="flex items-start justify-between border-b border-black pb-2">
+          <div className="flex items-center justify-start min-w-[150px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/gc-logo.png" alt="GC Logo" width="72" height="72" className="print:block" />
           </div>
-          <div className="flex-1 text-center">
+          <div className="flex-1 text-center mt-1">
             <p className="text-sm font-semibold">Gordon College</p>
             <p className="text-xs">Olongapo City</p>
             <p className="text-base font-bold tracking-wide">Health Services Unit</p>
           </div>
-          <div className="min-w-[110px] flex flex-col items-end">
-            <div className="w-[95px] h-[95px] border border-black flex items-center justify-center text-[10px]">
+          <div className="flex items-start justify-end gap-3 min-w-[150px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/clinic-logo.png" alt="Clinic Logo" width="72" height="72" className="print:block" />
+            <div className="w-[75px] h-[75px] border border-black flex items-center justify-center text-[9px] shrink-0">
               1x1 Photo
             </div>
           </div>
         </div>
 
-        <div className="mt-3 space-y-1 text-[11px]">
+        <div className="mt-2 space-y-1 text-[10px]">
           <div className="grid grid-cols-2 gap-x-6">
             <p><span className="font-semibold">Student #:</span> {displayValue(record.studentNumber)}</p>
             <p><span className="font-semibold">Course/Dept:</span> {displayValue(record.courseDept)}</p>
@@ -1148,7 +1150,7 @@ export default function DoctorRecordPage() {
           <p><span className="font-semibold">Present Address:</span> {displayValue(record.presentAddress)}</p>
         </div>
 
-        <div className="mt-4 space-y-2 text-[10px]">
+        <div className="mt-3 space-y-2 text-[9px]">
           <div>
             <p className="font-bold uppercase mb-1">Medical History</p>
             <p className="font-semibold uppercase mb-1">Medical History: Place a check (v) if you have or had:</p>
@@ -1371,11 +1373,28 @@ export default function DoctorRecordPage() {
         </div>
       )}
 
-      {/* Prescription Print Styles */}
+      {/* Print Styles */}
       <style>{`
         @media print {
+          @page {
+            size: legal;
+            margin: 0.15in 0.25in;
+          }
           #print-prescription {
             display: none !important;
+          }
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          #print-medical-record {
+            width: 100%;
+            height: 100%;
+            max-height: 13.5in;
+            overflow: hidden;
+            page-break-inside: avoid;
+            transform: scale(0.97);
+            transform-origin: top center;
           }
         }
       `}</style>

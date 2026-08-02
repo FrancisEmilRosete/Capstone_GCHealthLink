@@ -13,7 +13,7 @@
  * can catch and display the backend's error message.
  */
 
-export const API_PREFIX = '/api/v1';
+export const API_PREFIX = '/api';
 const API_BASE_CACHE_KEY = 'gchl_api_base';
 const LOCAL_FALLBACK_ATTEMPT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_FALLBACK_ATTEMPT_TIMEOUT_MS || 500);
 const ENABLE_DEV_PORT_DISCOVERY = process.env.NEXT_PUBLIC_ENABLE_API_PORT_DISCOVERY === 'true';
@@ -178,10 +178,12 @@ async function fetchWithFallback(
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  data?: any;
+  constructor(message: string, status: number, data?: any) {
     super(message);
     this.name  = 'ApiError';
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -193,12 +195,16 @@ async function request<T = unknown>(
   body?: unknown,
   token?: string,
 ): Promise<T> {
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  const headers: HeadersInit = { 
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetchWithFallback(path, {
     method,
     headers,
+    cache: 'no-store',
     body: body !== undefined ? JSON.stringify(body) : undefined,
   }, { expectsJson: true });
 
@@ -211,7 +217,7 @@ async function request<T = unknown>(
   }
 
   if (!res.ok) {
-    throw new ApiError(data?.message ?? 'Something went wrong.', res.status);
+    throw new ApiError(data?.message ?? 'Something went wrong.', res.status, data);
   }
 
   return data as T;
@@ -229,6 +235,7 @@ async function requestForm<T = unknown>(
   const res = await fetchWithFallback(path, {
     method,
     headers,
+    cache: 'no-store',
     body: formData,
   }, { expectsJson: true });
 
@@ -240,7 +247,7 @@ async function requestForm<T = unknown>(
   }
 
   if (!res.ok) {
-    throw new ApiError(data?.message ?? 'Something went wrong.', res.status);
+    throw new ApiError(data?.message ?? 'Something went wrong.', res.status, data);
   }
 
   return data as T;
@@ -276,6 +283,7 @@ async function requestBlob(
   const res = await fetchWithFallback(path, {
     method: 'GET',
     headers,
+    cache: 'no-store',
   });
 
   if (!res.ok) {

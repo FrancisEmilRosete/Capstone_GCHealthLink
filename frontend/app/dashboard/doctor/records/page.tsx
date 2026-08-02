@@ -810,15 +810,11 @@ export default function DoctorRecordsPage() {
   return (
     <>
       <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Logs</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {isDentalLogs ? 'Dental consultation and other operation logs.' : 'Consultation, physical examination, and other operation logs.'}
-          </p>
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={() => { void loadLogs(); }}
-            className="mt-2 text-xs font-semibold text-teal-700 hover:text-teal-800"
+            className="text-xs font-semibold border border-teal-200 bg-teal-50 text-teal-700 px-4 py-2 rounded-xl hover:bg-teal-100 transition-colors"
           >
             Refresh Logs
           </button>
@@ -1049,12 +1045,10 @@ export default function DoctorRecordsPage() {
                     <p className="text-xs font-semibold text-gray-500 uppercase">Log Type</p>
                     <p className="text-sm text-gray-900 font-medium mt-1">
                       {isDentalLogs
-                        ? selectedLog.logType === 'other_operation' ? 'Other Operation' : 'Dental Consultation'
+                        ? 'Dental Consultation'
                         : selectedLog.logType === 'consultation'
                           ? 'Consultation'
-                          : selectedLog.logType === 'physical_exam'
-                            ? 'Physical Exam'
-                            : 'Other Operation'}
+                          : 'Physical Exam'}
                     </p>
                   </div>
                 )}

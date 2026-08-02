@@ -195,11 +195,7 @@ export default function PhysicalExaminationPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Physical Examination</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Manage and view student health information</p>
-        </div>
+      <div className="flex flex-col sm:flex-row justify-end gap-3">
         <div className="flex gap-2 shrink-0 flex-wrap">
           <Link
             href="/dashboard/doctor/scanner"

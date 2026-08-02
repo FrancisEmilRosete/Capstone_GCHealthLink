@@ -108,10 +108,7 @@ export default function StudentNotificationsPage() {
   return (
     <div className="p-5 max-w-4xl mx-auto space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Health Advisories</h1>
-          <p className="text-sm text-gray-500 mt-1">Timely clinic announcements for your department and campus-wide alerts.</p>
-        </div>
+
 
         <button
           onClick={() => { void loadAdvisories(true); }}

@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
+import { formatTime12Hour } from '@/lib/time';
 
 interface VisitMedicine {
   quantity: number;
@@ -82,43 +83,6 @@ interface StudentProfileResponse {
   data: StudentProfile;
 }
 
-interface MedicalDocument {
-  id: string;
-  fileName: string;
-  fileUrl: string;
-  documentType: string;
-  uploadedAt: string;
-}
-
-interface DocumentsResponse {
-  success: boolean;
-  data: MedicalDocument[];
-}
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function formatDocumentType(value: string) {
-  switch (value) {
-    case 'PHYSICAL_EXAM':
-      return 'Physical Exam';
-    case 'LAB_RESULT':
-      return 'Lab Result';
-    case 'MED_CERT':
-      return 'Medical Certificate';
-    case 'VACCINATION_RECORD':
-      return 'Vaccination Record';
-    default:
-      return 'Other';
-  }
-}
 
 function toLabel(value?: string | null) {
   return value && value.trim() ? value : 'N/A';
@@ -303,27 +267,6 @@ export default function MyRecordPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [documents, setDocuments] = useState<MedicalDocument[]>([]);
-  const [documentsLoading, setDocumentsLoading] = useState(false);
-  const [documentsError, setDocumentsError] = useState('');
-  const [downloadingDocumentId, setDownloadingDocumentId] = useState('');
-
-  async function loadDocuments(studentProfileId: string, token: string) {
-    try {
-      setDocumentsLoading(true);
-      const response = await api.get<DocumentsResponse>(`/documents/${studentProfileId}?limit=200`, token);
-      setDocuments(response.data || []);
-      setDocumentsError('');
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setDocumentsError(err.message);
-      } else {
-        setDocumentsError('Unable to load your medical documents.');
-      }
-    } finally {
-      setDocumentsLoading(false);
-    }
-  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -337,9 +280,6 @@ export default function MyRecordPage() {
       try {
         const response = await api.get<StudentProfileResponse>('/students/me', token);
         setProfile(response.data);
-        if (response.data?.id) {
-          await loadDocuments(response.data.id, token);
-        }
         setError('');
       } catch (err) {
         if (err instanceof ApiError) {
@@ -358,68 +298,8 @@ export default function MyRecordPage() {
   const allergies = useMemo(() => splitCsv(profile?.medicalHistory?.allergyEnc), [profile]);
   const conditions = useMemo(() => pickConditions(profile?.medicalHistory || null), [profile]);
 
-  async function handleDownloadDocument(document: MedicalDocument) {
-    const token = getToken();
-    if (!token) {
-      setDocumentsError('You are not logged in. Please sign in again.');
-      return;
-    }
-
-    try {
-      setDownloadingDocumentId(document.id);
-      const { blob, fileName } = await api.getBlob(`/documents/file/${document.id}`, token);
-      const url = URL.createObjectURL(blob);
-      const anchor = window.document.createElement('a');
-      anchor.href = url;
-      anchor.download = fileName || document.fileName;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setDocumentsError(err.message);
-      } else {
-        setDocumentsError('Failed to download document.');
-      }
-    } finally {
-      setDownloadingDocumentId('');
-    }
-  }
-
   return (
     <div className="p-5 max-w-5xl mx-auto space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">My Health Record</h1>
-          <p className="text-sm text-gray-500 mt-1">Live clinic profile and consultation history.</p>
-        </div>
-        {profile && (
-          <button
-            onClick={() => downloadPdf(profile)}
-            className="text-xs font-semibold border border-gray-200 px-3 py-2 rounded-xl text-gray-600 hover:border-teal-300 hover:text-teal-600"
-          >
-            Export PDF
-          </button>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <div className="flex items-start gap-2.5">
-          <div className="mt-0.5 shrink-0 rounded-full bg-slate-200 p-1.5 text-slate-600">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 00-6 0v2c0 1.657 1.343 3 3 3zm-7 2a2 2 0 012-2h10a2 2 0 012 2v7H5v-7z"
-              />
-            </svg>
-          </div>
-          <p className="text-sm text-slate-700">
-            These records are encrypted and securely stored. To update your medical history, please visit the clinic in person.
-          </p>
-        </div>
-      </div>
-
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
@@ -433,65 +313,65 @@ export default function MyRecordPage() {
       ) : profile ? (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
-              <h2 className="text-sm font-bold text-gray-800">Personal Information</h2>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Name:</span> {profile.lastName}, {profile.firstName}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Student Number:</span> {profile.studentNumber}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Course/Dept:</span> {profile.courseDept}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Birthday:</span> {formatDate(profile.birthday)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Age/Sex:</span> {profile.age || 'N/A'} / {toLabel(profile.sex)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Civil Status:</span> {toLabel(profile.civilStatus)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Contact:</span> {toLabel(profile.telNumber)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Address:</span> {toLabel(profile.presentAddress)}</p>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+              <h2 className="text-sm font-bold text-gray-800 border-b border-gray-100 pb-3">Personal Information</h2>
+              <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Name</p><p className="text-sm font-medium text-gray-800">{profile.lastName}, {profile.firstName}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Student Number</p><p className="text-sm font-medium text-gray-800">{profile.studentNumber}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Course/Dept</p><p className="text-sm font-medium text-gray-800">{profile.courseDept}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Birthday</p><p className="text-sm font-medium text-gray-800">{formatDate(profile.birthday)}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Age/Sex</p><p className="text-sm font-medium text-gray-800">{profile.age || 'N/A'} / {toLabel(profile.sex)}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Civil Status</p><p className="text-sm font-medium text-gray-800">{toLabel(profile.civilStatus)}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Contact</p><p className="text-sm font-medium text-gray-800">{toLabel(profile.telNumber)}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Address</p><p className="text-sm font-medium text-gray-800">{toLabel(profile.presentAddress)}</p></div>
+              </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
-              <h2 className="text-sm font-bold text-gray-800">Emergency & Medical Profile</h2>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Emergency Contact:</span> {toLabel(profile.emergencyContactName)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Relationship:</span> {toLabel(profile.emergencyRelationship)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Emergency Number:</span> {toLabel(profile.emergencyContactTelNumber)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Emergency Address:</span> {toLabel(profile.emergencyContactAddress)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Allergies:</span> {allergies.join(', ') || 'None'}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Blood Type:</span> {toLabel(profile.medicalHistory?.bloodType)}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Immunizations:</span> {(profile.medicalHistory?.immunizations || []).join(', ') || 'None'}</p>
-              <p className="text-sm text-gray-700"><span className="font-semibold">Conditions:</span> {conditions.join(', ') || 'None'}</p>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+              <h2 className="text-sm font-bold text-gray-800 border-b border-gray-100 pb-3">Emergency & Medical Profile</h2>
+              <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Emergency Contact</p><p className="text-sm font-medium text-gray-800">{toLabel(profile.emergencyContactName)}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Relationship</p><p className="text-sm font-medium text-gray-800">{toLabel(profile.emergencyRelationship)}</p></div>
+                <div className="col-span-2"><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Emergency Number</p><p className="text-sm font-medium text-gray-800">{toLabel(profile.emergencyContactTelNumber)}</p></div>
+                <div className="col-span-2"><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Emergency Address</p><p className="text-sm font-medium text-gray-800">{toLabel(profile.emergencyContactAddress)}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Blood Type</p><p className="text-sm font-medium text-gray-800">{toLabel(profile.medicalHistory?.bloodType)}</p></div>
+                <div><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Allergies</p><p className="text-sm font-medium text-gray-800">{allergies.join(', ') || 'None'}</p></div>
+                <div className="col-span-2"><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Immunizations</p><p className="text-sm font-medium text-gray-800">{(profile.medicalHistory?.immunizations || []).join(', ') || 'None'}</p></div>
+                <div className="col-span-2"><p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Conditions</p><p className="text-sm font-medium text-gray-800">{conditions.join(', ') || 'None'}</p></div>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-gray-800">Consultation History</h2>
-              <Link href="/dashboard/student" className="text-xs text-teal-600 font-semibold hover:underline">
-                Back to Dashboard
-              </Link>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-sm font-bold text-gray-800">Physical Examination</h2>
             </div>
-
-            {profile.clinicVisits.length === 0 ? (
-              <p className="text-sm text-gray-400">No clinic visits on record yet.</p>
+            {profile.physicalExaminations.length === 0 ? (
+              <div className="p-6 text-sm text-gray-400">No physical examination records yet.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[720px]">
                   <thead>
-                    <tr className="text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                      <th className="text-left py-2 pr-3">Date</th>
-                      <th className="text-left py-2 pr-3">Time</th>
-                      <th className="text-left py-2 pr-3">Complaint</th>
-                      <th className="text-left py-2 pr-3">Medicines</th>
-                      <th className="text-left py-2">Handled By</th>
+                    <tr className="text-[11px] uppercase tracking-wide text-gray-500 bg-gray-50 border-b border-gray-100">
+                      <th className="text-left py-3 px-6 font-semibold">Date</th>
+                      <th className="text-left py-3 px-6 font-semibold">Year Level</th>
+                      <th className="text-left py-3 px-6 font-semibold">BP</th>
+                      <th className="text-left py-3 px-6 font-semibold">Weight</th>
+                      <th className="text-left py-3 px-6 font-semibold">Height</th>
+                      <th className="text-left py-3 px-6 font-semibold">BMI</th>
+                      <th className="text-left py-3 px-6 font-semibold">Examined By</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {profile.clinicVisits.map((visit) => (
-                      <tr key={visit.id} className="border-b border-gray-50 align-top">
-                        <td className="py-2 pr-3 text-gray-700">{formatDate(visit.visitDate)}</td>
-                        <td className="py-2 pr-3 text-gray-600">{visit.visitTime ? formatTime12Hour(visit.visitTime) : 'N/A'}</td>
-                        <td className="py-2 pr-3 text-gray-700">{normalizeComplaintDisplay(visit.chiefComplaintEnc)}</td>
-                        <td className="py-2 pr-3 text-gray-600">
-                          {visit.dispensedMedicines.length > 0
-                            ? visit.dispensedMedicines.map((item) => `${item.inventory.itemName} x${item.quantity}`).join(', ')
-                            : 'None'}
-                        </td>
-                        <td className="py-2 text-gray-600">{visit.handledBy?.email || 'Clinic Staff'}</td>
+                    {profile.physicalExaminations.map((exam) => (
+                      <tr key={exam.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                        <td className="py-3 px-6 text-gray-800 font-medium">{formatDate(exam.examDate)}</td>
+                        <td className="py-3 px-6 text-gray-600">{exam.yearLevel || 'N/A'}</td>
+                        <td className="py-3 px-6 text-gray-600">{exam.bp || 'N/A'}</td>
+                        <td className="py-3 px-6 text-gray-600">{exam.weight || 'N/A'}</td>
+                        <td className="py-3 px-6 text-gray-600">{exam.height || 'N/A'}</td>
+                        <td className="py-3 px-6 text-gray-600">{exam.bmi || 'N/A'}</td>
+                        <td className="py-3 px-6 text-gray-600">{exam.examinedBy || 'N/A'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -500,52 +380,7 @@ export default function MyRecordPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-sm font-bold text-gray-800 mb-4">Medical Documents</h2>
 
-            {documentsError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 mb-3">
-                {documentsError}
-              </div>
-            )}
-
-            {documentsLoading ? (
-              <p className="text-sm text-gray-400">Loading documents...</p>
-            ) : documents.length === 0 ? (
-              <p className="text-sm text-gray-400">No uploaded documents available yet.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[620px]">
-                  <thead>
-                    <tr className="text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                      <th className="text-left py-2 pr-3">File Name</th>
-                      <th className="text-left py-2 pr-3">Type</th>
-                      <th className="text-left py-2 pr-3">Uploaded</th>
-                      <th className="text-left py-2">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {documents.map((document) => (
-                      <tr key={document.id} className="border-b border-gray-50 align-top">
-                        <td className="py-2 pr-3 text-gray-700">{document.fileName}</td>
-                        <td className="py-2 pr-3 text-gray-600">{formatDocumentType(document.documentType)}</td>
-                        <td className="py-2 pr-3 text-gray-600">{formatDateTime(document.uploadedAt)}</td>
-                        <td className="py-2">
-                          <button
-                            onClick={() => { void handleDownloadDocument(document); }}
-                            disabled={downloadingDocumentId === document.id}
-                            className="text-xs font-semibold border border-gray-200 px-3 py-1.5 rounded-lg text-gray-600 hover:border-teal-300 hover:text-teal-600 disabled:opacity-70"
-                          >
-                            {downloadingDocumentId === document.id ? 'Downloading...' : 'Download'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
         </>
       ) : null}
     </div>

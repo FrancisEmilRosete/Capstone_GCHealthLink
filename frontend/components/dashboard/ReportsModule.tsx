@@ -8,7 +8,6 @@ import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { FileDown, Printer, BarChart2, Loader2, RefreshCw, Lightbulb } from 'lucide-react';
-import { StatCard } from '@/components/ui/StatCard';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,13 +33,6 @@ interface ReportResponse {
   success: boolean;
   meta: ReportMeta;
   data: ReportData;
-}
-
-interface InventorySummary {
-  expired: number;
-  expiringSoon: number;
-  nearReorder: number;
-  outOfStock?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -516,7 +508,6 @@ export default function ReportsModule({ staffRole }: ReportsModuleProps) {
   const [error,      setError]      = useState('');
   // Always an array so 'all' mode and single-type mode share the same state.
   const [results,    setResults]    = useState<ReportResponse[]>([]);
-  const inventorySummary = results[0]?.data?.inventorySummary as InventorySummary | undefined;
 
   // ─ Fetch ──────────────────────────────────────────────────
   async function handleGenerate() {
@@ -748,14 +739,6 @@ export default function ReportsModule({ staffRole }: ReportsModuleProps) {
         )}
 
       </div>
-      {inventorySummary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Expired Items" value={inventorySummary.expired} icon={<AlertTriangle className="h-5 w-5" />} />
-          <StatCard label="Expiring Soon" value={inventorySummary.expiringSoon} icon={<TrendingUp className="h-5 w-5" />} />
-          <StatCard label="Near Reorder" value={inventorySummary.nearReorder} icon={<BarChart2 className="h-5 w-5" />} />
-          <StatCard label="Out of Stock" value={inventorySummary.outOfStock ?? 0} icon={<Activity className="h-5 w-5" />} />
-        </div>
-      )}
     </>
   );
 }

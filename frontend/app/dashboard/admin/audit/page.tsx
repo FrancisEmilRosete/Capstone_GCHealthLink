@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface AuditLogEntry {
   id: string;
@@ -94,11 +95,11 @@ export default function AdminAuditPage() {
 
   // Pagination
   const [page,       setPage]       = useState(1);
+  const [pageSize,   setPageSize]   = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [total,      setTotal]      = useState(0);
-  const LIMIT = 50;
 
-  const loadLogs = useCallback(async (p: number) => {
+  const loadLogs = useCallback(async (p: number, size: number = pageSize) => {
     const token = getToken();
     if (!token) { setError('Not authenticated.'); setLoading(false); return; }
 
@@ -106,7 +107,7 @@ export default function AdminAuditPage() {
     setError('');
 
     try {
-      const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
+      const params = new URLSearchParams({ page: String(p), limit: String(size) });
       if (search.trim())  params.set('search',   search.trim());
 
       const res = await api.get<AuditLogsResponse>(`/audit?${params.toString()}`, token);
@@ -114,6 +115,7 @@ export default function AdminAuditPage() {
       setTotalPages(res.pagination?.totalPages ?? 1);
       setTotal(res.pagination?.total ?? 0);
       setPage(p);
+      setPageSize(size);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load audit logs.');
     } finally {
@@ -205,28 +207,17 @@ export default function AdminAuditPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <p className="text-xs text-gray-500">
-              Page {page} of {totalPages} &nbsp;·&nbsp; {total.toLocaleString()} total entries
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => void loadLogs(page - 1)}
-                disabled={page <= 1}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                ← Prev
-              </button>
-              <button
-                onClick={() => void loadLogs(page + 1)}
-                disabled={page >= totalPages}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Next →
-              </button>
-            </div>
-          </div>
+        {!loading && logs.length > 0 && (
+          <PaginationControls
+            page={page}
+            totalPages={totalPages}
+            totalItems={total}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 25, 50, 100]}
+            itemLabel="entries"
+            onPageChange={(p) => void loadLogs(p, pageSize)}
+            onPageSizeChange={(next) => void loadLogs(1, next)}
+          />
         )}
       </div>
     </div>
