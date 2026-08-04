@@ -49,7 +49,7 @@ function LegalModal({ type, onClose }: LegalModalProps) {
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm overflow-y-auto p-4 sm:p-6 animate-fade-in flex items-center justify-center"
+      className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm overflow-y-auto p-4 sm:p-6 animate-fade-in flex items-center justify-center pointer-events-auto"
       onClick={onClose}
     >
       <div
@@ -244,46 +244,74 @@ export default function LoginForm({
         {loading ? 'Signing in…' : 'Sign In'}
       </Button>
 
-      {/* Privacy + Terms (Required) */}
-      <div className="mt-6">
-        <label htmlFor={legalInputId} className="flex items-start gap-2.5 text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none group">
-          <div className="relative flex items-center justify-center mt-0.5">
-            <input
-              id={legalInputId}
-              type="checkbox"
-              checked={legalAccepted}
-              onChange={(e) => onLegalChange(e.target.checked)}
-              className="w-4 h-4 rounded border-2 border-[hsl(var(--input-border))] accent-[hsl(var(--primary))] cursor-pointer transition-all"
+      {/* Notification: must accept terms before signing in */}
+      {!legalAccepted && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 animate-fade-in"
+        >
+          <svg
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z"
             />
-          </div>
-          <span className="leading-relaxed">
-            I agree to the{' '}
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                openLegalModal('privacy');
-              }}
-              className="text-[hsl(var(--primary))] font-medium hover:text-[hsl(var(--primary-hover))] hover:underline transition-colors"
-            >
-              Privacy Policy
-            </button>{' '}
-            and{' '}
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                openLegalModal('terms');
-              }}
-              className="text-[hsl(var(--primary))] font-medium hover:text-[hsl(var(--primary-hover))] hover:underline transition-colors"
-            >
-              Terms of Agreement
-            </button>
-            .
+          </svg>
+          <span>
+            Please accept the{' '}
+            <strong className="font-semibold">Privacy Policy</strong> and{' '}
+            <strong className="font-semibold">Terms of Agreement</strong> below
+            to enable the Sign In button.
           </span>
-        </label>
+        </div>
+      )}
+
+      {/* Privacy + Terms (Required) */}
+      <div className="mt-6 flex items-start gap-2.5 text-xs text-[hsl(var(--muted-foreground))] group">
+        <div className="relative flex items-center justify-center mt-0.5 shrink-0">
+          <input
+            id={legalInputId}
+            type="checkbox"
+            checked={legalAccepted}
+            onChange={(e) => onLegalChange(e.target.checked)}
+            className="w-4 h-4 rounded border-2 border-[hsl(var(--input-border))] accent-[hsl(var(--primary))] cursor-pointer transition-all"
+          />
+        </div>
+        <div className="leading-relaxed">
+          <label htmlFor={legalInputId} className="cursor-pointer select-none">
+            I agree to the{' '}
+          </label>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              openLegalModal('privacy');
+            }}
+            className="text-[hsl(var(--primary))] font-medium hover:text-[hsl(var(--primary-hover))] hover:underline transition-colors cursor-pointer"
+          >
+            Privacy Policy
+          </button>
+          {' '}and{' '}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              openLegalModal('terms');
+            }}
+            className="text-[hsl(var(--primary))] font-medium hover:text-[hsl(var(--primary-hover))] hover:underline transition-colors cursor-pointer"
+          >
+            Terms of Agreement
+          </button>
+          .
+        </div>
       </div>
 
       {/* Remember Me (moved to bottom) */}

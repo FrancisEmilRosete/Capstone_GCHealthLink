@@ -23,6 +23,8 @@ interface MedicalCertificateModalProps {
   onClose: () => void;
   student: UiStudent;
   certificateType: 'CONSULTATION' | 'PHYSICAL_EXAM';
+  initialDiagnosis?: string;
+  initialRemarks?: string;
 }
 
 const MedicalCertificateModal: React.FC<MedicalCertificateModalProps> = ({
@@ -30,6 +32,8 @@ const MedicalCertificateModal: React.FC<MedicalCertificateModalProps> = ({
   onClose,
   student,
   certificateType,
+  initialDiagnosis,
+  initialRemarks,
 }) => {
   const role = getNormalizedUserRole();
   const isNurse = role === 'CLINIC_STAFF';
@@ -88,12 +92,12 @@ const MedicalCertificateModal: React.FC<MedicalCertificateModalProps> = ({
       }
       setDob(formattedDob);
 
-      setRemarks('Fit to resume classes');
+      setRemarks(initialRemarks || 'Fit to resume classes');
 
       if (certificateType === 'PHYSICAL_EXAM') {
-        setForReason('Annual Physical Examination findings are normal and healthy.');
-        setPeFindingsOption('NORMAL');
-        setPeDiagnosis('');
+        setForReason(initialDiagnosis || 'Annual Physical Examination findings are normal and healthy.');
+        setPeFindingsOption(initialDiagnosis ? 'DIAGNOSIS' : 'NORMAL');
+        setPeDiagnosis(initialDiagnosis || '');
         setPePurpose('ENROLMENT');
 
         // Defaults matching the provided image
@@ -101,7 +105,7 @@ const MedicalCertificateModal: React.FC<MedicalCertificateModalProps> = ({
         setDesignation('College Physician');
         setLicenseNo('0084558');
       } else {
-        setForReason('Medical Consultation due to acute symptoms.');
+        setForReason(initialDiagnosis || 'Medical Consultation due to acute symptoms.');
 
         if (isNurse) {
           setSignatoryName('Juana Dela Cruz, RN');

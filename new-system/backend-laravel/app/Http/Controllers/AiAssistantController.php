@@ -57,18 +57,31 @@ class AiAssistantController extends Controller
     public function smartReminders(Request $request): JsonResponse
     {
         try {
-            // 1. Gather context data
-            $todayVisits = Appointment::whereDate('preferred_date', today())->count();
-            $pendingVisits = Appointment::whereDate('preferred_date', today())
-                                ->where('status', Appointment::STATUS_PENDING)->count();
-            $lowStockItems = InventoryBatch::where('quantity', '<=', 10)->count();
+            $user = $request->user();
+            $role = $user ? $user->role : 'STUDENT';
 
-            $prompt = "You are a clinical AI assistant for a university clinic. "
-                    . "Based on the following data, generate 3 short, actionable, and encouraging bullet-point reminders for the clinic staff today:\n"
-                    . "- Total visits today: {$todayVisits}\n"
-                    . "- Pending visits: {$pendingVisits}\n"
-                    . "- Low stock inventory items: {$lowStockItems}\n\n"
-                    . "Return ONLY a JSON array of strings.";
+            if ($role === 'STUDENT') {
+                $prompt = "You are the GCHealthLink System AI Assistant. "
+                        . "Generate 3 short, actionable bullet-point reminders for a student using the clinic management system. "
+                        . "Focus on system tasks like checking appointment statuses, reviewing issued certificates, and keeping their medical history up-to-date. "
+                        . "Do NOT give personal health or wellness advice. Keep it strictly related to using the system.\n\n"
+                        . "Return ONLY a JSON array of strings.";
+            } else {
+                // 1. Gather context data
+                $todayVisits = Appointment::whereDate('preferred_date', today())->count();
+                $pendingVisits = Appointment::whereDate('preferred_date', today())
+                                    ->where('status', Appointment::STATUS_PENDING)->count();
+                $lowStockItems = InventoryBatch::where('quantity', '<=', 10)->count();
+
+                $prompt = "You are the GCHealthLink System AI Assistant. "
+                        . "Based on the following system data, generate 3 short, actionable bullet-point reminders for the clinic staff today. "
+                        . "Focus on system tasks, queue management, and inventory management. "
+                        . "Do NOT give personal wellness advice (e.g. do not say 'stay hydrated'). Keep it professional and system-oriented.\n"
+                        . "- Total visits today: {$todayVisits}\n"
+                        . "- Pending visits: {$pendingVisits}\n"
+                        . "- Low stock inventory items: {$lowStockItems}\n\n"
+                        . "Return ONLY a JSON array of strings.";
+            }
 
             $result = Gemini::geminiPro()->generateContent($prompt);
             
@@ -81,11 +94,15 @@ class AiAssistantController extends Controller
 
             if (!is_array($reminders)) {
                 // Fallback
-                $reminders = [
-                    "You have {$pendingVisits} patients left to see today.",
-                    $lowStockItems > 0 ? "Check inventory, {$lowStockItems} items are running low." : "Inventory levels are good.",
-                    "Remember to sanitize workstations between visits."
-                ];
+                if ($role === 'STUDENT') {
+                    $reminders = ["Check the status of your pending consultations in the dashboard.", "Review your newly issued medical certificates.", "Ensure your medical history profile is completely up-to-date."];
+                } else {
+                    $reminders = [
+                        "Review and process the {$pendingVisits} pending appointments in the queue.",
+                        isset($lowStockItems) && $lowStockItems > 0 ? "Check the inventory tab, {$lowStockItems} items require restocking." : "Inventory levels are stable.",
+                        "Ensure all finalized consultations are properly logged in the system."
+                    ];
+                }
             }
 
             return response()->json([
@@ -94,9 +111,16 @@ class AiAssistantController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Gemini SDK Error (Reminders)', ['error' => $e->getMessage()]);
+            
+            $user = $request->user();
+            $role = $user ? $user->role : 'STUDENT';
+            $fallback = $role === 'STUDENT'
+                ? ["Check the status of your pending consultations in the dashboard.", "Review your newly issued medical certificates."]
+                : ["Review and process any pending appointments in the queue.", "Check the inventory tab for items requiring restocking."];
+
             return response()->json([
                 'success' => true,
-                'data' => ["Stay hydrated during your shift!", "Remember to check pending appointments."] // Graceful fallback
+                'data' => $fallback
             ]);
         }
     }

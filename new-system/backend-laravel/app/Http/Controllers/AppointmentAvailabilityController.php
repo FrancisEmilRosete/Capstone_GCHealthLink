@@ -135,7 +135,7 @@ class AppointmentAvailabilityController extends Controller
                     [$sH, $sM] = array_map('intval', explode(':', $slot['startTime']));
                     [$eH, $eM] = array_map('intval', explode(':', $slot['endTime']));
                     $startMins = $sH * 60 + $sM;
-                    $endMins = $eH * 60 + eM;
+                    $endMins = $eH * 60 + $eM;
                 }
                 return [
                     'startTime' => $slot['startTime'] ?? null,

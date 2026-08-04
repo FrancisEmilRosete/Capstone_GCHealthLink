@@ -41,8 +41,8 @@ class StudentProfileResource extends JsonResource
             'physicalExaminations' => $this->whenLoaded('physicalExaminations'),
             'labResults'           => $this->whenLoaded('labResults'),
             'clinicVisits'         => ClinicVisitResource::collection($this->whenLoaded('clinicVisits')),
-            'appointments'         => $this->whenLoaded('appointments'),
-            'medicalCertificates'  => $this->whenLoaded('medicalCertificates'),
+            'appointments'         => AppointmentResource::collection($this->whenLoaded('appointments')),
+            'medicalCertificates'  => MedicalCertificateResource::collection($this->whenLoaded('medicalCertificates')),
         ];
     }
 }

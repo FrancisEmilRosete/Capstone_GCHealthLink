@@ -734,17 +734,29 @@ export default function AdminInventoryPage() {
 				</div>
 
 				{!isReadOnly && (
-				<div className="flex items-center ml-auto">
+				<div className="flex flex-col items-end ml-auto gap-2">
 					<button
 						type="button"
 						onClick={() => {
 							setIsAddModalOpen(true);
 						}}
-						className="h-[42px] px-5 text-sm font-semibold rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-sm transition-colors flex items-center justify-center gap-2"
+						className="h-[42px] px-5 w-full text-sm font-semibold rounded-xl bg-teal-500 hover:bg-teal-600 text-white shadow-sm transition-colors flex items-center justify-center gap-2"
 					>
 						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
 						Add {itemNameLabel}
 					</button>
+					{isStaff && !isDental && (
+						<button
+							type="button"
+							onClick={() => {
+								alert('Dispense medicine feature coming soon!');
+							}}
+							className="h-[42px] px-5 w-full text-sm font-semibold rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm transition-colors flex items-center justify-center gap-2"
+						>
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+							Dispense a medicine
+						</button>
+					)}
 				</div>
 				)}
 			</div>

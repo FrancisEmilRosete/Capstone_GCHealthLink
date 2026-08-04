@@ -9,6 +9,7 @@ import { getToken } from '@/lib/auth';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
 import { formatTime12Hour } from '@/lib/time';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
+import toast from 'react-hot-toast';
 
 type LogKind = 'consultation' | 'physical_exam' | 'other_operation';
 
@@ -81,8 +82,19 @@ interface OtherOperationResponse {
   data: OtherOperationRow[];
 }
 
+interface ParsedConsultationData {
+  concernTag: string;
+  chiefComplaint: string;
+  diagnosis: string;
+  treatmentProvided: string;
+  bp: string;
+  temperature: string;
+  notes: string;
+}
+
 interface UnifiedLogItem {
   id: string;
+  studentProfileId: string;
   studentNumber: string;
   studentName: string;
   department: string;
@@ -100,41 +112,6 @@ interface UnifiedLogItem {
   consultation?: VisitRecord;
   physicalExam?: PhysicalExamRow;
   parsedConsultation?: ParsedConsultationData;
-}
-
-function normalizeYearLevel(value?: string) {
-  if (!value) return 'N/A';
-  switch (value) {
-    case 'YR_1':
-      return 'Yr. 1';
-    case 'YR_2':
-      return 'Yr. 2';
-    case 'YR_3':
-      return 'Yr. 3';
-    case 'YR_4':
-      return 'Yr. 4';
-    default:
-      return value;
-  }
-}
-
-function toDateKey(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const y = date.getFullYear();
-  const m = `${date.getMonth() + 1}`.padStart(2, '0');
-  const d = `${date.getDate()}`.padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-interface ParsedConsultationData {
-  concernTag: string;
-  chiefComplaint: string;
-  diagnosis: string;
-  treatmentProvided: string;
-  bp: string;
-  temperature: string;
-  notes: string;
 }
 
 interface VitalSnapshot {
@@ -167,6 +144,26 @@ interface OtherOperationMetadata {
   };
 }
 
+function normalizeYearLevel(value?: string) {
+  if (!value) return 'N/A';
+  switch (value) {
+    case 'YR_1': return 'Yr. 1';
+    case 'YR_2': return 'Yr. 2';
+    case 'YR_3': return 'Yr. 3';
+    case 'YR_4': return 'Yr. 4';
+    default: return value;
+  }
+}
+
+function toDateKey(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, '0');
+  const d = `${date.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
     month: 'short',
@@ -177,21 +174,7 @@ function formatDate(iso: string) {
 
 function formatTime(timeStr?: string) {
   if (!timeStr) return '';
-  const trimmed = timeStr.trim();
-  if (!trimmed) return '';
-
-  if (trimmed.includes('T')) {
-    const parsed = new Date(trimmed);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
-    }
-  }
-
-  return formatTime12Hour(trimmed);
+  return timeStr;
 }
 
 function formatActorName(email?: string, fallback = 'Clinic Staff') {
@@ -347,10 +330,7 @@ function parseConsultationData(raw?: string): ParsedConsultationData {
       diagnosis?: string;
       treatmentProvided?: string;
       treatmentManagement?: string;
-      vitals?: {
-        bp?: string;
-        temperature?: string;
-      };
+      vitals?: { bp?: string; temperature?: string };
       notes?: string;
     };
 
@@ -376,76 +356,29 @@ function parseConsultationData(raw?: string): ParsedConsultationData {
   }
 }
 
-function hasDentalKeyword(value?: string) {
-  if (!value) return false;
-  const normalized = value.toLowerCase();
-  return (
-    normalized.includes('dental')
-    || normalized.includes('tooth')
-    || normalized.includes('teeth')
-    || normalized.includes('oral')
-    || normalized.includes('gum')
-    || normalized.includes('gingiv')
-  );
+function displayOrFallback(value?: string, fallback = 'Not recorded') {
+  const normalized = (value || '').trim();
+  if (!normalized || normalized.toUpperCase() === 'N/A') return fallback;
+  return normalized;
 }
 
-function isDentalConsultation(visit: VisitRecord, parsed: ParsedConsultationData) {
-  return [
-    visit.concernTag,
-    visit.chiefComplaintEnc,
-    parsed.concernTag,
-    parsed.chiefComplaint,
-    parsed.diagnosis,
-    parsed.treatmentProvided,
-    parsed.notes,
-  ].some((value) => hasDentalKeyword(value));
-}
-
-function VitalSignsPanel({ vitals }: { vitals: VitalSnapshot }) {
-  const hasVitals = Boolean((vitals.bp && vitals.bp !== 'N/A') || (vitals.temperature && vitals.temperature !== 'N/A'));
-
-  return (
-    <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl p-4 border border-cyan-200 space-y-3">
-      <p className="text-xs font-bold text-teal-700 uppercase tracking-wider">Vital Signs</p>
-
-      {hasVitals ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="bg-white/70 rounded-lg p-3 border border-cyan-100">
-            <p className="text-xs font-semibold text-gray-600 uppercase">BP (mmHg)</p>
-            <p className="text-sm font-bold text-gray-900 mt-1">{vitals.bp || 'N/A'}</p>
-          </div>
-          <div className="bg-white/70 rounded-lg p-3 border border-cyan-100">
-            <p className="text-xs font-semibold text-gray-600 uppercase">Temperature</p>
-            <p className="text-sm font-bold text-gray-900 mt-1">{vitals.temperature || 'N/A'}</p>
-          </div>
-        </div>
-      ) : (
-        <p className="text-xs text-gray-600">No recorded vitals for this log entry.</p>
-      )}
-
-    </div>
-  );
+function hasMeaningfulVitals(vitals: VitalSnapshot) {
+  const bp = (vitals.bp || '').trim().toUpperCase();
+  const temp = (vitals.temperature || '').trim().toUpperCase();
+  return (bp && bp !== 'N/A') || (temp && temp !== 'N/A');
 }
 
 function getVitalsForLog(log: UnifiedLogItem): VitalSnapshot {
   if (log.logType === 'physical_exam' && log.physicalExam) {
-    return {
-      bp: log.physicalExam.bp || 'N/A',
-      temperature: 'N/A',
-    };
+    return { bp: log.physicalExam.bp || 'N/A', temperature: 'N/A' };
   }
-
   if (log.logType === 'consultation') {
     return {
       bp: log.parsedConsultation?.bp || 'N/A',
       temperature: log.parsedConsultation?.temperature || 'N/A',
     };
   }
-
-  return {
-    bp: 'N/A',
-    temperature: 'N/A',
-  };
+  return { bp: 'N/A', temperature: 'N/A' };
 }
 
 function getConcernTag(log: UnifiedLogItem): string {
@@ -473,24 +406,34 @@ function getConsultationNotes(log: UnifiedLogItem): string {
   return log.parsedConsultation?.notes || '';
 }
 
-function displayOrFallback(value?: string, fallback = 'Not recorded') {
-  const normalized = (value || '').trim();
-  if (!normalized || normalized.toUpperCase() === 'N/A') return fallback;
-  return normalized;
+function VitalSignsPanel({ vitals }: { vitals: VitalSnapshot }) {
+  const hasVitals = hasMeaningfulVitals(vitals);
+  return (
+    <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl p-4 border border-cyan-200 space-y-3">
+      <p className="text-xs font-bold text-teal-700 uppercase tracking-wider">Vital Signs</p>
+      {hasVitals ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-white/70 rounded-lg p-3 border border-cyan-100">
+            <p className="text-xs font-semibold text-gray-600 uppercase">BP (mmHg)</p>
+            <p className="text-sm font-bold text-gray-900 mt-1">{vitals.bp || 'N/A'}</p>
+          </div>
+          <div className="bg-white/70 rounded-lg p-3 border border-cyan-100">
+            <p className="text-xs font-semibold text-gray-600 uppercase">Temperature</p>
+            <p className="text-sm font-bold text-gray-900 mt-1">{vitals.temperature || 'N/A'}</p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-gray-600">No recorded vitals for this log entry.</p>
+      )}
+    </div>
+  );
 }
 
-function hasMeaningfulVitals(vitals: VitalSnapshot) {
-  const bp = (vitals.bp || '').trim().toUpperCase();
-  const temp = (vitals.temperature || '').trim().toUpperCase();
-  return (bp && bp !== 'N/A') || (temp && temp !== 'N/A');
-}
+const PAGE_SIZE = 10;
 
-export default function DoctorRecordsPage() {
+export default function DoctorHistoryPage() {
   const pathname = usePathname();
-  const isDentalLogs = pathname?.startsWith('/dashboard/dental/') ?? false;
-  const isNurseLogs  = pathname?.startsWith('/dashboard/staff/')  ?? false;
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [logs, setLogs] = useState<UnifiedLogItem[]>([]);
   const [selectedLog, setSelectedLog] = useState<UnifiedLogItem | null>(null);
@@ -505,35 +448,30 @@ export default function DoctorRecordsPage() {
     open: boolean;
     log: UnifiedLogItem | null;
     loading: boolean;
-    error: string;
     diagnosisFindings: string;
     recommendationsRemarks: string;
     dateIssued: string;
-  }>({ open: false, log: null, loading: false, error: '', diagnosisFindings: '', recommendationsRemarks: '', dateIssued: '' });
+  }>({ open: false, log: null, loading: false, diagnosisFindings: '', recommendationsRemarks: '', dateIssued: '' });
 
   async function loadLogs() {
     const token = getToken();
     if (!token) {
-      setError('You are not logged in. Please sign in again.');
+      toast.error('You are not logged in. Please sign in again.');
       setLoading(false);
       return;
     }
 
     try {
-      setError('');
       const ts = Date.now();
-      const activityStaffType = isDentalLogs ? 'DENTIST' : isNurseLogs ? 'NURSE' : 'DOCTOR';
       const [visitsResult, physicalResult, otherResult] = await Promise.allSettled([
-        api.get<VisitsResponse>(`/clinic/visits?limit=500&_ts=${ts}`, token),
-        api.get<PhysicalExamResponse>(`/physical-exams?limit=500&_ts=${ts}`, token),
-        api.get<OtherOperationResponse>(`/clinic/activity-logs?staffType=${activityStaffType}&limit=500&_ts=${ts}`, token),
+        api.get<VisitsResponse>(`/clinic/visits?limit=200&_ts=${ts}`, token),
+        api.get<PhysicalExamResponse>(`/physical-exams?limit=200&_ts=${ts}`, token),
+        api.get<OtherOperationResponse>(`/clinic/activity-logs?limit=200&_ts=${ts}`, token),
       ]);
 
       if (visitsResult.status !== 'fulfilled') {
         const reason = visitsResult.reason;
-        if (reason instanceof ApiError) {
-          throw reason;
-        }
+        if (reason instanceof ApiError) throw reason;
         throw new Error('Failed to load consultation logs.');
       }
 
@@ -547,13 +485,6 @@ export default function DoctorRecordsPage() {
 
       const visitCandidates = (visitsResponse.data || [])
         .filter((visit) => !(visit.studentProfile.studentNumber || '').toUpperCase().startsWith('EMP'))
-        .filter((visit) => {
-          // Nurse sees all NON-dental consultations; Dental sees dental only; Doctor sees non-dental only
-          const parsed = parseConsultationData(visit.chiefComplaintEnc);
-          const isDental = isDentalConsultation(visit, parsed);
-          if (isNurseLogs) return !isDental;
-          return isDentalLogs ? isDental : !isDental;
-        })
         .map((visit) => {
           const parsed = parseConsultationData(visit.chiefComplaintEnc);
           const actorName = formatActorName(visit.handledBy?.email);
@@ -599,6 +530,7 @@ export default function DoctorRecordsPage() {
 
         return {
           id: `consult-${doctorCandidate.visit.id}`,
+          studentProfileId: doctorCandidate.visit.studentProfile.id,
           studentNumber: doctorCandidate.visit.studentProfile.studentNumber,
           studentName: `${doctorCandidate.visit.studentProfile.firstName} ${doctorCandidate.visit.studentProfile.lastName}`,
           department: doctorCandidate.visit.studentProfile.courseDept || 'N/A',
@@ -621,6 +553,7 @@ export default function DoctorRecordsPage() {
         .filter((candidate) => !(candidate.isNurseTriage && matchedNurseVisitIds.has(candidate.visit.id)))
         .map((candidate) => ({
           id: `consult-${candidate.visit.id}`,
+          studentProfileId: candidate.visit.studentProfile.id,
           studentNumber: candidate.visit.studentProfile.studentNumber,
           studentName: `${candidate.visit.studentProfile.firstName} ${candidate.visit.studentProfile.lastName}`,
           department: candidate.visit.studentProfile.courseDept || 'N/A',
@@ -637,29 +570,31 @@ export default function DoctorRecordsPage() {
 
       const visitLogs: UnifiedLogItem[] = [...pairedDoctorLogs, ...remainingVisitLogs];
 
-      const physicalLogs: UnifiedLogItem[] = isDentalLogs ? [] : (physicalResponse.data || [])
+      const physicalLogs: UnifiedLogItem[] = (physicalResponse.data || [])
         .filter((exam) => !(exam.studentNumber || '').toUpperCase().startsWith('EMP'))
         .map((exam) => ({
           id: `physical-${exam.id}`,
+          studentProfileId: exam.studentProfileId,
           studentNumber: exam.studentNumber,
           studentName: exam.studentName,
           department: exam.courseDept || 'N/A',
           yearLevel: normalizeYearLevel(exam.yearLevel),
-          logType: 'physical_exam',
+          logType: 'physical_exam' as const,
           loggedAtIso: exam.createdAt || exam.examDate,
           dateIso: exam.examDate,
           actorName: exam.examinedBy?.trim() || 'Clinic Staff',
-          actorRole: isDentalLogs ? 'Dentist' : 'Doctor',
+          actorRole: 'Nurse',
           physicalExam: exam,
         }));
 
       const otherLogs: UnifiedLogItem[] = (otherResponse.data || []).map((row) => ({
         id: `other-${row.id}`,
+        studentProfileId: row.targetId || 'N/A',
         studentNumber: row.targetId || 'N/A',
         studentName: row.actionLabel || formatActionLabel(row.action),
         department: 'N/A',
         yearLevel: 'N/A',
-        logType: 'other_operation',
+        logType: 'other_operation' as const,
         loggedAtIso: row.timestamp,
         dateIso: row.timestamp,
         actorName: row.actorName?.trim() || 'Clinic Staff',
@@ -671,15 +606,15 @@ export default function DoctorRecordsPage() {
       }));
 
       const merged = [...visitLogs, ...physicalLogs, ...otherLogs].sort(
-        (a, b) => +new Date(b.loggedAtIso || 0) - +new Date(a.loggedAtIso || 0)
+        (a, b) => +new Date(b.loggedAtIso || 0) - +new Date(a.loggedAtIso || 0),
       );
 
       setLogs(merged);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        toast.error(err.message);
       } else {
-        setError('Failed to load logs.');
+        toast.error('Failed to load logs.');
       }
     } finally {
       setLoading(false);
@@ -691,23 +626,16 @@ export default function DoctorRecordsPage() {
   }, []);
 
   useEffect(() => {
-    function handleWindowFocus() {
-      void loadLogs();
-    }
-
+    function handleWindowFocus() { void loadLogs(); }
     function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
-        void loadLogs();
-      }
+      if (document.visibilityState === 'visible') void loadLogs();
     }
 
     window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void loadLogs();
-      }
+      if (document.visibilityState === 'visible') void loadLogs();
     }, 10000);
 
     return () => {
@@ -719,36 +647,31 @@ export default function DoctorRecordsPage() {
 
   const departmentOptions = Array.from(new Set(logs.map((item) => item.department).filter(Boolean))).sort();
   const yearLevelOptions = Array.from(new Set(logs.map((item) => item.yearLevel).filter(Boolean))).sort();
-  const effectiveFilterType = isDentalLogs ? 'consultation' : filterType;
 
   const filteredLogs = logs.filter((item) => {
     const q = searchStudent.toLowerCase().trim();
-    const matchesQuery = !q
-      || item.studentName.toLowerCase().includes(q)
-      || item.studentNumber.toLowerCase().includes(q)
-      || item.actorName.toLowerCase().includes(q)
-      || (item.operationLabel || '').toLowerCase().includes(q);
-    const matchesType = effectiveFilterType === 'all' || item.logType === effectiveFilterType;
+    const matchesQuery = !q || item.studentName.toLowerCase().includes(q) || item.studentNumber.toLowerCase().includes(q);
+    const matchesType = filterType === 'all' || item.logType === filterType;
     const matchesDate = !filterDate || toDateKey(item.loggedAtIso) === filterDate;
     const matchesDepartment = filterDepartment === 'all' || item.department === filterDepartment;
     const matchesYearLevel = filterYearLevel === 'all' || item.yearLevel === filterYearLevel;
     return matchesQuery && matchesType && matchesDate && matchesDepartment && matchesYearLevel;
   });
 
-  const PAGE_SIZE = 10;
-  const filterKey = `${searchStudent}|${filterDate}|${filterDepartment}|${filterYearLevel}|${effectiveFilterType}`;
+  const filterKey = `${searchStudent}|${filterDate}|${filterDepartment}|${filterYearLevel}|${filterType}`;
   if (prevFilterKeyRef.current !== filterKey) {
     prevFilterKeyRef.current = filterKey;
     setPage(1);
   }
+
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
+  const selectedOtherDetails = selectedLog?.logType === 'other_operation'
+    ? buildOtherOperationDetails(selectedLog)
+    : null;
   const pagedLogs = useMemo(
     () => filteredLogs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [filteredLogs, page],
   );
-  const selectedOtherDetails = selectedLog?.logType === 'other_operation'
-    ? buildOtherOperationDetails(selectedLog)
-    : null;
 
   const pagedGrouped = pagedLogs.reduce(
     (acc, item) => {
@@ -760,7 +683,9 @@ export default function DoctorRecordsPage() {
     {} as Record<string, UnifiedLogItem[]>,
   );
 
-  const pagedDates = Object.keys(pagedGrouped).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+  const pagedDates = Object.keys(pagedGrouped).sort(
+    (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+  );
 
   function handleOpenCertModal(log: UnifiedLogItem) {
     const diagnosisFindings = log.logType === 'consultation'
@@ -774,7 +699,6 @@ export default function DoctorRecordsPage() {
       open: true,
       log,
       loading: false,
-      error: '',
       diagnosisFindings,
       recommendationsRemarks: '',
       dateIssued: (log.dateIso || new Date().toISOString()).split('T')[0],
@@ -785,23 +709,24 @@ export default function DoctorRecordsPage() {
     e.preventDefault();
     if (!certModal.log) return;
     if (!certModal.diagnosisFindings.trim()) {
-      setCertModal((m) => ({ ...m, error: 'Diagnosis / Findings are required.' }));
+      toast.error('Diagnosis / Findings are required.');
       return;
     }
-    setCertModal((m) => ({ ...m, loading: true, error: '' }));
+    setCertModal((m) => ({ ...m, loading: true }));
     try {
       const token = getToken();
       await api.post('/certificates', {
-        studentIdentifier: certModal.log.studentNumber,
-        certificateType: certModal.log.logType === 'consultation' ? 'CONSULTATION' : 'PHYSICAL_EXAM',
-        diagnosisFindings: certModal.diagnosisFindings.trim(),
-        recommendationsRemarks: certModal.recommendationsRemarks.trim(),
-        dateIssued: certModal.dateIssued,
+        student_profile_id: certModal.log.studentProfileId,
+        certificate_type: certModal.log.logType === 'consultation' ? 'CONSULTATION' : 'PHYSICAL_EXAM',
+        diagnosis_findings: certModal.diagnosisFindings.trim(),
+        recommendations_remarks: certModal.recommendationsRemarks.trim(),
+        date_issued: certModal.dateIssued,
       }, token!);
+      toast.success('Certificate issued successfully.');
       setCertModal((m) => ({ ...m, open: false }));
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Failed to issue certificate.';
-      setCertModal((m) => ({ ...m, error: msg }));
+      toast.error(msg);
     } finally {
       setCertModal((m) => ({ ...m, loading: false }));
     }
@@ -809,22 +734,16 @@ export default function DoctorRecordsPage() {
 
   return (
     <>
-      <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 space-y-5">
         <div className="flex justify-end">
           <button
             type="button"
             onClick={() => { void loadLogs(); }}
-            className="text-xs font-semibold border border-teal-200 bg-teal-50 text-teal-700 px-4 py-2 rounded-xl hover:bg-teal-100 transition-colors"
+            className="text-xs font-semibold text-teal-700 hover:text-teal-800"
           >
             Refresh Logs
           </button>
         </div>
-
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-4 border-b border-gray-100">
@@ -874,19 +793,17 @@ export default function DoctorRecordsPage() {
                 ))}
               </select>
 
-              {!isDentalLogs && (
-                <select
-                  value={filterType}
-                  onChange={(event) => setFilterType(event.target.value as 'all' | LogKind)}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
-                  aria-label="Filter by log type"
-                >
-                  <option value="all">All Types</option>
-                  <option value="consultation">Consultation</option>
-                  <option value="physical_exam">Physical Exam</option>
-                  <option value="other_operation">Others</option>
-                </select>
-              )}
+              <select
+                value={filterType}
+                onChange={(event) => setFilterType(event.target.value as 'all' | LogKind)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+                aria-label="Filter by log type"
+              >
+                <option value="all">All Types</option>
+                <option value="consultation">Consultation</option>
+                <option value="physical_exam">Physical Exam</option>
+                <option value="other_operation">Others</option>
+              </select>
 
               <button
                 type="button"
@@ -909,64 +826,89 @@ export default function DoctorRecordsPage() {
               {pagedDates.map((date) => (
                 <div key={date}>
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="flex-1 h-px bg-gradient-to-r from-teal-400 to-transparent"></div>
+                    <div className="flex-1 h-px bg-gradient-to-r from-teal-400 to-transparent" />
                     <p className="text-xs font-bold text-teal-600 uppercase tracking-wider whitespace-nowrap">{date}</p>
-                    <div className="flex-1 h-px bg-gradient-to-l from-teal-400 to-transparent"></div>
+                    <div className="flex-1 h-px bg-gradient-to-l from-teal-400 to-transparent" />
                   </div>
 
                   <div className="space-y-3">
-                    {pagedGrouped[date].map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => setSelectedLog(item)}
-                        className="p-3 rounded-lg border border-gray-200 hover:border-teal-400 hover:bg-teal-50 cursor-pointer transition-all"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            {item.logType === 'other_operation' ? (
-                              <>
-                                <p className="font-semibold text-gray-900">{item.operationLabel || 'Other Operation'}</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  By: <span className="font-medium text-gray-700">{item.actorName}</span> ({item.actorRole})
-                                </p>
-                              </>
-                            ) : (
-                              <>
-                                <p className="font-semibold text-gray-900">{item.studentName}</p>
-                                <p className="text-xs text-teal-600 font-medium">{item.studentNumber}</p>
-                                <p className="text-sm text-gray-700 mt-1.5">
-                                  {isDentalLogs ? 'Dental Consultation' : item.logType === 'consultation' ? 'Consultation' : 'Physical Exam'}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  By: <span className="font-medium text-gray-700">{item.actorName}</span> ({item.actorRole})
-                                </p>
-                                {isDentalLogs && item.logType === 'consultation' && (
-                                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                    {displayOrFallback(getChiefComplaint(item), displayOrFallback(getConcernTag(item)))}
-                                  </p>
-                                )}
-                              </>
+                    {pagedGrouped[date].map((item) => {
+                      let typeStyle = {
+                        border: 'border-slate-200 bg-slate-50/20 hover:border-slate-300 hover:bg-slate-50/50',
+                        badge: 'bg-slate-100 text-slate-700 border border-slate-200',
+                        label: 'Operation'
+                      };
+
+                      if (item.logType === 'consultation') {
+                        typeStyle = {
+                          border: 'border-blue-100 bg-blue-50/20 hover:border-blue-300 hover:bg-blue-50/50',
+                          badge: 'bg-blue-100 text-blue-700 border border-blue-200',
+                          label: 'Consultation'
+                        };
+                      } else if (
+                        item.logType === 'physical_exam' || 
+                        (item.logType === 'other_operation' && 
+                          (item.action?.toLowerCase().includes('exam') || 
+                           item.operationLabel?.toLowerCase().includes('physical')))
+                      ) {
+                        typeStyle = {
+                          border: 'border-emerald-100 bg-emerald-50/20 hover:border-emerald-300 hover:bg-emerald-50/50',
+                          badge: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+                          label: 'Physical Therapy'
+                        };
+                      } else if (
+                        item.logType === 'other_operation' && 
+                        (item.action?.toLowerCase().includes('dispens') || 
+                         item.operationLabel?.toLowerCase().includes('dispens'))
+                      ) {
+                        typeStyle = {
+                          border: 'border-orange-100 bg-orange-50/20 hover:border-orange-300 hover:bg-orange-50/50',
+                          badge: 'bg-orange-100 text-orange-700 border border-orange-200',
+                          label: 'Dispensing'
+                        };
+                      }
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setSelectedLog(item)}
+                          className={`p-3 rounded-xl border ${typeStyle.border} cursor-pointer transition-all shadow-[var(--shadow-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4`}
+                        >
+                          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${typeStyle.badge}`}>
+                              {typeStyle.label}
+                            </span>
+                            
+                            {item.logType !== 'other_operation' && (
+                              <span className="text-xs font-semibold text-[hsl(var(--primary))] font-mono shrink-0">
+                                {item.studentNumber}
+                              </span>
                             )}
+                            
+                            <span className="font-semibold text-gray-900 text-sm truncate max-w-[200px]">
+                              {item.logType === 'other_operation' ? item.operationLabel || 'Other Operation' : item.studentName}
+                            </span>
+                            
+                            <span className="text-xs text-[hsl(var(--muted-foreground))] truncate">
+                              <span className="hidden sm:inline">| </span>By: <span className="font-medium text-[hsl(var(--foreground))]">{item.actorName}</span> <span className="hidden sm:inline">({item.actorRole})</span>
+                            </span>
                           </div>
-                          <div className="shrink-0 text-right flex flex-col items-end gap-1.5">
-                            <p className="text-xs text-gray-500">
-                              {item.logType === 'other_operation'
-                                ? formatTime(item.loggedAtIso)
-                                : formatTime(item.visitTime)}
-                            </p>
-                            {!isDentalLogs && item.logType !== 'other_operation' && (
+
+                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 w-full sm:w-auto">
+                            <span className="text-xs text-[hsl(var(--muted))] font-medium">{formatTime(item.visitTime)}</span>
+                            {item.logType !== 'other_operation' && (
                               <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); handleOpenCertModal(item); }}
-                                className="text-[10px] font-semibold border border-teal-300 text-teal-700 hover:bg-teal-50 px-2 py-0.5 rounded transition-colors"
+                                className="text-[10px] font-bold border border-[hsl(var(--primary-soft))] hover:border-[hsl(var(--primary))] bg-white text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-soft))] px-2.5 py-1 rounded-[var(--radius-md)] transition-colors"
                               >
                                 Give Cert.
                               </button>
                             )}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -1003,7 +945,10 @@ export default function DoctorRecordsPage() {
       </div>
 
       {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelectedLog(null)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setSelectedLog(null)}
+        >
           <div
             className="w-full max-w-2xl rounded-2xl border border-gray-100 bg-white shadow-xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
@@ -1044,11 +989,11 @@ export default function DoctorRecordsPage() {
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs font-semibold text-gray-500 uppercase">Log Type</p>
                     <p className="text-sm text-gray-900 font-medium mt-1">
-                      {isDentalLogs
-                        ? 'Dental Consultation'
-                        : selectedLog.logType === 'consultation'
-                          ? 'Consultation'
-                          : 'Physical Exam'}
+                      {selectedLog.logType === 'consultation'
+                        ? 'Consultation'
+                        : selectedLog.logType === 'physical_exam'
+                          ? 'Physical Exam'
+                          : 'Other Operation'}
                     </p>
                   </div>
                 )}
@@ -1111,18 +1056,14 @@ export default function DoctorRecordsPage() {
               {selectedLog.logType === 'consultation' && selectedLog.consultation && (
                 <>
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase">
-                      {isDentalLogs ? 'Consultation Category' : 'Concern Tag'}
-                    </p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase">Concern Tag</p>
                     <p className="text-sm text-gray-900 font-medium mt-1">
                       {displayOrFallback(getConcernTag(selectedLog), 'General consultation')}
                     </p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase">
-                      {isDentalLogs ? 'Dental Findings / Concern' : 'Chief Complaint'}
-                    </p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase">Chief Complaint</p>
                     <p className="text-sm text-gray-700 mt-1">
                       {displayOrFallback(getChiefComplaint(selectedLog), 'No complaint details recorded.')}
                     </p>
@@ -1130,33 +1071,25 @@ export default function DoctorRecordsPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase">
-                        {isDentalLogs ? 'Assessment / Diagnosis' : 'Diagnosis'}
-                      </p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Diagnosis</p>
                       <p className="text-sm text-gray-700 mt-1">{displayOrFallback(getDiagnosis(selectedLog))}</p>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase">
-                        {isDentalLogs ? 'Procedure / Treatment' : 'Treatment'}
-                      </p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Treatment</p>
                       <p className="text-sm text-gray-700 mt-1">{displayOrFallback(getTreatment(selectedLog), 'No treatment details recorded.')}</p>
                     </div>
                   </div>
 
                   {displayOrFallback(getConsultationNotes(selectedLog), '') && (
                     <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase">
-                        {isDentalLogs ? 'Clinical Notes' : 'Notes'}
-                      </p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Notes</p>
                       <p className="text-sm text-gray-700 mt-1">{displayOrFallback(getConsultationNotes(selectedLog))}</p>
                     </div>
                   )}
 
                   {(selectedLog.consultation.dispensedMedicines?.length ?? 0) > 0 && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">
-                        {isDentalLogs ? 'Medicines / Supplies Dispensed' : 'Medicines Dispensed'}
-                      </p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Medicines Dispensed</p>
                       <div className="mt-2 space-y-1">
                         {selectedLog.consultation.dispensedMedicines?.map((med, idx) => (
                           <div key={idx} className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1.5 rounded-lg font-medium">
@@ -1186,18 +1119,13 @@ export default function DoctorRecordsPage() {
                 </div>
               )}
 
-              {selectedLog.logType !== 'other_operation' && (!isDentalLogs || hasMeaningfulVitals(getVitalsForLog(selectedLog))) && (
+              {hasMeaningfulVitals(getVitalsForLog(selectedLog)) && (
                 <VitalSignsPanel vitals={getVitalsForLog(selectedLog)} />
               )}
 
               {selectedLog.logType !== 'other_operation' && (
                 <Link
-                  href={isDentalLogs
-                    ? `/dashboard/dental/records/${encodeURIComponent(selectedLog.studentNumber)}`
-                    : isNurseLogs
-                      ? `/dashboard/staff/students/${encodeURIComponent(selectedLog.studentNumber)}`
-                      : `/dashboard/doctor/students/${encodeURIComponent(selectedLog.studentNumber)}?returnTo=${encodeURIComponent(pathname || '/dashboard/doctor/records')}`
-                  }
+                  href={`/dashboard/staff/students/${encodeURIComponent(selectedLog.studentNumber)}?returnTo=${encodeURIComponent(pathname || '/dashboard/staff/logs')}`}
                   className="block w-full text-center px-3 py-2.5 mt-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors"
                 >
                   View Full Record
@@ -1271,9 +1199,6 @@ export default function DoctorRecordsPage() {
                   required
                 />
               </div>
-              {certModal.error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">{certModal.error}</div>
-              )}
               <div className="flex gap-3 pt-1">
                 <button
                   type="button"
@@ -1298,10 +1223,9 @@ export default function DoctorRecordsPage() {
         onClose={() => setQrModalOpen(false)}
         onResolved={(student: QrResolvedStudent) => {
           setSearchStudent(student.studentNumber);
-          setError('');
         }}
         onNotFound={() => {
-          setError('Student not found. Please try another QR.');
+          toast.error('Student not found. Please try another QR.');
         }}
       />
     </>

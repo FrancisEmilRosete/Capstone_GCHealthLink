@@ -75,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('students/registration', [\App\Http\Controllers\StudentRegistrationController::class, 'authenticatedRegistration']);
     Route::get('students/me', [\App\Http\Controllers\StudentController::class, 'me']);
     Route::get('students/qr', [\App\Http\Controllers\StudentController::class, 'qr']);
+    Route::get('students/by-number/{student_number}', [\App\Http\Controllers\StudentController::class, 'byNumber']);
     Route::apiResource('students', \App\Http\Controllers\StudentController::class);
 
     // Clinic Visits

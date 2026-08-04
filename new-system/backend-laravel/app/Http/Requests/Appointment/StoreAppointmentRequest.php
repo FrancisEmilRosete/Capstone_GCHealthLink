@@ -14,6 +14,16 @@ class StoreAppointmentRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $user = $this->user();
+        if ($user && $user->isStudent() && $user->studentProfile && !$this->has('student_profile_id')) {
+            $this->merge([
+                'student_profile_id' => $user->studentProfile->id,
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [

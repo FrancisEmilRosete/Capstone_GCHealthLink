@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface StudentDirectoryItem {
   id: string;
@@ -34,7 +35,7 @@ export default function DoctorStudentsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   async function loadStudents(value?: string) {
     const token = getToken();
@@ -219,34 +220,20 @@ export default function DoctorStudentsPage() {
         </div>
 
         {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-            <span className="text-sm text-gray-500">
-              Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-              <span className="font-medium text-gray-900">
-                {Math.min(currentPage * itemsPerPage, filteredStudents.length)}
-              </span>{' '}
-              of <span className="font-medium text-gray-900">{filteredStudents.length}</span> students
-            </span>
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+        {!loading && filteredStudents.length > 0 && (
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredStudents.length}
+            pageSize={itemsPerPage}
+            pageSizeOptions={[10, 20, 30, 50]}
+            itemLabel="students"
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(next) => {
+              setItemsPerPage(next);
+              setCurrentPage(1);
+            }}
+          />
         )}
       </div>
 

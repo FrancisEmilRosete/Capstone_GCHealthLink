@@ -37,7 +37,7 @@ export default function CertificatesPage() {
   const [search, setSearch] = useState('');
   
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
+  const [pageSize, setPageSize] = useState(10);
 
   // QR State
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -101,7 +101,7 @@ export default function CertificatesPage() {
             studentId: studentId,
             student: studentName,
             course: course,
-            certificateType: cert.certificateType,
+            certificateType: (cert.certificateType === 'consultation' || cert.certificateType === 'CONSULTATION') ? 'CONSULTATION' : 'PHYSICAL_EXAM',
             diagnosisFindings: cert.diagnosisFindings,
             recommendationsRemarks: cert.recommendationsRemarks,
             remarks: cert.remarks,
@@ -355,7 +355,7 @@ export default function CertificatesPage() {
               totalPages={totalPages}
               totalItems={filtered.length}
               pageSize={pageSize}
-              pageSizeOptions={[8, 12, 20, 30]}
+              pageSizeOptions={[10, 20, 30, 50]}
               itemLabel="certificates"
               onPageChange={setPage}
               onPageSizeChange={(next) => {

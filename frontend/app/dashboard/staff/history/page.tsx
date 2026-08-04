@@ -94,6 +94,7 @@ interface ParsedConsultationData {
 
 interface UnifiedLogItem {
   id: string;
+  studentProfileId: string;
   studentNumber: string;
   studentName: string;
   department: string;
@@ -529,6 +530,7 @@ export default function StaffLogsPage() {
 
         return {
           id: `consult-${doctorCandidate.visit.id}`,
+          studentProfileId: doctorCandidate.visit.studentProfile.id,
           studentNumber: doctorCandidate.visit.studentProfile.studentNumber,
           studentName: `${doctorCandidate.visit.studentProfile.firstName} ${doctorCandidate.visit.studentProfile.lastName}`,
           department: doctorCandidate.visit.studentProfile.courseDept || 'N/A',
@@ -551,6 +553,7 @@ export default function StaffLogsPage() {
         .filter((candidate) => !(candidate.isNurseTriage && matchedNurseVisitIds.has(candidate.visit.id)))
         .map((candidate) => ({
           id: `consult-${candidate.visit.id}`,
+          studentProfileId: candidate.visit.studentProfile.id,
           studentNumber: candidate.visit.studentProfile.studentNumber,
           studentName: `${candidate.visit.studentProfile.firstName} ${candidate.visit.studentProfile.lastName}`,
           department: candidate.visit.studentProfile.courseDept || 'N/A',
@@ -571,6 +574,7 @@ export default function StaffLogsPage() {
         .filter((exam) => !(exam.studentNumber || '').toUpperCase().startsWith('EMP'))
         .map((exam) => ({
           id: `physical-${exam.id}`,
+          studentProfileId: exam.studentProfileId,
           studentNumber: exam.studentNumber,
           studentName: exam.studentName,
           department: exam.courseDept || 'N/A',
@@ -585,6 +589,7 @@ export default function StaffLogsPage() {
 
       const otherLogs: UnifiedLogItem[] = (otherResponse.data || []).map((row) => ({
         id: `other-${row.id}`,
+        studentProfileId: row.targetId || 'N/A',
         studentNumber: row.targetId || 'N/A',
         studentName: row.actionLabel || formatActionLabel(row.action),
         department: 'N/A',
@@ -711,11 +716,11 @@ export default function StaffLogsPage() {
     try {
       const token = getToken();
       await api.post('/certificates', {
-        studentIdentifier: certModal.log.studentNumber,
-        certificateType: certModal.log.logType === 'consultation' ? 'CONSULTATION' : 'PHYSICAL_EXAM',
-        diagnosisFindings: certModal.diagnosisFindings.trim(),
-        recommendationsRemarks: certModal.recommendationsRemarks.trim(),
-        dateIssued: certModal.dateIssued,
+        student_profile_id: certModal.log.studentProfileId,
+        certificate_type: certModal.log.logType === 'consultation' ? 'CONSULTATION' : 'PHYSICAL_EXAM',
+        diagnosis_findings: certModal.diagnosisFindings.trim(),
+        recommendations_remarks: certModal.recommendationsRemarks.trim(),
+        date_issued: certModal.dateIssued,
       }, token!);
       toast.success('Certificate issued successfully.');
       setCertModal((m) => ({ ...m, open: false }));

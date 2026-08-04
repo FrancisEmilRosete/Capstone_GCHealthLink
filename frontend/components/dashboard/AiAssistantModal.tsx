@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, X, Bot, ChevronRight } from 'lucide-react';
+import { Sparkles, X, Bot, ChevronRight, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { usePathname, useRouter } from 'next/navigation';
 import { getToken } from '@/lib/auth';
 import { api } from '@/lib/api';
 
@@ -13,6 +14,11 @@ interface AiAssistantModalProps {
 }
 
 export default function AiAssistantModal({ isOpen, onClose, autoOpened = false }: AiAssistantModalProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const isStaffOrDoctor = pathname?.includes('/dashboard/staff') || pathname?.includes('/dashboard/doctor');
+  const basePath = pathname?.includes('/dashboard/doctor') ? '/dashboard/doctor' : '/dashboard/staff';
+
   const [reminders, setReminders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
@@ -99,8 +105,29 @@ export default function AiAssistantModal({ isOpen, onClose, autoOpened = false }
                 <Sparkles size={28} className="text-teal-400" />
                 <p className="text-sm font-medium text-slate-500">Analyzing your dashboard...</p>
               </div>
-            ) : reminders.length > 0 ? (
+            ) : (reminders.length > 0 || isStaffOrDoctor) ? (
               <ul className="space-y-3">
+                {isStaffOrDoctor && (
+                  <li className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-teal-100 hover:bg-teal-50/50 transition-colors shadow-sm">
+                    <div className="mt-0.5 bg-teal-100 p-1 rounded-full shrink-0">
+                      <CalendarPlus size={14} className="text-teal-600 font-bold" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm text-slate-700 font-medium leading-relaxed">
+                        Don't forget to review and add slots for today's schedule!
+                      </span>
+                      <button 
+                        onClick={() => {
+                          handleClose();
+                          router.push(`${basePath}/calendar`);
+                        }}
+                        className="mt-1 text-xs text-teal-600 font-semibold text-left hover:underline"
+                      >
+                        Go to Calendar &rarr;
+                      </button>
+                    </div>
+                  </li>
+                )}
                 {reminders.map((reminder, idx) => (
                   <li key={idx} className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-teal-100 hover:bg-teal-50/50 transition-colors shadow-sm">
                     <div className="mt-0.5 bg-teal-100 p-1 rounded-full shrink-0">

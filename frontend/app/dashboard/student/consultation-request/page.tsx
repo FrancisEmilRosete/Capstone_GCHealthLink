@@ -78,7 +78,39 @@ function formatDate(value?: string | null) {
     year: 'numeric',
   });
 }
+function parseScheduled(apt: any): Date | null {
+  const d = new Date(apt.preferredDate || apt.preferred_date);
+  if (isNaN(d.getTime())) return null;
+  const raw = ((apt.preferredTime || apt.preferred_time) || '').trim();
+  const m12 = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (m12) {
+    let h = parseInt(m12[1]); const min = parseInt(m12[2]);
+    if (m12[3].toUpperCase() === 'PM' && h < 12) h += 12;
+    if (m12[3].toUpperCase() === 'AM' && h === 12) h = 0;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, min);
+  }
+  const m24 = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (m24) return new Date(d.getFullYear(), d.getMonth(), d.getDate(), parseInt(m24[1]), parseInt(m24[2]));
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
 
+function resolveStatus(apt: any): string {
+  const s = apt.status?.toUpperCase();
+  if (s === 'WAITING') {
+    const sched = parseScheduled(apt);
+    return sched && sched.getTime() > Date.now() ? 'INCOMING' : 'WAITING';
+  }
+  return s || 'UNKNOWN';
+}
+
+function formatStatus(status?: string) {
+  if (!status) return 'UNKNOWN';
+  return status
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
 
 
 export default function ConsultationRequestPage() {
@@ -190,8 +222,8 @@ export default function ConsultationRequestPage() {
     const token = getToken();
     if (!token) return;
     try {
-      await api.put(`/appointments/cancel/${selectedCancelId}`, {}, token);
-      toast.success("Request cancelled.");
+      await api.del(`/appointments/${selectedCancelId}`, token);
+      toast.success('Consultation request cancelled.');
       fetchProfileData();
     } catch (err) {
       toast.error("Failed to cancel request.");
@@ -296,9 +328,9 @@ export default function ConsultationRequestPage() {
 
     try {
       const payload = {
-        preferredDate,
-        preferredTime,
-        serviceType,
+        preferred_date: preferredDate,
+        preferred_time: preferredTime,
+        service_type: serviceType,
         symptoms: symptoms.trim(),
       };
 
@@ -308,7 +340,7 @@ export default function ConsultationRequestPage() {
         setEditingRequestId(null);
         setEditModalOpen(false);
       } else {
-        const response = await api.post<AppointmentResponse>('/appointments/book', payload, token);
+        const response = await api.post<AppointmentResponse>('/appointments', payload, token);
         toast.success(`Consultation requested successfully. Schedule: ${new Date(response.data.preferredDate).toLocaleDateString('en-US')} at ${response.data.preferredTime}.`);
       }
       setSymptoms('');
@@ -746,8 +778,19 @@ export default function ConsultationRequestPage() {
                       {formatDate(item._type === 'appointment' ? item.preferredDate : item.visitDate)} <span className="text-slate-300 mx-1">|</span> {item._type === 'appointment' ? formatTime12Hour(item.preferredTime) : (item.visitTime ? formatTime12Hour(item.visitTime) : 'N/A')}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium">
-                      <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-bold uppercase tracking-wider">
-                        {item._type === 'appointment' ? item.status : 'COMPLETED'}
+                      <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                        item._type === 'appointment' 
+                          ? resolveStatus(item) === 'INCOMING' ? 'bg-indigo-100 text-indigo-800'
+                          : resolveStatus(item) === 'PENDING' ? 'bg-amber-100 text-amber-800'
+                          : resolveStatus(item) === 'WAITING' ? 'bg-blue-100 text-blue-800'
+                          : resolveStatus(item) === 'IN_PROGRESS' ? 'bg-teal-100 text-teal-800'
+                          : resolveStatus(item) === 'FOR_DISPENSING' || resolveStatus(item) === 'FOR DISPENSING' ? 'bg-purple-100 text-purple-800'
+                          : resolveStatus(item) === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800'
+                          : resolveStatus(item) === 'CANCELLED' ? 'bg-red-100 text-red-800'
+                          : 'bg-slate-100 text-slate-600'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {item._type === 'appointment' ? formatStatus(resolveStatus(item)) : 'COMPLETED'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -818,7 +861,7 @@ export default function ConsultationRequestPage() {
                 <div>
                   <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</p>
                   <p className={`text-sm font-bold ${selectedAppointment.status === 'CANCELLED' ? 'text-red-600' : 'text-gray-800'}`}>
-                    {selectedAppointment.status}
+                    {formatStatus(resolveStatus(selectedAppointment))}
                   </p>
                 </div>
                 {selectedAppointment.status === 'CANCELLED' && selectedAppointment.cancellationReason && (
@@ -844,8 +887,16 @@ export default function ConsultationRequestPage() {
                 
                 {/* Check if a certificate was issued on the exact same date */}
                 {(() => {
+                  if (!selectedAppointment?.preferredDate) return null;
+                  const preferredDateObj = new Date(selectedAppointment.preferredDate);
+                  if (isNaN(preferredDateObj.getTime())) return null;
+                  const preferredDateStr = preferredDateObj.toISOString().split('T')[0];
+
                   const cert = certificates.find(c => {
-                    return new Date(c.issuedAt).toISOString().split('T')[0] === new Date(selectedAppointment.preferredDate).toISOString().split('T')[0];
+                    if (!c.issuedAt) return false;
+                    const issuedAtObj = new Date(c.issuedAt);
+                    if (isNaN(issuedAtObj.getTime())) return false;
+                    return issuedAtObj.toISOString().split('T')[0] === preferredDateStr;
                   });
                   if (cert) {
                     return (

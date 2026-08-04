@@ -17,6 +17,7 @@ import ConsultationModal, {
   type InventoryOption,
   type ConsultationPatient,
 } from '@/components/modals/ConsultationModal';
+import MedicalCertificateModal from '@/components/modals/MedicalCertificateModal';
 import { formatTime12Hour } from '@/lib/time';
 import RoleWellnessTrends from '@/components/dashboard/shared/RoleWellnessTrends';
 
@@ -127,6 +128,8 @@ export default function StaffCommandCenterPage() {
   const [selectedDoneIds, setSelectedDoneIds] = useState<string[]>([]);
   const [isDoneSelectMode, setIsDoneSelectMode] = useState(false);
   const [followUpPage, setFollowUpPage] = useState(1);
+  const [showCertModal, setShowCertModal] = useState(false);
+  const [certPatient, setCertPatient] = useState<QueueItem | null>(null);
 
   async function loadQueue(showLoading = true) {
     const token = getToken();
@@ -289,6 +292,8 @@ export default function StaffCommandCenterPage() {
     try {
       await issueConsultationCertificate(patient);
       toast.success('Medical certificate issued.');
+      setCertPatient(patient);
+      setShowCertModal(true);
     } catch (err) {
       if (err instanceof ApiError) {
         toast.error(err.message);
@@ -880,6 +885,27 @@ export default function StaffCommandCenterPage() {
           onSave={(data, medicines) => {
             void handleConsultSave(data, medicines);
           }}
+        />
+      )}
+
+      {showCertModal && certPatient && (
+        <MedicalCertificateModal
+          isOpen={showCertModal}
+          onClose={() => {
+            setShowCertModal(false);
+            setCertPatient(null);
+          }}
+          student={{
+            id: certPatient.studentProfile.id,
+            studentNumber: certPatient.studentProfile.studentNumber,
+            firstName: certPatient.studentProfile.firstName,
+            lastName: certPatient.studentProfile.lastName,
+            course: certPatient.studentProfile.course || certPatient.studentProfile.courseDept,
+            yearLevel: certPatient.studentProfile.yearLevel || '',
+            age: certPatient.studentProfile.age || '',
+            sex: certPatient.studentProfile.sex || '',
+          }}
+          certificateType="CONSULTATION"
         />
       )}
 

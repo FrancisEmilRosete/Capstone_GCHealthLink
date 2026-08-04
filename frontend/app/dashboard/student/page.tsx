@@ -2,11 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { X, FileText, CalendarClock } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { useServerEvents } from '@/lib/useServerEvents';
 import { normalizeComplaintDisplay } from '@/lib/complaint';
+import { formatTime12Hour } from '@/lib/time';
 import PersonalWellnessTrendsCard from '@/components/dashboard/student/PersonalWellnessTrendsCard';
 
 interface ClinicVisit {
@@ -35,6 +39,8 @@ interface StudentProfile {
     allergyEnc?: string | null;
   } | null;
   clinicVisits: ClinicVisit[];
+  appointments?: any[];
+  medicalCertificates?: any[];
 }
 
 interface StudentProfileResponse {
@@ -102,6 +108,48 @@ function buildMonthlyTrendFromVisits(visits: ClinicVisit[]) {
 
 function hasCompletedRegistration(profile: StudentProfile | null) {
   return Boolean(profile?.studentNumber?.trim());
+}
+
+function formatCertificateType(type?: string) {
+  if (!type) return 'Certificate';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function formatStatus(status?: string) {
+  if (!status) return 'UNKNOWN';
+  return status
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function parseScheduled(apt: any): Date | null {
+  const d = new Date(apt.preferred_date || apt.preferredDate);
+  if (isNaN(d.getTime())) return null;
+  const raw = ((apt.preferred_time || apt.preferredTime) || '').trim();
+  const m12 = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (m12) {
+    let h = parseInt(m12[1]); const min = parseInt(m12[2]);
+    if (m12[3].toUpperCase() === 'PM' && h < 12) h += 12;
+    if (m12[3].toUpperCase() === 'AM' && h === 12) h = 0;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, min);
+  }
+  const m24 = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (m24) return new Date(d.getFullYear(), d.getMonth(), d.getDate(), parseInt(m24[1]), parseInt(m24[2]));
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function resolveStatus(apt: any): string {
+  const s = apt.status?.toUpperCase();
+  if (s === 'WAITING') {
+    const sched = parseScheduled(apt);
+    return sched && sched.getTime() > Date.now() ? 'INCOMING' : 'WAITING';
+  }
+  return s || 'UNKNOWN';
 }
 
 function readCachedQrPayload(): CachedQrPayload | null {
@@ -200,10 +248,42 @@ function QrCard({
 }
 
 export default function StudentDashboard() {
+  const router = useRouter();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [qrImage, setQrImage] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Modals state
+  const [selectedCert, setSelectedCert] = useState<any | null>(null);
+  const [selectedApt, setSelectedApt] = useState<any | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [editConfirmOpen, setEditConfirmOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  async function handleCancelRequest() {
+    if (!selectedApt?.id) return;
+    const token = getToken();
+    if (!token) return;
+    try {
+      setCancelling(true);
+      await api.del(`/appointments/${selectedApt.id}`, token);
+      toast.success("Consultation request cancelled.");
+      loadStudentData(false);
+    } catch (err) {
+      toast.error("Failed to cancel request.");
+    } finally {
+      setCancelling(false);
+      setDeleteConfirmOpen(false);
+      setSelectedApt(null);
+    }
+  }
+
+  function handleEditRequest() {
+    setEditConfirmOpen(false);
+    setSelectedApt(null);
+    router.push('/dashboard/student/consultation-request');
+  }
 
   async function loadStudentData(showLoader = true) {
     const cachedQr = readCachedQrPayload();
@@ -276,6 +356,10 @@ export default function StudentDashboard() {
     () => buildMonthlyTrendFromVisits(profile?.clinicVisits || []),
     [profile?.clinicVisits],
   );
+  
+  const activeAppointments = useMemo(() => {
+    return (profile?.appointments || []).filter(apt => apt.status?.toUpperCase() !== 'CANCELLED');
+  }, [profile?.appointments]);
   return (
     <div className="p-5 space-y-5 max-w-4xl mx-auto">
       <div
@@ -340,44 +424,74 @@ export default function StudentDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 card p-5">
-          <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">Recent Clinic Visits</h2>
-
-          {loading ? (
-            <p className="text-sm text-[hsl(var(--muted))]">Loading visits...</p>
-          ) : recentVisits.length === 0 ? (
-            <p className="text-sm text-[hsl(var(--muted))]">No visit records yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {recentVisits.map((visit) => (
-                <div key={visit.id} className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 hover:bg-white hover:shadow-sm transition-all group">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path></svg>
-                      </div>
-                      <p className="text-sm font-bold text-gray-900 group-hover:text-teal-700 transition-colors">
-                        {normalizeComplaintDisplay(visit.chiefComplaintEnc, 'General Consultation')}
-                      </p>
+        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card p-5 flex flex-col max-h-[500px]">
+            <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">My Consultations</h2>
+            <div className="overflow-y-auto space-y-3 pr-2">
+              {loading ? (
+                <p className="text-sm text-[hsl(var(--muted))]">Loading consultations...</p>
+              ) : (activeAppointments.length === 0) ? (
+                <p className="text-sm text-[hsl(var(--muted))]">No active consultations found.</p>
+              ) : (
+                activeAppointments.slice(0, 5).map((apt) => (
+                  <div 
+                    key={apt.id} 
+                    onClick={() => setSelectedApt(apt)}
+                    className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col gap-2 cursor-pointer hover:border-teal-500 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <p className="text-sm font-bold text-gray-900">{apt.service_type || apt.serviceType}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                        resolveStatus(apt) === 'INCOMING' ? 'bg-indigo-100 text-indigo-800' :
+                        resolveStatus(apt) === 'PENDING' ? 'bg-amber-100 text-amber-800' :
+                        resolveStatus(apt) === 'WAITING' ? 'bg-blue-100 text-blue-800' :
+                        resolveStatus(apt) === 'IN_PROGRESS' ? 'bg-teal-100 text-teal-800' :
+                        resolveStatus(apt) === 'FOR_DISPENSING' || resolveStatus(apt) === 'FOR DISPENSING' ? 'bg-purple-100 text-purple-800' :
+                        resolveStatus(apt) === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' :
+                        resolveStatus(apt) === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-200 text-gray-700'
+                      }`}>
+                        {formatStatus(resolveStatus(apt))}
+                      </span>
                     </div>
-                    <span className="text-xs font-medium text-gray-500 whitespace-nowrap tabular-nums bg-gray-200/50 px-2.5 py-1 rounded-md">{formatDate(visit.visitDate)}</span>
+                    <p className="text-xs text-gray-500 font-medium">
+                      {formatDate(apt.preferred_date || apt.preferredDate)} at {apt.preferred_time || apt.preferredTime}
+                    </p>
+                    <p className="text-xs text-gray-700 mt-1 line-clamp-2">{apt.symptoms}</p>
                   </div>
-                  <div className="mt-3 ml-11">
-                    <p className="text-xs font-medium text-gray-600">Handled by: <span className="text-gray-900">{visit.handledBy?.email || 'Clinic Staff'}</span></p>
-                    {visit.dispensedMedicines?.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {visit.dispensedMedicines.map((item, idx) => (
-                          <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 text-[11px] font-medium border border-teal-100">
-                            {item.inventory?.itemName} <span className="opacity-70">x{item.quantity}</span>
-                          </span>
-                        ))}
-                      </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="card p-5 flex flex-col max-h-[500px]">
+            <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">My Certificates</h2>
+            <div className="overflow-y-auto space-y-3 pr-2">
+              {loading ? (
+                <p className="text-sm text-[hsl(var(--muted))]">Loading certificates...</p>
+              ) : (!profile?.medicalCertificates || profile.medicalCertificates.length === 0) ? (
+                <p className="text-sm text-[hsl(var(--muted))]">No certificates found.</p>
+              ) : (
+                profile.medicalCertificates.slice(0, 5).map((cert) => (
+                  <div 
+                    key={cert.id} 
+                    onClick={() => setSelectedCert(cert)}
+                    className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 flex flex-col gap-2 cursor-pointer hover:border-teal-500 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <p className="text-sm font-bold text-gray-900">{formatCertificateType(cert.certificate_type || cert.type)} Certificate</p>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium">
+                      Issued on: {formatDate(cert.issued_at || cert.issuedAt)}
+                    </p>
+                    {(cert.remarks || cert.recommendations_remarks) && (
+                      <p className="text-xs text-gray-700 mt-1 line-clamp-2">{cert.remarks || cert.recommendations_remarks}</p>
                     )}
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         <QrCard
@@ -387,6 +501,157 @@ export default function StudentDashboard() {
           className="hidden lg:flex"
         />
       </div>
+
+      {/* Details Modal - Consultation */}
+      {selectedApt && !editConfirmOpen && !deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <button 
+              onClick={() => setSelectedApt(null)}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-full transition"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="text-lg font-bold text-gray-800 mb-4">
+              Consultation Details
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Service Type</p>
+                <p className="text-sm font-medium text-gray-800">{selectedApt.service_type || selectedApt.serviceType}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</p>
+                <p className="text-sm font-bold text-gray-800">{formatStatus(resolveStatus(selectedApt))}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Preferred Schedule</p>
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                  <CalendarClock size={16} className="text-teal-600" />
+                  {formatDate(selectedApt.preferred_date || selectedApt.preferredDate)} at {selectedApt.preferred_time || selectedApt.preferredTime}
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Symptoms / Notes</p>
+                <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100 whitespace-pre-wrap">
+                  {selectedApt.symptoms || 'None provided'}
+                </div>
+              </div>
+            </div>
+
+            {selectedApt.status?.toUpperCase() === 'PENDING' && (
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  onClick={() => setEditConfirmOpen(true)}
+                  className="w-full py-2.5 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 transition"
+                >
+                  Edit Request
+                </button>
+                <button
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="w-full py-2.5 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition"
+                >
+                  Cancel Request
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Details Modal - Certificate */}
+      {selectedCert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <button 
+              onClick={() => setSelectedCert(null)}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-full transition"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FileText className="text-teal-600" size={24} />
+              Certificate Details
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Certificate Type</p>
+                <p className="text-sm font-medium text-gray-800">{formatCertificateType(selectedCert.certificate_type || selectedCert.type)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Issue Date</p>
+                <p className="text-sm font-medium text-gray-800">{formatDate(selectedCert.issued_at || selectedCert.issuedAt)}</p>
+              </div>
+              {(selectedCert.diagnosis_findings || selectedCert.diagnosisFindings) && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Diagnosis / Findings</p>
+                  <p className="text-sm font-medium text-gray-800">{selectedCert.diagnosis_findings || selectedCert.diagnosisFindings}</p>
+                </div>
+              )}
+              {(selectedCert.remarks || selectedCert.recommendations_remarks) && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Remarks</p>
+                  <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100 whitespace-pre-wrap">
+                    {selectedCert.remarks || selectedCert.recommendations_remarks}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative animate-in zoom-in duration-200 text-center">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Cancel Request</h3>
+            <p className="text-sm text-gray-500 mb-6">Are you sure you want to cancel this consultation request? This action cannot be undone.</p>
+            <div className="flex gap-3 w-full">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                disabled={cancelling}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
+              >
+                No, Keep it
+              </button>
+              <button
+                onClick={handleCancelRequest}
+                disabled={cancelling}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2"
+              >
+                {cancelling ? 'Cancelling...' : 'Yes, Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Confirmation Modal */}
+      {editConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative animate-in zoom-in duration-200 text-center">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Edit Request</h3>
+            <p className="text-sm text-gray-500 mb-6">You will be redirected to the Consultations page to select a new schedule. Proceed?</p>
+            <div className="flex gap-3 w-full">
+              <button
+                onClick={() => setEditConfirmOpen(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditRequest}
+                className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl transition"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

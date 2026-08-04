@@ -625,6 +625,41 @@ export default function ScannerWidget({ standalone = true }: { standalone?: bool
     return null;
   }
 
+  async function loadOngoingQueue(patient: UiStudent) {
+    const token = getToken();
+    if (!token) return null;
+
+    try {
+      // Fetch queue items to see if this student has an ongoing appointment
+      const response = await api.get<{ data: any[] }>(
+        `/appointments/queue?limit=50&status=WAITING,PENDING,IN_PROGRESS,FOR_DISPENSING`,
+        token
+      );
+      const queueItems = response.data || [];
+      const studentQueue = queueItems.find((q) => q.studentProfile?.id === patient.id || q.studentProfile?.studentNumber === patient.studentNumber);
+
+      if (studentQueue && studentQueue.symptoms) {
+        try {
+          const parsed = JSON.parse(studentQueue.symptoms);
+          return {
+            chiefComplaint: parsed.chiefComplaint || parsed.symptoms || '',
+            bp: parsed.vitals?.bp || '',
+            temperature: parsed.vitals?.temperature || '',
+            age: parsed.age || String(patient.age || ''),
+            sex: parsed.sex || patient.sex || '',
+          } as Partial<ConsultationForm>;
+        } catch {
+          return {
+            chiefComplaint: studentQueue.symptoms,
+          } as Partial<ConsultationForm>;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load ongoing queue:', e);
+    }
+    return null;
+  }
+
   async function openConsultModal() {
     if (!foundStudent) return;
 
@@ -632,6 +667,14 @@ export default function ScannerWidget({ standalone = true }: { standalone?: bool
     setShowConsultModal(true);
 
     if (isNurseScanner) {
+      try {
+        const ongoing = await loadOngoingQueue(foundStudent);
+        if (ongoing) {
+          setConsultInitialValues(ongoing);
+        }
+      } catch {
+        // ignore
+      }
       return;
     }
 

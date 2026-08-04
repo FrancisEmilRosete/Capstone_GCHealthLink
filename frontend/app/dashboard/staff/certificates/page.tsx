@@ -6,6 +6,7 @@ import { getToken } from '@/lib/auth';
 import { Search, Printer, X, CheckSquare } from 'lucide-react';
 import UseQrLookupModal, { type QrResolvedStudent } from '@/components/scanner/UseQrLookupModal';
 import { printCertificate, printCertificatesBatch } from '@/lib/printCertificate';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface Certificate {
   id: string;
@@ -74,7 +75,7 @@ export default function CertificatesPage() {
             studentId: studentId,
             student: studentName,
             course: course,
-            certificateType: cert.certificateType,
+            certificateType: (cert.certificateType === 'consultation' || cert.certificateType === 'CONSULTATION') ? 'CONSULTATION' : 'PHYSICAL_EXAM',
             diagnosisFindings: cert.diagnosisFindings,
             recommendationsRemarks: cert.recommendationsRemarks,
             remarks: cert.remarks,
@@ -158,7 +159,7 @@ export default function CertificatesPage() {
   });
 
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(10);
   
   useEffect(() => {
     setPage(1);
@@ -325,24 +326,20 @@ export default function CertificatesPage() {
           </table>
         </div>
         
-        {!loading && filtered.length > 0 && totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-            <span className="text-sm text-gray-500">
-              Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, filtered.length)} of {filtered.length} entries
-            </span>
-            <div className="flex gap-2">
-              <button 
-                disabled={currentPage === 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-white disabled:opacity-50 transition-colors bg-gray-50 font-medium text-gray-700"
-              >Prev</button>
-              <button 
-                disabled={currentPage === totalPages}
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-white disabled:opacity-50 transition-colors bg-gray-50 font-medium text-gray-700"
-              >Next</button>
-            </div>
-          </div>
+        {!loading && filtered.length > 0 && (
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 30, 50]}
+            itemLabel="certificates"
+            onPageChange={setPage}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(1);
+            }}
+          />
         )}
       </div>
       

@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { CalendarIcon, CertificatesIcon, DashboardIcon, InventoryIcon, NotificationsIcon, ScannerIcon, UsersIcon } from '@/components/icons/NavIcons';
+import { CalendarIcon, CertificatesIcon, DashboardIcon, InventoryIcon, NotificationsIcon, ScannerIcon, UsersIcon, ClockIcon } from '@/components/icons/NavIcons';
 
 export interface DoctorNavItem {
   id:     string;
@@ -62,10 +62,10 @@ export const DOCTOR_NAV_GROUPS: DoctorNavGroup[] = [
         icon:  CalendarIcon,
       },
       {
-        id:    'records',
-        label: 'Logs',
-        href:  '/dashboard/doctor/records',
-        icon:  CertificatesIcon,
+        id:    'history',
+        label: 'History',
+        href:  '/dashboard/doctor/history',
+        icon:  ClockIcon,
       },
     ],
   },

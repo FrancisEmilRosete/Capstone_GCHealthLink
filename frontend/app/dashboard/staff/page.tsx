@@ -24,6 +24,7 @@ import ConsultationModal, {
 import { formatTime12Hour } from '@/lib/time';
 import ScannerWidget from '@/components/scanner/ScannerWidget';
 import { printCertificate, printCertificatesBatch } from '@/lib/printCertificate';
+import MedicalCertificateModal from '@/components/modals/MedicalCertificateModal';
 import RoleWellnessTrends from '@/components/dashboard/shared/RoleWellnessTrends';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -113,8 +114,13 @@ export default function NurseDashboardPage() {
     diagnosisFindings: string;
     recommendationsRemarks: string;
   }>>({});
+  const [printCertModalOpen, setPrintCertModalOpen] = useState(false);
+  const [printCertPatient, setPrintCertPatient] = useState<QueueItem | null>(null);
+  const [printCertType, setPrintCertType] = useState<'CONSULTATION' | 'PHYSICAL_EXAM'>('CONSULTATION');
+  const [printCertDiagnosis, setPrintCertDiagnosis] = useState('');
+  const [printCertRemarks, setPrintCertRemarks] = useState('');
 
-  // ── Queue parsing helpers ────────────────────────────────────────────────
+  // ── Modals State ───────────────────────────────────────────────────────────
   function parseScheduled(item: QueueItem): Date | null {
     const d = new Date(item.preferredDate);
     if (isNaN(d.getTime())) return null;
@@ -347,7 +353,14 @@ export default function NurseDashboardPage() {
       toast.success(`Issued ${createdCerts.length} medical certificate${createdCerts.length > 1 ? 's' : ''}.`);
       
       if (createdCerts.length === 1) {
-        printCertificate(createdCerts[0]);
+        const p = certTargets[0];
+        const form = certForms[p.id] || { certificateType: 'CONSULTATION', diagnosisFindings: '', recommendationsRemarks: '' };
+        
+        setPrintCertPatient(p);
+        setPrintCertType(form.certificateType === 'PHYSICAL_EXAM' ? 'PHYSICAL_EXAM' : 'CONSULTATION');
+        setPrintCertDiagnosis(form.diagnosisFindings);
+        setPrintCertRemarks(form.recommendationsRemarks);
+        setPrintCertModalOpen(true);
       } else if (createdCerts.length > 1) {
         printCertificatesBatch(createdCerts);
       }
@@ -829,6 +842,29 @@ export default function NurseDashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {printCertModalOpen && printCertPatient && (
+        <MedicalCertificateModal
+          isOpen={printCertModalOpen}
+          onClose={() => {
+            setPrintCertModalOpen(false);
+            setPrintCertPatient(null);
+          }}
+          student={{
+            id: printCertPatient.studentProfile.id,
+            studentNumber: printCertPatient.studentProfile.studentNumber,
+            firstName: printCertPatient.studentProfile.firstName,
+            lastName: printCertPatient.studentProfile.lastName,
+            course: printCertPatient.studentProfile.course || printCertPatient.studentProfile.courseDept,
+            yearLevel: printCertPatient.studentProfile.yearLevel || '',
+            age: printCertPatient.studentProfile.age || '',
+            sex: printCertPatient.studentProfile.sex || '',
+          }}
+          certificateType={printCertType}
+          initialDiagnosis={printCertDiagnosis}
+          initialRemarks={printCertRemarks}
+        />
       )}
 
     </div>

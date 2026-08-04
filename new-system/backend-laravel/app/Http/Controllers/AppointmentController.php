@@ -77,10 +77,11 @@ class AppointmentController extends Controller
             $appointment->id
         );
 
-        return response()->json(
-            new AppointmentResource($appointment->load('studentProfile')),
-            201
-        );
+        return response()->json([
+            'success' => true,
+            'message' => 'Appointment created successfully.',
+            'data' => new AppointmentResource($appointment->load('studentProfile'))
+        ], 201);
     }
 
     // -------------------------------------------------------------------------
@@ -96,9 +97,10 @@ class AppointmentController extends Controller
             return response()->json(['error' => 'Unauthorized.'], 403);
         }
 
-        return response()->json(
-            new AppointmentResource($appointment->load('studentProfile'))
-        );
+        return response()->json([
+            'success' => true,
+            'data' => new AppointmentResource($appointment->load('studentProfile'))
+        ]);
     }
 
     // -------------------------------------------------------------------------
@@ -118,7 +120,11 @@ class AppointmentController extends Controller
             $appointment->id
         );
 
-        return response()->json(new AppointmentResource($appointment->fresh()));
+        return response()->json([
+            'success' => true,
+            'message' => 'Appointment status updated.',
+            'data' => new AppointmentResource($appointment->fresh())
+        ]);
     }
 
     // -------------------------------------------------------------------------

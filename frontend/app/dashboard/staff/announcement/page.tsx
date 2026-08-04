@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Edit2, Trash2, AlertTriangle, X, Save } from 'lucide-react';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import toast from 'react-hot-toast';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 interface AdvisoryItem {
 	id: string;
@@ -63,6 +65,20 @@ export default function StaffAnnouncementPage() {
 	const [submitting, setSubmitting] = useState(false);
 
 	const [search, setSearch] = useState('');
+	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(5);
+
+	// Edit State
+	const [editingAdvisory, setEditingAdvisory] = useState<AdvisoryItem | null>(null);
+	const [editTitle, setEditTitle] = useState('');
+	const [editMessage, setEditMessage] = useState('');
+	const [editTargetAudience, setEditTargetAudience] = useState<Array<(typeof AUDIENCE_OPTIONS)[number]['value']>>(['ALL']);
+	const [editSeverity, setEditSeverity] = useState<(typeof SEVERITY_OPTIONS)[number]>('INFO');
+	const [savingEdit, setSavingEdit] = useState(false);
+
+	// Delete State
+	const [deletingAdvisory, setDeletingAdvisory] = useState<AdvisoryItem | null>(null);
+	const [deleting, setDeleting] = useState(false);
 
 	async function loadHistory() {
 		const token = getToken();
@@ -152,6 +168,91 @@ export default function StaffAnnouncementPage() {
 				|| (item.severity || '').toLowerCase().includes(q);
 		});
 	}, [history, search]);
+
+	useEffect(() => {
+		setPage(1);
+	}, [search, history.length]);
+
+	const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
+	const currentPage = Math.min(page, totalPages);
+	const pagedHistory = useMemo(() => {
+		const start = (currentPage - 1) * pageSize;
+		return filteredHistory.slice(start, start + pageSize);
+	}, [filteredHistory, currentPage, pageSize]);
+
+	function openEditModal(advisory: AdvisoryItem) {
+		setEditingAdvisory(advisory);
+		setEditTitle(advisory.title);
+		setEditMessage(advisory.message);
+		
+		const parsedTargets = advisory.targetDept ? advisory.targetDept.split(',').map(s => s.trim()) as any[] : ['ALL'];
+		setEditTargetAudience(parsedTargets.length ? parsedTargets : ['ALL']);
+		setEditSeverity(advisory.severity as any || 'INFO');
+	}
+
+	async function handleUpdateAdvisory(e: React.FormEvent) {
+		e.preventDefault();
+		if (!editingAdvisory) return;
+
+		const token = getToken();
+		if (!token) return toast.error('You are not logged in.');
+
+		setSavingEdit(true);
+		try {
+			const targetDeptStr = editTargetAudience.includes('ALL') ? 'ALL' : editTargetAudience.join(',');
+			await api.put(`/advisories/${editingAdvisory.id}`, {
+				title: editTitle.trim(),
+				message: editMessage.trim(),
+				targetDept: targetDeptStr,
+				severity: editSeverity,
+			}, token);
+			
+			toast.success('Announcement updated successfully.');
+			setEditingAdvisory(null);
+			loadHistory();
+		} catch (err) {
+			const msg = err instanceof ApiError ? err.message : 'Failed to update announcement.';
+			toast.error(msg);
+		} finally {
+			setSavingEdit(false);
+		}
+	}
+
+	async function handleDeleteAdvisory() {
+		if (!deletingAdvisory) return;
+		const token = getToken();
+		if (!token) return toast.error('You are not logged in.');
+
+		setDeleting(true);
+		try {
+			await api.delete(`/advisories/${deletingAdvisory.id}`, token);
+			toast.success('Announcement deleted successfully.');
+			setDeletingAdvisory(null);
+			loadHistory();
+		} catch (err) {
+			const msg = err instanceof ApiError ? err.message : 'Failed to delete announcement.';
+			toast.error(msg);
+		} finally {
+			setDeleting(false);
+		}
+	}
+
+	function handleEditAudienceToggle(value: (typeof AUDIENCE_OPTIONS)[number]['value']) {
+		if (value === 'ALL') {
+			setEditTargetAudience(['ALL']);
+			return;
+		}
+
+		setEditTargetAudience((prev) => {
+			const withoutAll = prev.filter((item) => item !== 'ALL');
+			const exists = withoutAll.includes(value);
+			const next = exists
+				? withoutAll.filter((item) => item !== value)
+				: [...withoutAll, value];
+
+			return next.length ? next : ['ALL'];
+		});
+	}
 
 	function handleAudienceToggle(value: (typeof AUDIENCE_OPTIONS)[number]['value']) {
 		if (value === 'ALL') {
@@ -286,7 +387,7 @@ export default function StaffAnnouncementPage() {
 					<div className="p-10 text-center text-sm text-gray-400">No announcement logs found.</div>
 				) : (
 					<div className="divide-y divide-gray-100">
-						{filteredHistory.map((item) => {
+						{pagedHistory.map((item) => {
 							const normalizedSeverity = (item.severity || 'INFO').toUpperCase();
 							return (
 								<div key={item.id} className="p-5 hover:bg-gray-50/50 transition-colors">
@@ -302,13 +403,189 @@ export default function StaffAnnouncementPage() {
 										</div>
 									</div>
 									<p className="text-sm text-gray-600 mt-2 leading-relaxed">{item.message}</p>
-									<p className="text-xs font-medium text-gray-400 mt-3">{formatDateTime(item.createdAt)}</p>
+									<div className="flex items-center justify-between mt-3">
+										<p className="text-xs font-medium text-gray-400">{formatDateTime(item.createdAt)}</p>
+										<div className="flex items-center gap-3">
+											<button 
+												onClick={() => openEditModal(item)}
+												className="text-gray-400 hover:text-teal-600 transition-colors"
+												title="Edit Announcement"
+											>
+												<Edit2 size={16} />
+											</button>
+											<button 
+												onClick={() => setDeletingAdvisory(item)}
+												className="text-gray-400 hover:text-red-600 transition-colors"
+												title="Delete Announcement"
+											>
+												<Trash2 size={16} />
+											</button>
+										</div>
+									</div>
 								</div>
 							);
 						})}
 					</div>
 				)}
+				
+				{!loadingHistory && filteredHistory.length > 0 && (
+					<div className="border-t border-gray-100 p-3">
+						<PaginationControls
+							page={currentPage}
+							totalPages={totalPages}
+							totalItems={filteredHistory.length}
+							pageSize={pageSize}
+							pageSizeOptions={[5, 10, 20]}
+							itemLabel="announcements"
+							onPageChange={setPage}
+							onPageSizeChange={(next) => {
+								setPageSize(next);
+								setPage(1);
+							}}
+						/>
+					</div>
+				)}
 			</div>
+			{/* Edit Modal */}
+			{editingAdvisory && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+					<div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+						<div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+							<h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+								<Edit2 className="text-teal-600" size={24} />
+								Edit Announcement
+							</h2>
+							<button onClick={() => setEditingAdvisory(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+								<X size={24} />
+							</button>
+						</div>
+						<div className="p-6 overflow-y-auto">
+							<form id="edit-advisory-form" onSubmit={(e) => void handleUpdateAdvisory(e)} className="space-y-6">
+								<div className="space-y-1.5">
+									<label className="text-sm font-bold text-gray-900">Announcement Title</label>
+									<input
+										type="text"
+										value={editTitle}
+										onChange={(event) => setEditTitle(event.target.value)}
+										required
+										className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-400 focus:bg-white transition-all"
+									/>
+								</div>
+
+								<div>
+									<label className="text-sm font-bold text-gray-900 mb-2 block">Target Audience</label>
+									<div className="flex flex-wrap gap-2">
+										{AUDIENCE_OPTIONS.map((option) => {
+											const checked = editTargetAudience.includes(option.value);
+											return (
+												<label
+													key={option.value}
+													className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold cursor-pointer transition-all ${
+														checked
+															? 'bg-teal-600 border-teal-700 text-white shadow-sm'
+															: 'bg-white border-gray-200 text-gray-600 hover:border-teal-300'
+													}`}
+												>
+													<input
+														type="checkbox"
+														className="sr-only"
+														checked={checked}
+														onChange={() => handleEditAudienceToggle(option.value)}
+													/>
+													{option.label}
+												</label>
+											);
+										})}
+									</div>
+								</div>
+
+								<div>
+									<label className="text-sm font-bold text-gray-900 mb-2 block">Severity Level</label>
+									<div className="flex flex-wrap gap-2">
+										{SEVERITY_OPTIONS.map((option) => (
+											<button
+												type="button"
+												key={option}
+												onClick={() => setEditSeverity(option)}
+												className={`px-3 py-2 rounded-lg border text-sm font-bold tracking-wide transition-all ${
+													editSeverity === option
+														? `${SEVERITY_BADGE_CLASS[option]} shadow-sm ring-2 ring-offset-1 ring-${option === 'CRITICAL' ? 'red' : option === 'WARNING' ? 'amber' : 'blue'}-500`
+														: 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+												}`}
+											>
+												{option}
+											</button>
+										))}
+									</div>
+								</div>
+
+								<div className="space-y-1.5 flex-1 flex flex-col">
+									<label className="text-sm font-bold text-gray-900">Message Content</label>
+									<textarea
+										value={editMessage}
+										onChange={(event) => setEditMessage(event.target.value)}
+										required
+										className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-3 text-sm resize-none min-h-[120px] focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-400 focus:bg-white transition-all"
+									/>
+								</div>
+							</form>
+						</div>
+						<div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+							<button
+								type="button"
+								onClick={() => setEditingAdvisory(null)}
+								className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 transition-colors text-sm"
+							>
+								Cancel
+							</button>
+							<button
+								type="submit"
+								form="edit-advisory-form"
+								disabled={savingEdit}
+								className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold shadow-md disabled:opacity-70 transition-all text-sm"
+							>
+								<Save size={18} />
+								{savingEdit ? 'Saving...' : 'Save Changes'}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Delete Confirmation Modal */}
+			{deletingAdvisory && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+					<div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
+						<div className="p-6 text-center space-y-4">
+							<div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-2">
+								<AlertTriangle size={32} />
+							</div>
+							<h3 className="text-lg font-bold text-gray-900">Delete Announcement</h3>
+							<p className="text-sm text-gray-500">
+								Are you sure you want to delete <span className="font-semibold text-gray-700">"{deletingAdvisory.title}"</span>? This action cannot be undone.
+							</p>
+						</div>
+						<div className="p-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+							<button
+								type="button"
+								onClick={() => setDeletingAdvisory(null)}
+								disabled={deleting}
+								className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 transition-colors text-sm"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => void handleDeleteAdvisory()}
+								disabled={deleting}
+								className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold shadow-md disabled:opacity-70 transition-all text-sm"
+							>
+								{deleting ? 'Deleting...' : 'Delete'}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

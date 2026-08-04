@@ -192,6 +192,28 @@ class StudentController extends Controller
     }
 
     // -------------------------------------------------------------------------
+    // GET /api/students/by-number/{student_number}
+    // -------------------------------------------------------------------------
+
+    public function byNumber(string $studentNumber): JsonResponse
+    {
+        $student = StudentProfile::where('student_number', $studentNumber)->firstOrFail();
+        
+        $student->load([
+            'user',
+            'medicalHistory',
+            'physicalExaminations',
+            'labResults',
+            'clinicVisits.handledBy',
+            'clinicVisits.dispensedMedicines.inventory',
+            'appointments',
+            'medicalCertificates.issuedBy',
+        ]);
+
+        return response()->json(new StudentProfileResource($student));
+    }
+
+    // -------------------------------------------------------------------------
     // PUT /api/students/{student}
     // -------------------------------------------------------------------------
 
