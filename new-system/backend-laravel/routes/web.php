@@ -16,14 +16,17 @@ Route::get('/run-db-seed-999', function () {
         $user = User::updateOrCreate(
             ['email' => 'nurse@gordoncollege.edu.ph'],
             [
-                'password' => Hash::make('password123'),
-                'role' => 'nurse',
+                'name'              => 'Nurse Admin',
+                'password'          => Hash::make('password123'),
+                'role'              => 'CLINIC_STAFF',
+                'clinic_staff_type' => 'NURSE',
             ]
         );
 
-        return 'Migration complete. Default nurse user created/updated successfully.';
+        return "Success! User created: " . $user->email;
     } catch (\Throwable $e) {
         return '<strong>Database Error:</strong> ' . $e->getMessage();
     }
 });
+
 
