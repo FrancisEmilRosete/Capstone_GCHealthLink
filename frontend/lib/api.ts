@@ -309,7 +309,8 @@ export const api = {
   post:  <T = unknown>(path: string, body: unknown, token?: string) => request<T>('POST',   path, body,      token),
   put:   <T = unknown>(path: string, body: unknown, token?: string) => request<T>('PUT',    path, body,      token),
   patch: <T = unknown>(path: string, body: unknown, token?: string) => request<T>('PATCH',  path, body,      token),
-  del:   <T = unknown>(path: string, token?: string)              => request<T>('DELETE', path, undefined, token),
+  del:    <T = unknown>(path: string, token?: string)              => request<T>('DELETE', path, undefined, token),
+  delete: <T = unknown>(path: string, token?: string)              => request<T>('DELETE', path, undefined, token),
   postForm: <T = unknown>(path: string, formData: FormData, token?: string) => requestForm<T>('POST', path, formData, token),
   getBlob: (path: string, token?: string) => requestBlob(path, token),
 };
