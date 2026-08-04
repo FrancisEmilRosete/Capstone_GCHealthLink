@@ -193,7 +193,7 @@ async function request<T = unknown>(
   method: string,
   path: string,
   body?: unknown,
-  token?: string,
+  token?: string | null,
 ): Promise<T> {
   const headers: HeadersInit = { 
     'Content-Type': 'application/json',
@@ -227,7 +227,7 @@ async function requestForm<T = unknown>(
   method: string,
   path: string,
   formData: FormData,
-  token?: string,
+  token?: string | null,
 ): Promise<T> {
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -275,7 +275,7 @@ function parseDownloadFileName(headerValue: string | null): string | null {
 
 async function requestBlob(
   path: string,
-  token?: string,
+  token?: string | null,
 ): Promise<{ blob: Blob; fileName: string | null }> {
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -305,12 +305,12 @@ async function requestBlob(
 // ── Public API object ───────────────────────────────────────────
 
 export const api = {
-  get:   <T = unknown>(path: string, token?: string)              => request<T>('GET',    path, undefined, token),
-  post:  <T = unknown>(path: string, body: unknown, token?: string) => request<T>('POST',   path, body,      token),
-  put:   <T = unknown>(path: string, body: unknown, token?: string) => request<T>('PUT',    path, body,      token),
-  patch: <T = unknown>(path: string, body: unknown, token?: string) => request<T>('PATCH',  path, body,      token),
-  del:    <T = unknown>(path: string, token?: string)              => request<T>('DELETE', path, undefined, token),
-  delete: <T = unknown>(path: string, token?: string)              => request<T>('DELETE', path, undefined, token),
-  postForm: <T = unknown>(path: string, formData: FormData, token?: string) => requestForm<T>('POST', path, formData, token),
-  getBlob: (path: string, token?: string) => requestBlob(path, token),
+  get:   <T = unknown>(path: string, token?: string | null)              => request<T>('GET',    path, undefined, token),
+  post:  <T = unknown>(path: string, body: unknown, token?: string | null) => request<T>('POST',   path, body,      token),
+  put:   <T = unknown>(path: string, body: unknown, token?: string | null) => request<T>('PUT',    path, body,      token),
+  patch: <T = unknown>(path: string, body: unknown, token?: string | null) => request<T>('PATCH',  path, body,      token),
+  del:    <T = unknown>(path: string, token?: string | null)              => request<T>('DELETE', path, undefined, token),
+  delete: <T = unknown>(path: string, token?: string | null)              => request<T>('DELETE', path, undefined, token),
+  postForm: <T = unknown>(path: string, formData: FormData, token?: string | null) => requestForm<T>('POST', path, formData, token),
+  getBlob: (path: string, token?: string | null) => requestBlob(path, token),
 };
