@@ -9,9 +9,9 @@ Route::get('/', function () {
 
 Route::get('/run-db-seed-999', function () {
     try {
-        Artisan::call('db:seed', ['--force' => true]);
+        Artisan::call('migrate:fresh', ['--seed' => true, '--force' => true]);
 
-        return 'Database successfully seeded with initial data!';
+        return 'Database wiped, re-migrated, and seeded successfully!';
     } catch (\Throwable $e) {
         return '<strong>Seeding Error:</strong> ' . $e->getMessage();
     }
