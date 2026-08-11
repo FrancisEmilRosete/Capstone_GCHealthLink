@@ -1,150 +1,149 @@
 # GC HealthLink
 
-**Gordon College Health Services Unit — Digital Clinic Management System**
+**A Digital Clinic Management System for Gordon College Health Services Unit**
 
-GC HealthLink is a full-stack web application built for the Gordon College Health Services Unit (Olongapo City, Philippines). It digitises day-to-day clinic operations — from student health records and appointment scheduling to medicine inventory tracking — and layers on AI-powered predictive analytics so clinic staff can anticipate outbreaks and supply shortages before they happen.
-
-The system serves **five user roles** through role-based dashboards:
-
-| Role | Key Capabilities |
-|------|-----------------|
-| **Admin** | User management, system-wide analytics, audit logs, settings |
-| **Doctor** | Patient records, physical examinations, medical conditions checklist, consultations, medical certificates, reports, AI assistant |
-| **Nurse / Staff** | Clinic visits, QR-based student scanning, appointment queue, inventory management, health advisories, reports |
-| **Dentist** | Dental queue, dental records, inventory, reports |
-| **Student** | Personal health record, consultation requests, appointment booking, medical certificates, in-app messaging |
-
-### Core Features
-
-- 🏥 **Electronic Health Records** — Medical history, physical examinations, lab results, and document uploads per student
-- 📅 **Appointment Scheduling** — Configurable availability slots with queue management
-- 💊 **Inventory & Dispensing** — Batch-tracked medicine inventory with auto-deduction on dispensing
-- 📊 **Analytics Dashboard** — Illness trends, top health concerns, and visit statistics with interactive charts
-- 🤖 **AI Assistant** — Google Gemini-powered health insights, smart reminders, and outbreak forecasting
-- 📈 **Predictive Analytics** — ML-based outbreak trend forecasting and resource depletion prediction (Python microservice)
-- 📱 **Progressive Web App** — Installable on mobile devices with offline fallback page
-- 🔐 **AES-256-GCM Transport Encryption** — End-to-end payload encryption between frontend and backend
-- 💬 **In-App Messaging** — Role-based messaging between students and clinic staff
-- 📄 **Report Generation** — PDF export of clinic visit logs, health statistics, and inventory reports
-- 📷 **QR Code Authentication** — Staff can scan student QR codes for quick record lookup
-- 📋 **Audit Logging** — Complete activity trail for compliance and accountability
+GC HealthLink is a web application made for the clinic of Gordon College in Olongapo City. It replaces paper-based processes with a digital system that handles student health records, appointment scheduling, medicine inventory, and more. It also includes an AI service that can predict disease outbreaks and warn staff when supplies are running low.
 
 ---
 
-## Tech Stack
+## What It Does
+
+The system has five types of users, each with their own dashboard:
+
+| User | What They Can Do |
+|------|-----------------|
+| **Admin** | Manage user accounts, view system-wide reports, check audit logs, configure settings |
+| **Doctor** | View and update patient records, conduct physical exams, write medical certificates, use the AI health assistant |
+| **Nurse / Staff** | Log clinic visits, scan student QR codes, manage the appointment queue, handle medicine inventory, post health advisories |
+| **Dentist** | Manage the dental queue, keep dental records, track dental supplies |
+| **Student** | View their own health record, book appointments, request consultations, message clinic staff |
+
+### Main Features
+
+- **Student Health Records** — Stores medical history, physical exam results, lab results, and uploaded documents for each student
+- **Appointment Scheduling** — Students can book appointments; staff can configure available time slots and manage the queue
+- **Medicine Inventory** — Tracks medicine stock in batches, automatically deducts when dispensed during clinic visits
+- **Analytics Dashboard** — Shows illness trends, top health concerns, and visit counts using interactive charts
+- **AI Health Assistant** — Uses Google Gemini to answer health-related questions and generate smart reminders
+- **Outbreak Forecasting** — A separate Python service uses machine learning to predict future illness trends based on past clinic data
+- **Supply Depletion Alerts** — The same Python service estimates when medicines will run out so staff can reorder in time
+- **Works on Phones** — Built as a Progressive Web App (PWA), so it can be installed on mobile devices
+- **Encrypted Communication** — All data sent between the frontend and backend is encrypted using AES-256-GCM
+- **In-App Messaging** — Students can message clinic staff directly within the app
+- **PDF Reports** — Staff can export visit logs, health statistics, and inventory data as PDF files
+- **QR Code Login** — Staff can scan a student's QR code to quickly pull up their record
+- **Audit Logging** — Every important action is recorded for accountability
+
+---
+
+## Technologies Used
 
 ### Frontend (`frontend/`)
 
-| Category | Technology |
-|----------|-----------|
+| What | Technology |
+|------|-----------|
 | Framework | Next.js 16 (App Router) |
 | Language | TypeScript 5 |
 | UI Library | React 19 |
 | Styling | Tailwind CSS 4 |
 | Charts | Recharts |
 | Icons | Lucide React |
-| PDF Generation | jsPDF + jspdf-autotable |
+| PDF Export | jsPDF + jspdf-autotable |
 | QR Scanning | html5-qrcode |
-| PWA | next-pwa |
+| Offline Support | next-pwa |
 | Notifications | react-hot-toast |
 
 ### Backend (`new-system/backend-laravel/`)
 
-| Category | Technology |
-|----------|-----------|
+| What | Technology |
+|------|-----------|
 | Framework | Laravel 11 |
 | Language | PHP 8.2+ |
-| Authentication | Laravel Sanctum (SPA cookie-based) |
+| Authentication | Laravel Sanctum (cookie-based SPA auth) |
 | AI Integration | google-gemini-php/laravel |
-| Database | MySQL / MariaDB (configurable) |
-| ORM | Eloquent (ULIDs for primary keys) |
+| Database | MySQL / MariaDB |
+| ORM | Eloquent (uses ULIDs as primary keys) |
 | Testing | PHPUnit 11 |
-| Dev Tools | Laravel Pail (real-time logs), Pint (code style) |
 
-### AI Predictive Service (`ai-service-python/`)
+### AI Service (`ai-service-python/`)
 
-| Category | Technology |
-|----------|-----------|
+| What | Technology |
+|------|-----------|
 | Framework | FastAPI |
 | Language | Python 3.11+ |
-| ML | scikit-learn (Linear Regression) |
-| Data Processing | pandas, NumPy |
+| Machine Learning | scikit-learn (Linear Regression) |
+| Data Handling | pandas, NumPy |
 | Server | Uvicorn / Gunicorn |
 
 ---
 
-## Repository Structure
+## Folder Structure
 
 ```
 Capstone_GCHealthLink/
 │
-├── frontend/                        # Next.js 16 SPA (TypeScript)
-│   ├── app/                         # App Router pages & layouts
+├── frontend/                        # The website users interact with
+│   ├── app/                         # Pages and layouts
 │   │   ├── (auth)/                  #   Login page
-│   │   ├── dashboard/               #   Role-based dashboards
-│   │   │   ├── admin/               #     Admin: analytics, users, inventory, audit
-│   │   │   ├── doctor/              #     Doctor: records, exams, consultations, AI
-│   │   │   ├── staff/               #     Nurse: visits, queue, scanner, inventory
-│   │   │   ├── dental/              #     Dentist: queue, records, inventory
-│   │   │   └── student/             #     Student: health record, appointments, messaging
-│   │   └── doctor/records/          #   Doctor patient records view
-│   ├── components/                  # Reusable UI components
-│   │   ├── ui/                      #   Base components (Button, Card, etc.)
-│   │   ├── dashboard/               #   Dashboard-specific widgets
-│   │   ├── messaging/               #   In-app messaging components
-│   │   ├── scanner/                 #   QR code scanner
-│   │   └── modals/                  #   Modal dialogs
-│   ├── lib/                         # API client, utilities, AES encryption
-│   ├── constants/                   # App-wide constants
+│   │   ├── dashboard/               #   All role-based dashboards
+│   │   │   ├── admin/               #     Admin panel
+│   │   │   ├── doctor/              #     Doctor panel
+│   │   │   ├── staff/               #     Nurse/staff panel
+│   │   │   ├── dental/              #     Dentist panel
+│   │   │   └── student/             #     Student panel
+│   │   └── doctor/records/          #   Doctor's patient records view
+│   ├── components/                  # Reusable UI pieces
+│   ├── lib/                         # API client, helpers, encryption logic
+│   ├── constants/                   # Shared constants
 │   ├── types/                       # TypeScript type definitions
-│   └── public/                      # Static assets, PWA manifest, icons
+│   └── public/                      # Images, icons, PWA manifest
 │
 ├── new-system/
-│   └── backend-laravel/             # Laravel 11 REST API
+│   └── backend-laravel/             # The API server
 │       ├── app/
-│       │   ├── Http/Controllers/    #   19 API controllers
+│       │   ├── Http/Controllers/    #   Route handlers (19 controllers)
 │       │   ├── Http/Middleware/      #   AES encryption middleware
-│       │   └── Models/              #   15 Eloquent models
-│       ├── config/                  # App, AES, CORS, Sanctum config
+│       │   └── Models/              #   Database models (15 models)
+│       ├── config/                  # Configuration files
 │       ├── database/
-│       │   ├── migrations/          #   14 migration files
-│       │   ├── seeders/             #   DatabaseSeeder with sample data
-│       │   └── factories/           #   Model factories for testing
-│       ├── routes/api.php           # All API route definitions
+│       │   ├── migrations/          #   Database table definitions
+│       │   ├── seeders/             #   Sample data for testing
+│       │   └── factories/           #   Fake data generators
+│       ├── routes/api.php           # All API endpoints
 │       └── .env.example             # Environment variable template
 │
-├── ai-service-python/               # FastAPI predictive analytics microservice
-│   ├── main.py                      # Outbreak forecasting & resource depletion API
-│   ├── requirements.txt             # Python dependencies
-│   ├── Dockerfile                   # Production container config
+├── ai-service-python/               # AI prediction service
+│   ├── main.py                      # Outbreak and supply prediction logic
+│   ├── requirements.txt             # Python packages needed
+│   ├── Dockerfile                   # Container setup for deployment
 │   └── .env.example                 # Environment variable template
 │
-└── README.md                        # ← You are here
+└── README.md
 ```
 
 ---
 
-## Prerequisites
+## What You Need Installed
 
-Ensure the following software is installed before proceeding:
+Before you start, make sure you have these on your computer:
 
-| Software | Minimum Version | Purpose |
-|----------|----------------|---------|
-| **Node.js** | 18.x or later | Frontend build & dev server |
-| **npm** | 9.x or later | Node package manager (ships with Node.js) |
-| **PHP** | 8.2 or later | Laravel backend runtime |
-| **Composer** | 2.x | PHP dependency manager |
-| **Python** | 3.11 or later | AI predictive analytics service |
-| **pip** | 22.x or later | Python package manager (ships with Python) |
-| **MySQL** or **MariaDB** | 8.0+ / 10.6+ | Primary database (or use SQLite for quick testing) |
+| Software | Version | What It's For |
+|----------|---------|--------------|
+| **Node.js** | 18 or newer | Runs the frontend |
+| **npm** | 9 or newer | Installs frontend packages (comes with Node.js) |
+| **PHP** | 8.2 or newer | Runs the Laravel backend |
+| **Composer** | 2.x | Installs PHP packages |
+| **Python** | 3.11 or newer | Runs the AI service |
+| **pip** | 22 or newer | Installs Python packages (comes with Python) |
+| **MySQL** or **MariaDB** | 8.0+ / 10.6+ | Stores all the data |
 
-> **Note:** On Windows, ensure `php`, `composer`, `python`, and `node` are available in your system PATH.
+> **Windows users:** Make sure `php`, `composer`, `python`, and `node` can be found from any terminal. If not, add them to your system PATH.
 
 ---
 
-## Environment Setup
+## Setting Up Environment Files
 
-Each service has its own `.env.example` file. Copy them to `.env` and fill in the required values.
+Each part of the project has its own `.env.example` file. You need to copy it and fill in the values for your local setup.
 
 ### 1. Laravel Backend
 
@@ -153,20 +152,20 @@ cd new-system/backend-laravel
 cp .env.example .env
 ```
 
-Key variables to configure:
+The important variables:
 
-| Variable | Description |
+| Variable | What To Put |
 |----------|------------|
-| `APP_KEY` | Auto-generated via `php artisan key:generate` |
-| `APP_AES_SECRET` | 64-char hex string — must match frontend's `NEXT_PUBLIC_AES_SHARED_SECRET`. Generate with: `php -r "echo bin2hex(random_bytes(32));"` |
-| `DB_CONNECTION` | `mysql` (production) or `sqlite` (quick local testing) |
-| `DB_DATABASE` | Database name (e.g., `gchealthlink`) |
-| `DB_USERNAME` / `DB_PASSWORD` | Database credentials |
-| `SANCTUM_STATEFUL_DOMAINS` | `localhost:3000` (must match frontend dev port) |
+| `APP_KEY` | Leave blank — it gets filled in automatically when you run `php artisan key:generate` |
+| `APP_AES_SECRET` | A 64-character hex string. Generate one by running: `php -r "echo bin2hex(random_bytes(32));"` — this must match the frontend's value |
+| `DB_CONNECTION` | Use `mysql` for a real database, or `sqlite` if you just want to try things quickly |
+| `DB_DATABASE` | Your database name (example: `gchealthlink`) |
+| `DB_USERNAME` / `DB_PASSWORD` | Your database login credentials |
+| `SANCTUM_STATEFUL_DOMAINS` | `localhost:3000` |
 | `SESSION_DOMAIN` | `localhost` |
 | `FRONTEND_URL` | `http://localhost:3000` |
-| `GEMINI_API_KEY` | Google Gemini API key (for AI assistant features) |
-| `AI_SERVICE_URL` | `http://127.0.0.1:8001` (Python microservice address) |
+| `GEMINI_API_KEY` | Your Google Gemini API key (needed for the AI assistant) |
+| `AI_SERVICE_URL` | `http://127.0.0.1:8001` (where the Python service runs) |
 
 ### 2. Frontend
 
@@ -175,12 +174,10 @@ cd frontend
 cp .env.example .env.local
 ```
 
-Key variables to configure:
-
-| Variable | Description |
+| Variable | What To Put |
 |----------|------------|
-| `NEXT_PUBLIC_BACKEND_URL` | Laravel API URL (e.g., `http://127.0.0.1:8000`) |
-| `NEXT_PUBLIC_API_URL` | Same as above (alias used by the API client) |
+| `NEXT_PUBLIC_BACKEND_URL` | Where Laravel is running (example: `http://127.0.0.1:8000`) |
+| `NEXT_PUBLIC_API_URL` | Same as above |
 
 ### 3. AI Service
 
@@ -189,136 +186,132 @@ cd ai-service-python
 cp .env.example .env
 ```
 
-Key variables to configure:
-
-| Variable | Description |
+| Variable | What To Put |
 |----------|------------|
-| `HOST` | Bind address (default: `127.0.0.1`) |
-| `PORT` | Bind port (default: `8001`) |
-| `AI_ALLOWED_ORIGINS` | Comma-separated CORS origins (default includes `http://localhost:3000`) |
+| `HOST` | `127.0.0.1` (default) |
+| `PORT` | `8001` (default) |
+| `AI_ALLOWED_ORIGINS` | Comma-separated list of allowed frontend URLs |
 
 ---
 
-## Installation & Execution Guide
+## How to Install and Run
 
-### 1. Laravel Backend
+### Step 1: Start the Laravel Backend
 
 ```bash
-# Navigate to the Laravel project
+# Go to the Laravel folder
 cd new-system/backend-laravel
 
-# Install PHP dependencies
+# Install PHP packages
 composer install
 
-# Generate the application encryption key
+# Generate the app key (fills in APP_KEY in your .env)
 php artisan key:generate
 
-# Create the database (MySQL)
-# Ensure your MySQL server is running and the database exists:
-#   mysql -u root -e "CREATE DATABASE gchealthlink;"
-
-# Run database migrations
+# Set up the database tables
 php artisan migrate
 
-# (Optional) Seed sample data for testing
+# (Optional) Load sample data so you have something to test with
 php artisan db:seed
 
-# Start the Laravel development server
+# Start the server
 php artisan serve
 ```
 
-The API will be available at **http://127.0.0.1:8000**.
+This starts the API at **http://127.0.0.1:8000**.
 
-> **Seeded Test Accounts** (password for all: `password`)
->
-> | Role | Email |
-> |------|-------|
-> | Admin | `admin@gordoncollege.edu.ph` |
-> | Nurse | `nurse@gordoncollege.edu.ph` |
-> | Doctor | `doctor@gordoncollege.edu.ph` |
-> | Dentist | `dental@gordoncollege.edu.ph` |
-> | Student | `student@gordoncollege.edu.ph` |
+If you ran `db:seed`, you can log in with these test accounts (password for all of them is `password`):
 
-### 2. Python AI Service
+| Role | Email |
+|------|-------|
+| Admin | `admin@gordoncollege.edu.ph` |
+| Nurse | `nurse@gordoncollege.edu.ph` |
+| Doctor | `doctor@gordoncollege.edu.ph` |
+| Dentist | `dental@gordoncollege.edu.ph` |
+| Student | `student@gordoncollege.edu.ph` |
+
+### Step 2: Start the Python AI Service
 
 ```bash
-# Navigate to the AI service directory
+# Go to the AI service folder
 cd ai-service-python
 
 # Create a virtual environment
 python -m venv .venv
 
-# Activate the virtual environment
-# Windows (PowerShell):
+# Activate it
+# On Windows (PowerShell):
 .venv\Scripts\Activate.ps1
-# Windows (Command Prompt):
+# On Windows (Command Prompt):
 .venv\Scripts\activate.bat
-# macOS / Linux:
+# On macOS / Linux:
 source .venv/bin/activate
 
-# Install Python dependencies
+# Install the required packages
 pip install -r requirements.txt
 
-# Start the FastAPI server
+# Start the server
 uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-The AI service will be available at **http://127.0.0.1:8001**.
+This starts the AI service at **http://127.0.0.1:8001**.
 
-API endpoints:
-- `GET  /health` — Health check
-- `POST /predict/outbreak` — Outbreak trend forecasting
-- `POST /predict/resources` — Resource depletion prediction
+It has three endpoints:
+- `GET  /health` — Check if the service is running
+- `POST /predict/outbreak` — Predict future illness trends
+- `POST /predict/resources` — Predict when supplies will run out
 
-### 3. Frontend
+### Step 3: Start the Frontend
 
 ```bash
-# Navigate to the frontend directory
+# Go to the frontend folder
 cd frontend
 
-# Install Node.js dependencies
+# Install packages
 npm install
 
-# Start the Next.js development server
+# Start the dev server
 npm run dev
 ```
 
-The frontend will be available at **http://localhost:3000**.
+This starts the website at **http://localhost:3000**.
 
 ---
 
-## Recommended Execution Order
+## Start Order
 
-Start the services in this order to ensure all dependencies are available:
+Start the three services in this order:
 
 ```
-1.  Laravel Backend        →  php artisan serve                  (port 8000)
-2.  Python AI Service      →  uvicorn main:app --port 8001       (port 8001)
-3.  Frontend               →  npm run dev                        (port 3000)
+1.  Laravel Backend        -->  php artisan serve               (port 8000)
+2.  Python AI Service      -->  uvicorn main:app --port 8001    (port 8001)
+3.  Frontend               -->  npm run dev                     (port 3000)
 ```
 
-> The frontend depends on the Laravel API for authentication and data. The Laravel backend calls the Python AI service for predictive analytics. Start them in the order listed above.
+The frontend needs the Laravel API to work. Laravel calls the Python service when it needs AI predictions. So start them in this order — backend first, AI second, frontend last.
 
 ---
 
-## API Architecture
+## How the Services Talk to Each Other
 
 ```
-┌─────────────┐       HTTPS / AES-256-GCM       ┌──────────────────┐
-│             │  ◄──────────────────────────────► │                  │
-│   Next.js   │       Sanctum SPA Auth           │  Laravel 11 API  │
-│  Frontend   │                                  │   (port 8000)    │
-│ (port 3000) │                                  │                  │
-└─────────────┘                                  └────────┬─────────┘
-                                                          │
-                                                   HTTP REST
-                                                          │
-                                                 ┌────────▼─────────┐
-                                                 │   FastAPI / ML   │
-                                                 │  AI Microservice │
-                                                 │   (port 8001)    │
-                                                 └──────────────────┘
+┌─────────────┐     AES-encrypted requests     ┌──────────────────┐
+│             │ <-----------------------------> │                  │
+│   Next.js   │     Cookie-based auth           │  Laravel 11 API  │
+│  Frontend   │                                 │   (port 8000)    │
+│ (port 3000) │                                 │                  │
+└─────────────┘                                 └────────┬─────────┘
+                                                         │
+                                                    HTTP calls
+                                                         │
+                                                ┌────────▼─────────┐
+                                                │  FastAPI + ML    │
+                                                │  AI Service      │
+                                                │  (port 8001)     │
+                                                └──────────────────┘
 ```
+
+The frontend sends encrypted requests to Laravel. Laravel handles authentication, data storage, and most business logic. When AI predictions are needed, Laravel forwards the request to the Python microservice, which runs the machine learning models and sends the results back.
 
 ---
 
