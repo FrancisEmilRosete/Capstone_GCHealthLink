@@ -46,6 +46,13 @@ class ClinicVisitController extends Controller
             $query->where('concern_tag', $concern);
         }
 
+        $user = $request->user();
+        if ($user && $user->isStudent()) {
+            $query->whereHas('studentProfile', function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            });
+        }
+
         if ($from = $request->query('from')) {
             $query->whereDate('visit_date', '>=', $from);
         }
@@ -110,9 +117,17 @@ class ClinicVisitController extends Controller
     // GET /api/visits/{visit}
     // -------------------------------------------------------------------------
 
-    public function show(ClinicVisit $visit): JsonResponse
+    public function show(Request $request, ClinicVisit $visit): JsonResponse
     {
+        $user = $request->user();
         $visit->load(['studentProfile', 'handledBy', 'dispensedMedicines.inventory']);
+        
+        if ($user && $user->isStudent()) {
+            if ($visit->studentProfile->user_id !== $user->id) {
+                return response()->json(['error' => 'Unauthorized.'], 403);
+            }
+        }
+        
         return response()->json(new ClinicVisitResource($visit));
     }
 
@@ -122,6 +137,10 @@ class ClinicVisitController extends Controller
 
     public function update(Request $request, ClinicVisit $visit): JsonResponse
     {
+        if (!$request->user()->isClinicStaff() && !$request->user()->isAdmin()) {
+            return response()->json(['error' => 'Unauthorized.'], 403);
+        }
+
         // Only the concern_tag and chief_complaint can be corrected after creation
         $data = $request->validate([
             'concern_tag'     => ['sometimes', 'string', 'max:100'],

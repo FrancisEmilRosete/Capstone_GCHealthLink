@@ -25,13 +25,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
+            'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
+        ]);
 
         // ---------------------------------------------------------------
         // ADDED: Register AES-256-GCM encryption as a global API middleware
         // It runs on every /api/* route, before controllers are reached.
         // ---------------------------------------------------------------
         $middleware->api(prepend: [
-            // \App\Http\Middleware\EncryptApiPayload::class,
+            \App\Http\Middleware\EncryptApiPayload::class,
         ]);
 
         // ---------------------------------------------------------------

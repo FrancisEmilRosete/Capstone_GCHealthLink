@@ -12,6 +12,7 @@
  * All methods throw an ApiError on non-2xx responses so callers
  * can catch and display the backend's error message.
  */
+import { encryptApiPayload, decryptApiPayload } from '@/lib/crypto';
 
 export const API_PREFIX = '/api';
 const API_BASE_CACHE_KEY = 'gchl_api_base';
@@ -197,27 +198,42 @@ async function request<T = unknown>(
 ): Promise<T> {
   const headers: HeadersInit = { 
     'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    'X-Encrypted-Request': 'true'
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let payloadBody = body !== undefined ? body : undefined;
+  if (payloadBody !== undefined && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+    try {
+      const encrypted = await encryptApiPayload(payloadBody);
+      payloadBody = { payload: encrypted };
+    } catch (err) {
+      console.error('Failed to encrypt payload', err);
+      throw new ApiError('Client error: Encryption failed', 400);
+    }
+  }
 
   const res = await fetchWithFallback(path, {
     method,
     headers,
     cache: 'no-store',
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: payloadBody !== undefined ? JSON.stringify(payloadBody) : undefined,
   }, { expectsJson: true });
 
   // Parse response body (backend always returns JSON)
-  let data: { message?: string } & Record<string, unknown>;
+  let data: any;
   try {
     data = await res.json();
+    if (data && typeof data.payload === 'string') {
+      data = await decryptApiPayload(data.payload);
+    }
   } catch {
     throw new ApiError('Unexpected server response.', res.status);
   }
 
   if (!res.ok) {
-    throw new ApiError(data?.message ?? (data as any)?.error ?? 'Something went wrong.', res.status, data);
+    throw new ApiError(data?.message ?? data?.error ?? 'Something went wrong.', res.status, data);
   }
 
   return data as T;
@@ -229,7 +245,9 @@ async function requestForm<T = unknown>(
   formData: FormData,
   token?: string | null,
 ): Promise<T> {
-  const headers: HeadersInit = {};
+  const headers: HeadersInit = {
+    'X-Encrypted-Request': 'true'
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetchWithFallback(path, {
@@ -239,15 +257,18 @@ async function requestForm<T = unknown>(
     body: formData,
   }, { expectsJson: true });
 
-  let data: { message?: string } & Record<string, unknown>;
+  let data: any;
   try {
     data = await res.json();
+    if (data && typeof data.payload === 'string') {
+      data = await decryptApiPayload(data.payload);
+    }
   } catch {
     throw new ApiError('Unexpected server response.', res.status);
   }
 
   if (!res.ok) {
-    throw new ApiError(data?.message ?? (data as any)?.error ?? 'Something went wrong.', res.status, data);
+    throw new ApiError(data?.message ?? data?.error ?? 'Something went wrong.', res.status, data);
   }
 
   return data as T;
@@ -277,7 +298,9 @@ async function requestBlob(
   path: string,
   token?: string | null,
 ): Promise<{ blob: Blob; fileName: string | null }> {
-  const headers: HeadersInit = {};
+  const headers: HeadersInit = {
+    'X-Encrypted-Request': 'true'
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetchWithFallback(path, {

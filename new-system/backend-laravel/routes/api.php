@@ -29,8 +29,8 @@ Route::get('/health', fn () => response()->json(['status' => 'ok']));
 // Public routes (authentication)
 // --------------------------------------------------------------------------
 Route::prefix('auth')->group(function (): void {
-    Route::post('/login',           [\App\Http\Controllers\AuthController::class, 'login']);
-    Route::post('/qr',              [\App\Http\Controllers\AuthController::class, 'loginQr']);
+    Route::post('/login',           [\App\Http\Controllers\AuthController::class, 'login'])->middleware('throttle:6,1');
+    Route::post('/qr',              [\App\Http\Controllers\AuthController::class, 'loginQr'])->middleware('throttle:6,1');
 });
 
 Route::post('students/registration/public', [\App\Http\Controllers\StudentRegistrationController::class, 'publicRegistration']);
@@ -72,7 +72,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     // Students
-    Route::post('students/registration', [\App\Http\Controllers\StudentRegistrationController::class, 'authenticatedRegistration']);
+    Route::post('students/registration', [\App\Http\Controllers\StudentRegistrationController::class, 'authenticatedRegistration'])->middleware('ability:*');
     Route::get('students/me', [\App\Http\Controllers\StudentController::class, 'me']);
     Route::get('students/qr', [\App\Http\Controllers\StudentController::class, 'qr']);
     Route::get('students/by-number/{student_number}', [\App\Http\Controllers\StudentController::class, 'byNumber']);
