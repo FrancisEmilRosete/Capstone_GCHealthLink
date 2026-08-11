@@ -61,7 +61,7 @@ class AdminAnalyticsController extends Controller
         $resourcePrediction = $this->createResourcePrediction($visits);
 
         // 7. Inventory Summary & Projected Stockouts
-        $inventoryItems = Inventory::select('id', 'item_name', 'current_stock', 'reorder_threshold', 'expiration_date', 'unit')->get();
+        $inventoryItems = Inventory::with('batches')->get();
         $inventorySummary = [
             'expired' => 0,
             'expiringSoon' => 0,
@@ -70,24 +70,29 @@ class AdminAnalyticsController extends Controller
         ];
         
         foreach ($inventoryItems as $item) {
-            if ($item->current_stock == 0) {
+            $totalStock = $item->total_stock;
+            if ($totalStock == 0) {
                 $inventorySummary['outOfStock']++;
             }
-            if ($item->current_stock <= $item->reorder_threshold) {
+            if ($totalStock <= $item->reorder_threshold) {
                 $inventorySummary['nearReorder']++;
             }
-            if ($item->expiration_date) {
-                $exp = Carbon::parse($item->expiration_date);
-                if ($exp->isPast()) {
-                    $inventorySummary['expired']++;
-                } elseif ($exp->copy()->subDays(30)->isPast()) {
-                    $inventorySummary['expiringSoon']++;
+            
+            $hasExpired = false;
+            $hasExpiringSoon = false;
+            foreach ($item->batches as $batch) {
+                if ($batch->isExpired()) {
+                    $hasExpired = true;
+                } elseif ($batch->isExpiringSoon(30)) {
+                    $hasExpiringSoon = true;
                 }
             }
+            if ($hasExpired) $inventorySummary['expired']++;
+            if ($hasExpiringSoon) $inventorySummary['expiringSoon']++;
         }
 
         // Forecast / Projected Stockouts
-        $dispensed = VisitMedicine::with('inventory:id,item_name,current_stock,unit')
+        $dispensed = VisitMedicine::with('inventory.batches')
             ->where('created_at', '>=', $thirtyDaysAgo)
             ->where('status', 'DISPENSED')
             ->get();
@@ -99,7 +104,7 @@ class AdminAnalyticsController extends Controller
                 $forecastMap[$d->inventory_id] = [
                     'id' => $d->inventory_id,
                     'name' => $d->inventory->item_name,
-                    'currentStock' => $d->inventory->current_stock,
+                    'currentStock' => $d->inventory->total_stock,
                     'unit' => $d->inventory->unit,
                     'totalUsed' => 0
                 ];

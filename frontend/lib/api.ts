@@ -217,7 +217,7 @@ async function request<T = unknown>(
   }
 
   if (!res.ok) {
-    throw new ApiError(data?.message ?? 'Something went wrong.', res.status, data);
+    throw new ApiError(data?.message ?? (data as any)?.error ?? 'Something went wrong.', res.status, data);
   }
 
   return data as T;
@@ -247,7 +247,7 @@ async function requestForm<T = unknown>(
   }
 
   if (!res.ok) {
-    throw new ApiError(data?.message ?? 'Something went wrong.', res.status, data);
+    throw new ApiError(data?.message ?? (data as any)?.error ?? 'Something went wrong.', res.status, data);
   }
 
   return data as T;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Download, Activity, Users, AlertTriangle, TrendingUp } from 'lucide-react';
 
 import { api, ApiError } from '@/lib/api';
@@ -229,36 +229,54 @@ export default function AdminDashboard() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [, startTransition] = useTransition();
 
-  async function loadAnalytics() {
+  async function loadAnalytics(showLoading = true) {
     const token = getToken();
     if (!token) {
       setError('You are not logged in. Please sign in again.');
-      setLoading(false);
+      if (showLoading) setLoading(false);
       return;
     }
 
     try {
+      if (showLoading) setLoading(true);
       setError('');
       const response = await api.get<AnalyticsResponse>('/admin/analytics', token);
       setData(response.data);
     } catch (err) {
+      // On silent reload, keep the old data visible instead of showing an error
+      if (!showLoading && data) return;
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
         setError('Failed to load admin analytics.');
       }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
+  // Poll for updates silently (no skeleton flash)
   useServerEvents(['queue', 'visits'], () => {
-    void loadAnalytics();
+    startTransition(() => { void loadAnalytics(false); });
   });
 
   useEffect(() => {
-    void loadAnalytics();
+    void loadAnalytics(true);
+
+    // Silent refresh on tab re-focus
+    function handleWindowFocus() { void loadAnalytics(false); }
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') void loadAnalytics(false);
+    }
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const departmentRows = useMemo(
@@ -308,7 +326,7 @@ export default function AdminDashboard() {
 
   const topConcern = topConcerns[0]?.tag || '-';
   const outbreakCount = Array.isArray(data?.outbreakWatch) ? data?.outbreakWatch.length : 0;
-  
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
@@ -327,11 +345,21 @@ export default function AdminDashboard() {
         }
       />
 
-      {error && (
+      {error && !data && (
         <ErrorAlert
           message={error}
           variant="error"
-          onRetry={() => void loadAnalytics()}
+          onRetry={() => void loadAnalytics(true)}
+        />
+      )}
+
+      {error && data && (
+        <ErrorAlert
+          message={error}
+          variant="warning"
+          title="Data may be outdated"
+          onRetry={() => void loadAnalytics(true)}
+          onDismiss={() => setError('')}
         />
       )}
 
