@@ -58,7 +58,7 @@ async function getDerivedKey(): Promise<CryptoKey> {
   derivedKeyPromise = (async () => {
     const baseKey = await crypto.subtle.importKey(
       'raw',
-      ikm,
+      ikm as any,
       { name: 'HKDF' },
       false,
       ['deriveKey']
@@ -67,8 +67,8 @@ async function getDerivedKey(): Promise<CryptoKey> {
     return await crypto.subtle.deriveKey(
       {
         name: 'HKDF',
-        salt: HKDF_SALT,
-        info: HKDF_INFO,
+        salt: HKDF_SALT as any,
+        info: HKDF_INFO as any,
         hash: 'SHA-256'
       },
       baseKey,
@@ -90,9 +90,9 @@ export async function encryptApiPayload(data: unknown): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
   
   const ciphertextBuffer = await crypto.subtle.encrypt(
-    { name: ALGO, iv },
+    { name: ALGO, iv: iv as any },
     key,
-    plaintext
+    plaintext as any
   );
   
   const combined = new Uint8Array(iv.length + ciphertextBuffer.byteLength);
@@ -117,9 +117,9 @@ export async function decryptApiPayload(blob: string): Promise<unknown> {
   const ciphertext = buffer.slice(IV_BYTES);
   
   const plaintextBuffer = await crypto.subtle.decrypt(
-    { name: ALGO, iv: new Uint8Array(iv) },
+    { name: ALGO, iv: (new Uint8Array(iv)) as any },
     key,
-    ciphertext
+    ciphertext as any
   );
   
   const plaintext = new TextDecoder().decode(plaintextBuffer);
