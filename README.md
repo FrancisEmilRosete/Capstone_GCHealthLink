@@ -53,7 +53,7 @@ The system has five types of users, each with their own dashboard:
 | Offline Support | next-pwa |
 | Notifications | react-hot-toast |
 
-### Backend (`new-system/backend-laravel/`)
+### Backend (`backend/`)
 
 | What | Technology |
 |------|-----------|
@@ -83,41 +83,9 @@ The system has five types of users, each with their own dashboard:
 Capstone_GCHealthLink/
 │
 ├── frontend/                        # The website users interact with
-│   ├── app/                         # Pages and layouts
-│   │   ├── (auth)/                  #   Login page
-│   │   ├── dashboard/               #   All role-based dashboards
-│   │   │   ├── admin/               #     Admin panel
-│   │   │   ├── doctor/              #     Doctor panel
-│   │   │   ├── staff/               #     Nurse/staff panel
-│   │   │   ├── dental/              #     Dentist panel
-│   │   │   └── student/             #     Student panel
-│   │   └── doctor/records/          #   Doctor's patient records view
-│   ├── components/                  # Reusable UI pieces
-│   ├── lib/                         # API client, helpers, encryption logic
-│   ├── constants/                   # Shared constants
-│   ├── types/                       # TypeScript type definitions
-│   └── public/                      # Images, icons, PWA manifest
-│
-├── new-system/
-│   └── backend-laravel/             # The API server
-│       ├── app/
-│       │   ├── Http/Controllers/    #   Route handlers (19 controllers)
-│       │   ├── Http/Middleware/      #   AES encryption middleware
-│       │   └── Models/              #   Database models (15 models)
-│       ├── config/                  # Configuration files
-│       ├── database/
-│       │   ├── migrations/          #   Database table definitions
-│       │   ├── seeders/             #   Sample data for testing
-│       │   └── factories/           #   Fake data generators
-│       ├── routes/api.php           # All API endpoints
-│       └── .env.example             # Environment variable template
-│
-├── ai-service-python/               # AI prediction service
-│   ├── main.py                      # Outbreak and supply prediction logic
-│   ├── requirements.txt             # Python packages needed
-│   ├── Dockerfile                   # Container setup for deployment
-│   └── .env.example                 # Environment variable template
-│
+├── backend/                         # The API server (Laravel)
+├── ai-service-python/               # AI prediction service (FastAPI)
+├── docker-compose.yml               # Orchestration file for deployment
 └── README.md
 ```
 
@@ -136,6 +104,7 @@ Before you start, make sure you have these on your computer:
 | **Python** | 3.11 or newer | Runs the AI service |
 | **pip** | 22 or newer | Installs Python packages (comes with Python) |
 | **MySQL** or **MariaDB** | 8.0+ / 10.6+ | Stores all the data |
+| **Docker** | Latest | Recommended: Easily deploy the whole system |
 
 > **Windows users:** Make sure `php`, `composer`, `python`, and `node` can be found from any terminal. If not, add them to your system PATH.
 
@@ -148,7 +117,7 @@ Each part of the project has its own `.env.example` file. You need to copy it an
 ### 1. Laravel Backend
 
 ```bash
-cd new-system/backend-laravel
+cd backend
 cp .env.example .env
 ```
 
@@ -178,6 +147,7 @@ cp .env.example .env.local
 |----------|------------|
 | `NEXT_PUBLIC_BACKEND_URL` | Where Laravel is running (example: `http://127.0.0.1:8000`) |
 | `NEXT_PUBLIC_API_URL` | Same as above |
+| `NEXT_PUBLIC_AES_SHARED_SECRET` | Ensure this exactly matches `APP_AES_SECRET` from the Laravel `.env` |
 
 ### 3. AI Service
 
@@ -196,11 +166,27 @@ cp .env.example .env
 
 ## How to Install and Run
 
-### Step 1: Start the Laravel Backend
+### Option A: Using Docker (Recommended for Deployment)
+
+With Docker installed, you can spin up the entire ecosystem (Database, Redis, Laravel API, Python Microservice, and Next.js Frontend) automatically.
+
+1. Ensure all your `.env` files are configured properly.
+2. From the root directory, run:
+```bash
+docker compose up -d --build
+```
+3. Once running, access the services at:
+   - Frontend: `http://localhost:3000`
+   - Backend API: `http://localhost:8000`
+   - AI Service: `http://localhost:8001`
+
+### Option B: Local Setup (For Development)
+
+#### Step 1: Start the Laravel Backend
 
 ```bash
 # Go to the Laravel folder
-cd new-system/backend-laravel
+cd backend
 
 # Install PHP packages
 composer install
@@ -230,7 +216,7 @@ If you ran `db:seed`, you can log in with these test accounts (password for all 
 | Dentist | `dental@gordoncollege.edu.ph` |
 | Student | `student@gordoncollege.edu.ph` |
 
-### Step 2: Start the Python AI Service
+#### Step 2: Start the Python AI Service
 
 ```bash
 # Go to the AI service folder
@@ -256,12 +242,7 @@ uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 
 This starts the AI service at **http://127.0.0.1:8001**.
 
-It has three endpoints:
-- `GET  /health` — Check if the service is running
-- `POST /predict/outbreak` — Predict future illness trends
-- `POST /predict/resources` — Predict when supplies will run out
-
-### Step 3: Start the Frontend
+#### Step 3: Start the Frontend
 
 ```bash
 # Go to the frontend folder
@@ -275,20 +256,6 @@ npm run dev
 ```
 
 This starts the website at **http://localhost:3000**.
-
----
-
-## Start Order
-
-Start the three services in this order:
-
-```
-1.  Laravel Backend        -->  php artisan serve               (port 8000)
-2.  Python AI Service      -->  uvicorn main:app --port 8001    (port 8001)
-3.  Frontend               -->  npm run dev                     (port 3000)
-```
-
-The frontend needs the Laravel API to work. Laravel calls the Python service when it needs AI predictions. So start them in this order — backend first, AI second, frontend last.
 
 ---
 

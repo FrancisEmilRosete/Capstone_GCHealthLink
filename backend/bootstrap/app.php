@@ -8,7 +8,7 @@
  * The sections marked ADDED below are the only changes needed for Phase 1.
  *
  * Run to scaffold the real file:
- *   composer create-project laravel/laravel backend-laravel "^11.0"
+ *   composer create-project laravel/laravel backend "^11.0"
  *
  * Then apply the ADDED lines from this file into the generated bootstrap/app.php.
  */

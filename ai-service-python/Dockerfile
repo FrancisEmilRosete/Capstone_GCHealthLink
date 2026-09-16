@@ -14,5 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose port and start FastAPI with uvicorn via gunicorn
-EXPOSE 10000
-CMD gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-10000} --workers 2
+EXPOSE 8001
+CMD gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8001} --workers 2

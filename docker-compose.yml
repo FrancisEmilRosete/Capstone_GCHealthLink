@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # Database Service
+  # ==========================================
+  mysql:
+    image: mysql:8.0
+    container_name: gchealthlink-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-gchealthlink}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_USER: ${DB_USERNAME:-gchealthlink_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - gchealthlink_net
+
+  # ==========================================
+  # Redis Service (optional but recommended)
+  # ==========================================
+  redis:
+    image: redis:alpine
+    container_name: gchealthlink-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - gchealthlink_net
+
+  # ==========================================
+  # Laravel Backend Service
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gchealthlink-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - DB_HOST=mysql
+      - REDIS_HOST=redis
+    volumes:
+      - ./backend:/var/www/html
+    networks:
+      - gchealthlink_net
+
+  # ==========================================
+  # Next.js Frontend Service
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gchealthlink-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - gchealthlink_net
+
+  # ==========================================
+  # Python AI Service
+  # ==========================================
+  ai-service:
+    build:
+      context: ./ai-service-python
+      dockerfile: Dockerfile
+    container_name: gchealthlink-ai
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./ai-service-python:/app
+    networks:
+      - gchealthlink_net
+
+networks:
+  gchealthlink_net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
