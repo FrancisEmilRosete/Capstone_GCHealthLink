@@ -208,9 +208,9 @@ async function request<T = unknown>(
     try {
       const encrypted = await encryptApiPayload(payloadBody);
       payloadBody = { payload: encrypted };
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to encrypt payload', err);
-      throw new ApiError('Client error: Encryption failed', 400);
+      throw new ApiError(`Client error: Encryption failed. Details: ${err?.message || err}`, 400);
     }
   }
 
