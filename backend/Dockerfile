@@ -1,9 +1,10 @@
 FROM php:8.2-cli
 
-# Install system packages and PHP MySQL extensions
+# Install system packages and PHP PostgreSQL extensions
 RUN apt-get update && apt-get install -y \
-    git zip unzip \
-    && docker-php-ext-install pdo pdo_mysql
+    git zip unzip libpq-dev \
+    && docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql \
+    && docker-php-ext-install pdo pdo_pgsql pgsql
 
 # Copy Composer from the official container
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
