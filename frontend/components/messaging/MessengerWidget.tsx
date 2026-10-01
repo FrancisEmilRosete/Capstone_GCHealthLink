@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getToken, getUserId } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { useUserPing } from '@/hooks/useUserPing';
 
 // ── Types ─────────────────────────────────────────────────────
 
