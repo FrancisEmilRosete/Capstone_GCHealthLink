@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Check, X, FileText, Calendar, Package } from 'lucide-react';
 import type { PendingCertificateRequest } from '@/components/dashboard/staff/CertificateApprovalTable';
 import { api, ApiError } from '@/lib/api';
-import { getToken } from '@/lib/auth';
+import { getToken, getUserId } from '@/lib/auth';
+import { useUserPing } from '@/hooks/useUserPing';
 import { formatTime12Hour } from '@/lib/time';
 
 type Level = 'critical' | 'warning' | 'info';
@@ -193,13 +194,14 @@ export default function StaffNotificationsBell() {
 
   useEffect(() => {
     void loadAlerts();
-
-    const interval = setInterval(() => {
-      void loadAlerts();
-    }, 60000);
-
-    return () => clearInterval(interval);
   }, []);
+
+  const userId = getUserId();
+  useUserPing(userId, (type) => {
+    if (type === 'advisory' || type === 'certificate') {
+      void loadAlerts();
+    }
+  });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

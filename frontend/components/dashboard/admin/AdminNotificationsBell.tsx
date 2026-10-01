@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Check, X, ShieldAlert, Activity, Package, AlertTriangle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import { getToken } from '@/lib/auth';
+import { getToken, getUserId } from '@/lib/auth';
+import { useUserPing } from '@/hooks/useUserPing';
 import { formatDateTime12Hour } from '@/lib/time';
 
 interface AdminAlert {
@@ -160,14 +161,14 @@ export default function AdminNotificationsBell() {
 
   useEffect(() => {
     void loadAlerts();
-
-    // Poll for notifications every 60 seconds
-    const interval = setInterval(() => {
-      void loadAlerts();
-    }, 60000);
-
-    return () => clearInterval(interval);
   }, []);
+
+  const userId = getUserId();
+  useUserPing(userId, (type) => {
+    if (type === 'advisory' || type === 'certificate') {
+      void loadAlerts();
+    }
+  });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

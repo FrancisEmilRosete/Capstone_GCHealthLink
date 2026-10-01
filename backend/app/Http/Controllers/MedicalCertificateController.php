@@ -8,6 +8,7 @@ use App\Http\Requests\Certificate\StoreCertificateRequest;
 use App\Http\Resources\MedicalCertificateResource;
 use App\Models\AuditLog;
 use App\Models\MedicalCertificate;
+use App\Events\UserPinged;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -42,6 +43,9 @@ class MedicalCertificateController extends Controller
             $cert->id,
             ['student_profile_id' => $cert->student_profile_id]
         );
+
+        // Notify the student that they received a new certificate
+        UserPinged::dispatch($cert->student_profile_id, 'certificate');
 
         return response()->json(
             new MedicalCertificateResource($cert->load(['studentProfile', 'issuedBy'])),

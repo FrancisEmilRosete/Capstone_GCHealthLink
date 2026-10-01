@@ -17,8 +17,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getToken } from '@/lib/auth';
+import { getToken, getUserId } from '@/lib/auth';
 import { api } from '@/lib/api';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -532,7 +533,8 @@ export default function MessengerWidget() {
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [loadingThread,   setLoadingThread]   = useState(false);
   const [sending,   setSending]   = useState(false);
-  const [unreadTotal, setUnreadTotal] = useState(0);
+  const userId = getUserId();
+  const { unreadCount: unreadTotal, setUnreadCount: setUnreadTotal } = useUnreadMessages(userId);
   const [error, setError] = useState<string | null>(null);
 
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -670,32 +672,13 @@ export default function MessengerWidget() {
 
   // ── Polling when thread is open ────────────────────────────
 
-  useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-
-    if (isOpen && view === 'thread' && activeContact) {
-      pollRef.current = setInterval(() => {
-        if (isOpenRef.current && activeRef.current) {
-          // Silent = true: no spinner, no flicker — just merge new data in background
-          void fetchThread(activeRef.current.id, true);
-        }
-      }, 5000);
+  useUserPing(userId, (type) => {
+    if (type === 'message' && isOpenRef.current && activeRef.current) {
+      void fetchThread(activeRef.current.id, true);
     }
+  });
 
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [isOpen, view, activeContact, fetchThread]);
-
-  // ── Unread count polling (always active when logged in) ────
-
-  useEffect(() => {
-    if (!token) return;
-    void fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [token, fetchUnreadCount]);
-
+  // ── Unread count polling replaced by WebSockets ──────────────
   // ── Don't render for unauthenticated or admin users ────────
 
   if (!token) return null;
