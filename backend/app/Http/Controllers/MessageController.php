@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Message;
 use App\Models\User;
+use App\Events\UnreadCountUpdated;
+use App\Events\UserPinged;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -217,6 +219,10 @@ class MessageController extends Controller
             'recipient_id' => $recipient->id,
             'body'         => $validated['body'],
         ]);
+
+        $newUnreadCount = Message::where('recipient_id', $recipient->id)->where('is_read', false)->count();
+        UnreadCountUpdated::dispatch($recipient->id, $newUnreadCount);
+        UserPinged::dispatch($recipient->id, 'message');
 
         return response()->json([
             'success' => true,

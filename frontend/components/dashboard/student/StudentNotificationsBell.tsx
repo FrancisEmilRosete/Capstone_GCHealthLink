@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Check, X, FileText, Download } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import { getToken } from '@/lib/auth';
+import { getToken, getUserId } from '@/lib/auth';
+import { useUserPing } from '@/hooks/useUserPing';
 import { printCertificate, type PrintableCertificate } from '@/lib/printCertificate';
 
 interface AdvisoryItem {
@@ -142,14 +143,14 @@ export default function StudentNotificationsBell() {
 
   useEffect(() => {
     void loadNotifications();
-
-    // Poll for notifications every 60 seconds
-    const interval = setInterval(() => {
-      void loadNotifications();
-    }, 60000);
-
-    return () => clearInterval(interval);
   }, []);
+
+  const userId = getUserId();
+  useUserPing(userId, (type) => {
+    if (type === 'certificate' || type === 'advisory') {
+      void loadNotifications();
+    }
+  });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
