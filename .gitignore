@@ -142,4 +142,4 @@ logs/
 *.pid
 *.seed
 *.pid.lock
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.jsonbackend/database/database.sqlite
