@@ -265,16 +265,13 @@ export default function AdminDashboard() {
   useEffect(() => {
     void loadAnalytics(true);
 
-    // Silent refresh on tab re-focus
-    function handleWindowFocus() { void loadAnalytics(false); }
+    // Silent refresh on tab visibility change
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') void loadAnalytics(false);
     }
 
-    window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);

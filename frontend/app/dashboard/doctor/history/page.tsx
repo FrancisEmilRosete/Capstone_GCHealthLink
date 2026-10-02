@@ -626,12 +626,10 @@ export default function DoctorHistoryPage() {
   }, []);
 
   useEffect(() => {
-    function handleWindowFocus() { void loadLogs(); }
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') void loadLogs();
     }
 
-    window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const intervalId = window.setInterval(() => {
@@ -639,7 +637,6 @@ export default function DoctorHistoryPage() {
     }, 10000);
 
     return () => {
-      window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.clearInterval(intervalId);
     };

@@ -3,7 +3,7 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
 // Setup Reverb connection once
-if (typeof window !== 'undefined' && !(window as any).Echo) {
+if (typeof window !== 'undefined' && !(window as any).Echo && process.env.NEXT_PUBLIC_REVERB_APP_KEY) {
   (window as any).Pusher = Pusher;
   (window as any).Echo = new Echo({
     broadcaster: 'reverb',
@@ -20,7 +20,7 @@ export function useUnreadMessages(userId: number | string | null | undefined) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !(window as any).Echo) return;
 
     // Listen to the private user channel
     const channel = (window as any).Echo.private(`App.Models.User.${userId}`);

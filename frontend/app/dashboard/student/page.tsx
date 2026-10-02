@@ -344,15 +344,12 @@ export default function StudentDashboard() {
     void loadStudentData(true);
 
     // Silent refresh on tab re-focus
-    function handleWindowFocus() { void loadStudentData(false); }
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') void loadStudentData(false);
     }
 
-    window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);

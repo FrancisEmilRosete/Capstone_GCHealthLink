@@ -159,21 +159,15 @@ export default function StaffCommandCenterPage() {
   }, []);
 
   useEffect(() => {
-    function handleWindowFocus() {
-      void loadQueue(false);
-    }
-
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') {
         void loadQueue(false);
       }
     }
 
-    window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);

@@ -80,7 +80,6 @@ export default function QrHidScanner({
         value={scanValue}
         onChange={(event) => setScanValue(event.target.value)}
         onKeyDown={handleKeyDown}
-        autoFocus
         disabled={!active}
         className="absolute inset-0 opacity-0"
         aria-label="QR scanner input"
