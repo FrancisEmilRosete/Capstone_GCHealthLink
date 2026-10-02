@@ -77,8 +77,6 @@ export default function AiOutbreakForecastClient() {
   const [generatedAt, setGeneratedAt] = useState('');
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
     async function fetchForecast() {
       const token = getToken();
       if (!token) {
@@ -103,18 +101,12 @@ export default function AiOutbreakForecastClient() {
         } else {
           setError('Failed to load AI outbreak forecast.');
         }
-
-        // Graceful retry mechanism
-        if (isServiceUnavailable) {
-          timeoutId = setTimeout(fetchForecast, 5000);
-        }
       } finally {
         setLoading(false);
       }
     }
 
     void fetchForecast();
-    return () => clearTimeout(timeoutId);
   }, []);
 
   const chartData = useMemo(() => mapAiForecastToChartData(forecastRows), [forecastRows]);

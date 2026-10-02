@@ -238,8 +238,6 @@ export default function ConsultationRequestPage() {
   }
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    
     async function fetchAvailability(showLoader = true) {
       const token = getToken();
       if (!token) return;
@@ -258,13 +256,6 @@ export default function ConsultationRequestPage() {
     }
     
     fetchAvailability(true);
-    
-    // Poll every 15 seconds to sync availability
-    interval = setInterval(() => {
-      fetchAvailability(false);
-    }, 15000);
-
-    return () => clearInterval(interval);
   }, [currentMonth, currentYear, serviceType]);
 
   useEffect(() => {

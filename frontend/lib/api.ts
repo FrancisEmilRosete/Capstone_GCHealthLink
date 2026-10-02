@@ -74,31 +74,29 @@ export const API_BASE = configuredApiBase || cachedApiBase || defaultDevBases[0]
 let preferredApiBase = API_BASE;
 
 function orderedCandidateBases(): string[] {
-  if (configuredApiBase) {
-    if (process.env.NODE_ENV === 'production') {
-      return [configuredApiBase];
-    }
+  // If explicitly configured, trust it completely. No fallback loops.
+  if (configuredApiBase && !ENABLE_DEV_PORT_DISCOVERY) {
+    return [configuredApiBase];
+  }
 
+  // If explicitly requested dev discovery, include the default ports
+  if (ENABLE_DEV_PORT_DISCOVERY) {
     const latestCachedBase = readCachedApiBase();
-
-    if (!ENABLE_DEV_PORT_DISCOVERY) {
-      return uniqueBases([configuredApiBase, latestCachedBase]);
-    }
-
-    return uniqueBases([configuredApiBase, latestCachedBase, ...defaultDevBases]);
+    return uniqueBases([
+      configuredApiBase, 
+      preferredApiBase, 
+      latestCachedBase, 
+      ...defaultDevBases
+    ].filter(Boolean));
   }
 
   if (process.env.NODE_ENV === 'production') {
     return [''];
   }
 
+  // Final fallback for local dev without explicit config
   const latestCachedBase = readCachedApiBase();
-
-  if (!ENABLE_DEV_PORT_DISCOVERY) {
-    return uniqueBases([preferredApiBase, latestCachedBase, defaultDevBases[0] || ''].filter(Boolean));
-  }
-
-  return uniqueBases([preferredApiBase, latestCachedBase, ...defaultDevBases]);
+  return uniqueBases([preferredApiBase, latestCachedBase, defaultDevBases[0] || ''].filter(Boolean));
 }
 
 function rememberWorkingBase(base: string): void {
@@ -157,7 +155,12 @@ async function fetchWithFallback(
       const res = await fetchWithTimeout(buildApiUrl(base, path), init, timeoutMs);
 
       if (expectsJson && !hasJsonContentType(res)) {
-        lastError = new Error(`Received non-JSON response from ${base}.`);
+        lastError = new Error(`Received non-JSON response from ${base} (Status: ${res.status}).`);
+        // If we actually connected and got a response (even HTML 500 error), 
+        // DO NOT keep trying other random ports. The server is there, it's just throwing an error.
+        if (res.status >= 400) {
+          throw lastError;
+        }
         continue;
       }
 

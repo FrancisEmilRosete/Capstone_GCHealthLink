@@ -537,8 +537,6 @@ export default function MessengerWidget() {
   const userId = getUserId();
   const { unreadCount: unreadTotal, setUnreadCount: setUnreadTotal } = useUnreadMessages(userId);
   const [error, setError] = useState<string | null>(null);
-
-  const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const isOpenRef  = useRef(isOpen);
   const activeRef  = useRef(activeContact);
 
@@ -650,7 +648,6 @@ export default function MessengerWidget() {
     setView('contacts');
     setActiveContact(null);
     setMessages([]);
-    if (pollRef.current) clearInterval(pollRef.current);
   }, []);
 
   // ── Toggle open/close ──────────────────────────────────────
@@ -663,11 +660,6 @@ export default function MessengerWidget() {
     if (opening) {
       await fetchContacts();
     } else {
-      // Clear polling when closing
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
     }
   }, [isOpen, fetchContacts]);
 

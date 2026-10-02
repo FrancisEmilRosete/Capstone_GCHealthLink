@@ -108,12 +108,13 @@ export default function DentalDashboardPage() {
     void loadQueue(true);
     void loadInventory();
 
-    const interval = setInterval(() => {
+    function handleVisibilityChange() {
       if (document.visibilityState === 'visible') void loadQueue(false);
-    }, 30_000);
-
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
     return () => {
-      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
