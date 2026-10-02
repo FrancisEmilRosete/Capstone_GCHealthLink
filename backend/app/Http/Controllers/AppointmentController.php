@@ -9,6 +9,7 @@ use App\Http\Requests\Appointment\UpdateAppointmentStatusRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\AuditLog;
+use App\Events\QueueUpdated;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -77,6 +78,8 @@ class AppointmentController extends Controller
             $appointment->id
         );
 
+        QueueUpdated::dispatch();
+
         return response()->json([
             'success' => true,
             'message' => 'Appointment created successfully.',
@@ -120,6 +123,8 @@ class AppointmentController extends Controller
             $appointment->id
         );
 
+        QueueUpdated::dispatch();
+
         return response()->json([
             'success' => true,
             'message' => 'Appointment status updated.',
@@ -146,6 +151,8 @@ class AppointmentController extends Controller
 
         AuditLog::record('APPOINTMENT_CANCEL', 'Appointment cancelled.', $appointment->id);
         $appointment->update(['status' => Appointment::STATUS_CANCELLED]);
+
+        QueueUpdated::dispatch();
 
         return response()->json(['message' => 'Appointment cancelled.']);
     }

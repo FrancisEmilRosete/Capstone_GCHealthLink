@@ -632,13 +632,8 @@ export default function DoctorHistoryPage() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void loadLogs();
-    }, 10000);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.clearInterval(intervalId);
     };
   }, []);
 

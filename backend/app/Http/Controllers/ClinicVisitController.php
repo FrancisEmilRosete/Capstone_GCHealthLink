@@ -14,6 +14,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use App\Events\QueueUpdated;
+use App\Events\VisitsUpdated;
 
 /**
  * ClinicVisitController
@@ -110,6 +112,9 @@ class ClinicVisitController extends Controller
             $visit->id
         );
 
+        QueueUpdated::dispatch();
+        VisitsUpdated::dispatch();
+
         return response()->json(new ClinicVisitResource($visit), 201);
     }
 
@@ -156,6 +161,9 @@ class ClinicVisitController extends Controller
 
         AuditLog::record('VISIT_UPDATE', 'Visit record updated.', $visit->id);
 
+        QueueUpdated::dispatch();
+        VisitsUpdated::dispatch();
+
         return response()->json(new ClinicVisitResource($visit->fresh()));
     }
 
@@ -171,6 +179,9 @@ class ClinicVisitController extends Controller
 
         AuditLog::record('VISIT_DELETE', 'Visit record deleted.', $visit->id);
         $visit->delete();
+
+        QueueUpdated::dispatch();
+        VisitsUpdated::dispatch();
 
         return response()->json(['message' => 'Visit deleted.']);
     }

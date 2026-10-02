@@ -13,6 +13,22 @@
 import { useEffect, useRef } from 'react';
 import { getToken } from '@/lib/auth';
 import { API_PREFIX } from '@/lib/api';
+import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
+
+// Setup Reverb connection once
+if (typeof window !== 'undefined' && !(window as any).Echo && process.env.NEXT_PUBLIC_REVERB_APP_KEY) {
+  (window as any).Pusher = Pusher;
+  (window as any).Echo = new Echo({
+    broadcaster: 'reverb',
+    key: process.env.NEXT_PUBLIC_REVERB_APP_KEY,
+    wsHost: process.env.NEXT_PUBLIC_REVERB_HOST,
+    wsPort: process.env.NEXT_PUBLIC_REVERB_PORT ? Number(process.env.NEXT_PUBLIC_REVERB_PORT) : 8080,
+    wssPort: process.env.NEXT_PUBLIC_REVERB_PORT ? Number(process.env.NEXT_PUBLIC_REVERB_PORT) : 8080,
+    forceTLS: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https',
+    enabledTransports: ['ws', 'wss'],
+  });
+}
 
 type SseCallback = (topic: string, data: unknown) => void;
 
@@ -39,19 +55,24 @@ export function useServerEvents(
   const topicsKey = topics.slice().sort().join(',');
 
   useEffect(() => {
-    const token = getToken();
-    if (!token || typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !(window as any).Echo) return;
+    const echo = (window as any).Echo;
 
-    // Use robust polling instead of SSE (EventSource) since backend is standard PHP-FPM
-    const intervalId = setInterval(() => {
-      for (const topic of topics) {
-        callbackRef.current(topic, {});
-      }
-    }, 10000); // Poll every 10 seconds
+    if (topics.includes('queue')) {
+      echo.channel('clinic.queue').listen('.QueueUpdated', (e: any) => {
+        callbackRef.current('queue', e);
+      });
+    }
+
+    if (topics.includes('visits')) {
+      echo.channel('clinic.visits').listen('.VisitsUpdated', (e: any) => {
+        callbackRef.current('visits', e);
+      });
+    }
 
     return () => {
-      clearInterval(intervalId);
+      // We don't strictly echo.leave() here to avoid breaking other components 
+      // listening to the same public channels, but we could if we tracked instances.
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicsKey]);
 }
