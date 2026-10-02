@@ -3,7 +3,7 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
 // Setup Reverb connection once
-if (typeof window !== 'undefined' && !(window as any).Echo) {
+if (typeof window !== 'undefined' && !(window as any).Echo && process.env.NEXT_PUBLIC_REVERB_APP_KEY) {
   (window as any).Pusher = Pusher;
   (window as any).Echo = new Echo({
     broadcaster: 'reverb',
@@ -18,7 +18,7 @@ if (typeof window !== 'undefined' && !(window as any).Echo) {
 
 export function useUserPing(userId: number | string | null | undefined, callback: (type: string) => void) {
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !(window as any).Echo) return;
 
     // Listen to the private user channel
     const channel = (window as any).Echo.private(`App.Models.User.${userId}`);
