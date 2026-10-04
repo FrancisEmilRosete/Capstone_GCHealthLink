@@ -27,7 +27,7 @@ if (typeof window !== 'undefined' && !(window as any).Echo && process.env.NEXT_P
     wssPort: process.env.NEXT_PUBLIC_REVERB_PORT ? Number(process.env.NEXT_PUBLIC_REVERB_PORT) : 8080,
     forceTLS: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https',
     enabledTransports: ['ws', 'wss'],
-    authEndpoint: `${window.localStorage.getItem('gchl_api_base')?.replace(/\/+$/, '') || 'http://127.0.0.1:8000'}/api/broadcasting/auth`,
+    authEndpoint: `${window.localStorage.getItem('gchl_api_base')?.replace(/\/+$/, '') || `http://${typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1'}:8000`}/api/broadcasting/auth`,
     auth: {
       headers: {
         Authorization: 'Bearer cookie-auth',

@@ -35,17 +35,22 @@ function stripApiPrefix(base: string): string {
     : base;
 }
 
-const defaultDevBases = Array.from(
-  { length: 11 },
-  (_, index) => {
-    const port = 5000 + index;
+const defaultDevBases = Array.from({ length: 11 }, (_, index) => 5000 + index).flatMap(port => {
+  if (typeof window !== 'undefined' && window.location.hostname === '127.0.0.1') {
     return [`http://127.0.0.1:${port}`, `http://localhost:${port}`];
-  },
-).flat();
+  }
+  return [`http://localhost:${port}`, `http://127.0.0.1:${port}`];
+});
 
 function readCachedApiBase(): string {
   if (typeof window === 'undefined') return '';
-  return normalizeBaseUrl(window.localStorage.getItem(API_BASE_CACHE_KEY) || '');
+  const cached = normalizeBaseUrl(window.localStorage.getItem(API_BASE_CACHE_KEY) || '');
+  if (cached && !cached.includes(window.location.hostname)) {
+    // Invalidate cache if it crossed origins (e.g. 127.0.0.1 vs localhost) to prevent cookie drop
+    window.localStorage.removeItem(API_BASE_CACHE_KEY);
+    return '';
+  }
+  return cached;
 }
 
 function writeCachedApiBase(base: string): void {
