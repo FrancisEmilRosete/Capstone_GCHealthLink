@@ -73,7 +73,9 @@ function isTokenExpired(token: string): boolean {
 }
 
 export function getToken(): string | null {
-  return null;
+  // Since we migrated to HttpOnly cookies, we don't have the real token here.
+  // Return a dummy string if logged in so frontend guards and api clients don't fail.
+  return isLoggedIn() ? 'cookie-auth' : null;
 }
 
 export function getUserRole(): string | null {
