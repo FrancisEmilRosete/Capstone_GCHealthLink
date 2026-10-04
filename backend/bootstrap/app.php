@@ -33,9 +33,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // ---------------------------------------------------------------
         // ADDED: Register AES-256-GCM encryption as a global API middleware
         // It runs on every /api/* route, before controllers are reached.
+        // Also register CookieToBearerToken to parse auth_token cookies.
         // ---------------------------------------------------------------
         $middleware->api(prepend: [
             \App\Http\Middleware\EncryptApiPayload::class,
+            \App\Http\Middleware\CookieToBearerToken::class,
         ]);
 
         // ---------------------------------------------------------------

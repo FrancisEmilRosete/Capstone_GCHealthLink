@@ -48,19 +48,31 @@ class AuthController extends Controller
         // Revoke previous tokens for this device (optional — comment out for multi-device)
         $user->tokens()->where('name', 'web-spa')->delete();
 
-        $token = $user->createToken('web-spa', ['*'], now()->addHours(8));
+        $remember = $request->boolean('remember');
+        $expirationMinutes = $remember ? (30 * 24 * 60) : (2 * 60);
+
+        $token = $user->createToken('web-spa', ['*'], now()->addMinutes($expirationMinutes));
 
         AuditLog::record('LOGIN_SUCCESS', 'User logged in.', $user->id);
+
+        $cookie = cookie(
+            'auth_token',
+            $token->plainTextToken,
+            $expirationMinutes,
+            '/',
+            null,
+            config('session.secure'),
+            true, // HttpOnly
+            false,
+            'Lax' // SameSite
+        );
 
         return response()->json([
             'success'      => true,
             'message'      => 'Login successful.',
             'user'         => new UserResource($user->load('studentProfile')),
-            'token'        => $token->plainTextToken,
-            'access_token' => $token->plainTextToken,
-            'token_type'   => 'Bearer',
             'expires_at'   => $token->accessToken->expires_at?->toISOString(),
-        ]);
+        ])->withCookie($cookie);
     }
 
     // -------------------------------------------------------------------------
@@ -70,11 +82,14 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         // Delete only the current token used to make this request
-        $request->user()->currentAccessToken()->delete();
+        if ($request->user()) {
+            $request->user()->currentAccessToken()->delete();
+            AuditLog::record('LOGOUT', 'User logged out.', $request->user()->id);
+        }
 
-        AuditLog::record('LOGOUT', 'User logged out.', $request->user()->id);
+        $cookie = cookie()->forget('auth_token');
 
-        return response()->json(['message' => 'Logged out successfully.']);
+        return response()->json(['message' => 'Logged out successfully.'])->withCookie($cookie);
     }
 
     // -------------------------------------------------------------------------

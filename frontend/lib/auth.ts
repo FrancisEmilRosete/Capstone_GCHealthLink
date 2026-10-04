@@ -16,30 +16,17 @@ function readSessionValue(key: string): string | null {
   const fromSession = window.sessionStorage.getItem(key);
   if (fromSession) return fromSession;
 
-  // Backward-compatible fallback for older logins saved in localStorage.
-  const fromLocal = window.localStorage.getItem(key);
-  if (fromLocal) {
-    window.sessionStorage.setItem(key, fromLocal);
-    return fromLocal;
-  }
-
   return null;
 }
 
-function writeSessionValue(key: string, value: string, rememberMe: boolean = false): void {
+function writeSessionValue(key: string, value: string): void {
   if (typeof window === 'undefined') return;
   window.sessionStorage.setItem(key, value);
-  if (rememberMe) {
-    window.localStorage.setItem(key, value);
-  } else {
-    window.localStorage.removeItem(key);
-  }
 }
 
 function clearSessionValue(key: string): void {
   if (typeof window === 'undefined') return;
   window.sessionStorage.removeItem(key);
-  window.localStorage.removeItem(key);
 }
 
 export interface AuthUser {
@@ -86,17 +73,7 @@ function isTokenExpired(token: string): boolean {
 }
 
 export function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  const token = readSessionValue(TOKEN_KEY);
-  if (!token) return null;
-
-  if (isTokenExpired(token)) {
-    clearSession();
-    return null;
-  }
-
-  return token;
+  return null;
 }
 
 export function getUserRole(): string | null {
@@ -109,10 +86,9 @@ export function getUserId(): string | null {
   return readSessionValue(USER_ID_KEY);
 }
 
-function saveSession(token: string, user: AuthUser, rememberMe: boolean = false): void {
-  writeSessionValue(TOKEN_KEY, token, rememberMe);
-  writeSessionValue(ROLE_KEY, user.role, rememberMe);
-  writeSessionValue(USER_ID_KEY, user.id, rememberMe);
+function saveSession(user: AuthUser): void {
+  writeSessionValue(ROLE_KEY, user.role);
+  writeSessionValue(USER_ID_KEY, user.id);
 }
 
 /**
@@ -127,7 +103,6 @@ export function setUserRole(role: string): void {
 }
 
 function clearSession(): void {
-  clearSessionValue(TOKEN_KEY);
   clearSessionValue(ROLE_KEY);
   clearSessionValue(USER_ID_KEY);
 
@@ -137,21 +112,22 @@ function clearSession(): void {
     window.sessionStorage.removeItem('gchl_user');
     window.localStorage.removeItem('gchl_token');
     window.localStorage.removeItem('gchl_user');
+    window.localStorage.removeItem(TOKEN_KEY);
   }
 }
 
 export async function authLogin(credentials: {
   email: string;
   password: string;
-}, rememberMe: boolean = false): Promise<{ token: string; user: AuthUser }> {
-  const data = await api.post<LoginResponse>('/auth/login', credentials);
+}, rememberMe: boolean = false): Promise<{ user: AuthUser }> {
+  const data = await api.post<LoginResponse>('/auth/login', { ...credentials, remember: rememberMe });
 
-  if (!data.success || !data.token || !data.user?.id || !data.user?.role) {
+  if (!data.success || !data.user?.id || !data.user?.role) {
     throw new Error('Invalid login response from server.');
   }
 
-  saveSession(data.token, data.user, rememberMe);
-  return { token: data.token, user: data.user };
+  saveSession(data.user);
+  return { user: data.user };
 }
 
 export function authLogout(): void {
@@ -159,7 +135,7 @@ export function authLogout(): void {
 }
 
 export function isLoggedIn(): boolean {
-  return !!getToken();
+  return !!getUserRole();
 }
 
 function normalizeRole(role: string | null): BackendUserRole | null {

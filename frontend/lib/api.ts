@@ -220,6 +220,7 @@ async function request<T = unknown>(
   const res = await fetchWithFallback(path, {
     method,
     headers,
+    credentials: 'include',
     cache: 'no-store',
     body: payloadBody !== undefined ? JSON.stringify(payloadBody) : undefined,
   }, { expectsJson: true });
@@ -256,6 +257,7 @@ async function requestForm<T = unknown>(
   const res = await fetchWithFallback(path, {
     method,
     headers,
+    credentials: 'include',
     cache: 'no-store',
     body: formData,
   }, { expectsJson: true });
@@ -309,6 +311,7 @@ async function requestBlob(
   const res = await fetchWithFallback(path, {
     method: 'GET',
     headers,
+    credentials: 'include',
     cache: 'no-store',
   });
 
