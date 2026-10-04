@@ -19,11 +19,11 @@ use Illuminate\Support\Facades\Route;
 Route::get('/health', fn () => response()->json(['status' => 'ok']));
 
 // --------------------------------------------------------------------------
-// Sanctum CSRF cookie (excluded from encryption)
+// Sanctum CSRF cookie & Broadcasting Auth
 // --------------------------------------------------------------------------
 // Route::get('/sanctum/csrf-cookie', [CsrfCookieController::class, 'show']);
-// This is registered automatically by Sanctum — just ensure it's in the
-// excluded paths list in EncryptApiPayload.
+use Illuminate\Support\Facades\Broadcast;
+Broadcast::routes(['middleware' => ['api', 'auth:sanctum']]);
 
 // --------------------------------------------------------------------------
 // Public routes (authentication)

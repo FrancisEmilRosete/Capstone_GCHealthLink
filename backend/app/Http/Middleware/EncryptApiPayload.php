@@ -46,6 +46,7 @@ class EncryptApiPayload
     private array $excludedPaths = [
         'api/health',
         'api/sanctum/csrf-cookie',
+        'api/broadcasting/auth',
     ];
 
     public function __construct(private readonly AesGcmCipher $cipher)
