@@ -56,15 +56,15 @@ class AuthController extends Controller
         AuditLog::record('LOGIN_SUCCESS', 'User logged in.', $user->id);
 
         $cookie = cookie(
-            'auth_token',
-            $token->plainTextToken,
-            $expirationMinutes,
-            '/',
-            null,
-            config('session.secure'),
-            true, // HttpOnly
-            false,
-            'Lax' // SameSite
+            name: 'auth_token',
+            value: $token->plainTextToken,
+            minutes: $expirationMinutes,
+            path: '/',
+            domain: null,
+            secure: true,
+            httpOnly: true,
+            raw: false,
+            sameSite: 'none'
         );
 
         return response()->json([
