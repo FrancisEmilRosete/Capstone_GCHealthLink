@@ -1,4 +1,4 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { FileCheck, Printer, FileDown } from 'lucide-react';
 
 interface DentalClearanceProps {
@@ -19,6 +19,23 @@ interface DentalClearanceProps {
 const DentalClearance: React.FC<DentalClearanceProps> = ({ 
   patient, clearanceData, onUpdate, onPrint 
 }) => {
+  const [staffList, setStaffList] = useState<{name: string, position: string}[]>([]);
+  const [selectedStaff, setSelectedStaff] = useState('');
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const res = await fetch('/api/staff', {
+          headers: { 'Authorization': `Bearer cookie-auth`, 'X-Encrypted-Request': 'true' }
+        });
+        const data = await res.json();
+        setStaffList(data.payload ? data.payload : data);
+      } catch (e) {
+        console.error('Failed to load staff');
+      }
+    };
+    fetchStaff();
+  }, []);
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto print-wrapper">
       <style>{`
@@ -121,7 +138,19 @@ const DentalClearance: React.FC<DentalClearanceProps> = ({
         {/* Signature Line */}
         <div className="mt-12 print:mt-16 flex flex-col items-end space-y-4 print:space-y-2">
           <div className="text-center w-64 print:w-48">
-            <div className="border-b-2 border-slate-800 pb-1 font-black text-lg print:text-sm">Dr. Juan Dela Cruz, DMD</div>
+            <div className="border-b-2 border-slate-800 pb-1 font-black text-lg print:text-sm">
+              <select 
+                className="text-lg print:text-sm font-black text-slate-800 bg-transparent text-center outline-none print:appearance-none cursor-pointer hover:bg-slate-50 rounded w-full"
+                value={selectedStaff}
+                onChange={e => setSelectedStaff(e.target.value)}
+              >
+                <option value="" disabled>Select Dentist</option>
+                {staffList.filter(s => s.position === 'Dentist').map(staff => (
+                  <option key={staff.name} value={staff.name}>{staff.name}, DMD</option>
+                ))}
+                {!staffList.length && <option value="Dr. Juan Dela Cruz, DMD">Dr. Juan Dela Cruz, DMD</option>}
+              </select>
+            </div>
             <p className="text-[10px] print:text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Dental Physician</p>
           </div>
           <div className="text-right space-y-1">

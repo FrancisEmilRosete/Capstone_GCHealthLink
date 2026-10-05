@@ -57,6 +57,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/health-concerns', [\App\Http\Controllers\AdminAnalyticsController::class, 'getHealthConcerns']);
     });
 
+    // Dynamic System Data Management
+    Route::apiResource('courses', \App\Http\Controllers\CourseController::class);
+    Route::apiResource('staff', \App\Http\Controllers\ClinicStaffController::class);
+
     // Clinic Compatibility (Legacy Frontend)
     Route::prefix('clinic')->group(function (): void {
         Route::get('/students', [\App\Http\Controllers\ClinicController::class, 'students']);

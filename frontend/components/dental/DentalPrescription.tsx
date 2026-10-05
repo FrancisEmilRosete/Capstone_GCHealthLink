@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Save, Printer, History, PenTool, Lock } from 'lucide-react';
 import AuditHistoryModal from './AuditHistoryModal';
 
@@ -19,6 +19,23 @@ const DentalPrescription: React.FC<DentalPrescriptionProps> = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [staffList, setStaffList] = useState<{name: string, position: string}[]>([]);
+  const [selectedStaff, setSelectedStaff] = useState('');
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const res = await fetch('/api/staff', {
+          headers: { 'Authorization': `Bearer cookie-auth`, 'X-Encrypted-Request': 'true' }
+        });
+        const data = await res.json();
+        setStaffList(data.payload ? data.payload : data);
+      } catch (e) {
+        console.error('Failed to load staff');
+      }
+    };
+    fetchStaff();
+  }, []);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl mx-auto">
@@ -72,7 +89,17 @@ const DentalPrescription: React.FC<DentalPrescriptionProps> = ({
               <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em]">Health Services Unit | Dental Clinic</p>
             </div>
             <div className="text-right space-y-0.5">
-              <p className="text-sm font-black text-slate-800">Dr. Juan Dela Cruz, DMD</p>
+              <select 
+                className="text-sm font-black text-slate-800 bg-transparent text-right outline-none print:appearance-none cursor-pointer hover:bg-slate-50 rounded px-1 -mr-1"
+                value={selectedStaff}
+                onChange={e => setSelectedStaff(e.target.value)}
+              >
+                <option value="" disabled>Select Dentist</option>
+                {staffList.filter(s => s.position === 'Dentist').map(staff => (
+                  <option key={staff.name} value={staff.name}>{staff.name}, DMD</option>
+                ))}
+                {!staffList.length && <option value="Dr. Juan Dela Cruz, DMD">Dr. Juan Dela Cruz, DMD</option>}
+              </select>
               <p className="text-[10px] font-bold text-slate-400">License No: 123456</p>
               <p className="text-[10px] font-bold text-slate-400">PTR No: 7890123</p>
             </div>

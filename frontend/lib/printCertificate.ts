@@ -274,9 +274,13 @@ export function printCertificate(cert: PrintableCertificate): void {
     ? 'This is to certify that the below-named student has undergone a physical examination and the findings are as follows:'
     : 'The student was seen by the college physician/ nurse on duty:';
 
-  const designationText = (cert.issuedByRole || '').toUpperCase() === 'NURSE' || (cert.issuedByRole || '').toUpperCase() === 'CLINIC_STAFF'
-    ? 'College Nurse'
-    : 'College Physician';
+  let designationText = 'College Physician';
+  if (cert.issuedByRole) {
+    const roleUpper = cert.issuedByRole.toUpperCase();
+    if (roleUpper === 'NURSE' || roleUpper === 'CLINIC_STAFF') designationText = 'College Nurse';
+    else if (roleUpper === 'DOCTOR') designationText = 'College Physician';
+    else designationText = cert.issuedByRole; // Use the dynamic string directly (e.g., Dentist, Physician)
+  }
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -629,9 +633,13 @@ export function printCertificatesBatch(certs: PrintableCertificate[]): void {
       const statementText = isPhysical
         ? 'This is to certify that the below-named student has undergone a physical examination and the findings are as follows:'
         : 'The student was seen by the college physician/ nurse on duty:';
-      const designationText = (cert.issuedByRole || '').toUpperCase() === 'NURSE' || (cert.issuedByRole || '').toUpperCase() === 'CLINIC_STAFF'
-        ? 'College Nurse'
-        : 'College Physician';
+      let designationText = 'College Physician';
+      if (cert.issuedByRole) {
+        const roleUpper = cert.issuedByRole.toUpperCase();
+        if (roleUpper === 'NURSE' || roleUpper === 'CLINIC_STAFF') designationText = 'College Nurse';
+        else if (roleUpper === 'DOCTOR') designationText = 'College Physician';
+        else designationText = cert.issuedByRole; 
+      }
 
       return `
   <div class="page page-break">

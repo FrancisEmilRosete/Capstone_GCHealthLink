@@ -24,10 +24,30 @@ interface PrescriptionPadProps {
   onSave?: () => void;
 }
 
+import { useEffect, useState } from 'react';
+
 const PrescriptionPad: React.FC<PrescriptionPadProps> = ({ 
   patient, medicines, onAddMedicine, onUpdateMedicine, onDeleteMedicine,
   onPrint, onDownload, onSave 
 }) => {
+  const [staffList, setStaffList] = useState<{name: string, position: string}[]>([]);
+  const [selectedStaff, setSelectedStaff] = useState('');
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const res = await fetch('/api/staff', {
+          headers: { 'Authorization': `Bearer cookie-auth`, 'X-Encrypted-Request': 'true' }
+        });
+        const data = await res.json();
+        setStaffList(data.payload ? data.payload : data);
+      } catch (e) {
+        console.error('Failed to load staff');
+      }
+    };
+    fetchStaff();
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between border-b border-slate-100 pb-4 print:hidden">
@@ -62,7 +82,17 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
               <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Medical Clinic & Wellness</p>
             </div>
             <div className="text-right space-y-0.5">
-              <p className="text-sm font-black text-slate-800">Dr. Juan Dela Cruz, MD</p>
+              <select 
+                className="text-sm font-black text-slate-800 bg-transparent text-right outline-none print:appearance-none cursor-pointer hover:bg-slate-50 rounded px-1 -mr-1"
+                value={selectedStaff}
+                onChange={e => setSelectedStaff(e.target.value)}
+              >
+                <option value="" disabled>Select Doctor</option>
+                {staffList.filter(s => s.position === 'Physician' || s.position === 'Doctor').map(staff => (
+                  <option key={staff.name} value={staff.name}>{staff.name}, MD</option>
+                ))}
+                {!staffList.length && <option value="Dr. Juan Dela Cruz, MD">Dr. Juan Dela Cruz, MD</option>}
+              </select>
               <p className="text-[10px] font-bold text-slate-400">License No: 123456</p>
               <p className="text-[10px] font-bold text-slate-400">PTR No: 7890123</p>
             </div>

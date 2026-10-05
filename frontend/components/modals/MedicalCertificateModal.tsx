@@ -61,6 +61,25 @@ const MedicalCertificateModal: React.FC<MedicalCertificateModalProps> = ({
 
   const [isPrinting, setIsPrinting] = useState(false);
 
+  // Dynamic Staff state
+  const [staffList, setStaffList] = useState<{name: string, position: string}[]>([]);
+
+  useEffect(() => {
+    // Fetch dynamic staff
+    const fetchStaff = async () => {
+      try {
+        const res = await fetch('/api/staff', {
+          headers: { 'Authorization': `Bearer cookie-auth`, 'X-Encrypted-Request': 'true' }
+        });
+        const data = await res.json();
+        setStaffList(data.payload ? data.payload : data); // Handle decrypted if using api helper
+      } catch (e) {
+        console.error('Failed to load staff');
+      }
+    };
+    fetchStaff();
+  }, []);
+
   useEffect(() => {
     if (student) {
       const today = new Date().toLocaleDateString('en-US', {
@@ -425,12 +444,26 @@ const MedicalCertificateModal: React.FC<MedicalCertificateModalProps> = ({
             <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Signatory Name</label>
-                <input
-                  type="text"
+                <select
                   value={signatoryName}
-                  onChange={(e) => setSignatoryName(e.target.value)}
+                  onChange={(e) => {
+                    setSignatoryName(e.target.value);
+                    const selected = staffList.find(s => s.name === e.target.value);
+                    if (selected) {
+                      setDesignation(selected.position);
+                    }
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                />
+                >
+                  <option value="" disabled>Select Staff</option>
+                  {staffList.map((staff, idx) => (
+                    <option key={idx} value={staff.name}>{staff.name} ({staff.position})</option>
+                  ))}
+                  {/* Keep the current hardcoded name as an option if not in DB yet */}
+                  {!staffList.some(s => s.name === signatoryName) && signatoryName && (
+                    <option value={signatoryName}>{signatoryName} (Current)</option>
+                  )}
+                </select>
               </div>
 
               <div>
