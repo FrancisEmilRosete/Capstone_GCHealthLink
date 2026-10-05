@@ -239,9 +239,7 @@ async function requestForm<T = unknown>(
   formData: FormData,
   token?: string | null,
 ): Promise<T> {
-  const headers: HeadersInit = {
-    'X-Encrypted-Request': 'true'
-  };
+  const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetchWithFallback(path, {
@@ -255,9 +253,6 @@ async function requestForm<T = unknown>(
   let data: any;
   try {
     data = await res.json();
-    if (data && typeof data.payload === 'string') {
-      data = await decryptApiPayload(data.payload);
-    }
   } catch {
     throw new ApiError('Unexpected server response.', res.status);
   }
