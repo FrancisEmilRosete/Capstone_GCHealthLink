@@ -12,7 +12,7 @@
  * All methods throw an ApiError on non-2xx responses so callers
  * can catch and display the backend's error message.
  */
-import { encryptApiPayload, decryptApiPayload } from '@/lib/crypto';
+// import { encryptApiPayload, decryptApiPayload } from '@/lib/crypto';
 
 export const API_PREFIX = '/api';
 const API_BASE_CACHE_KEY = 'gchl_api_base';
@@ -207,36 +207,21 @@ async function request<T = unknown>(
   const headers: HeadersInit = { 
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'X-Encrypted-Request': 'true'
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  let payloadBody = body !== undefined ? body : undefined;
-  if (payloadBody !== undefined && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
-    try {
-      const encrypted = await encryptApiPayload(payloadBody);
-      payloadBody = { payload: encrypted };
-    } catch (err: any) {
-      console.error('Failed to encrypt payload', err);
-      throw new ApiError(`Client error: Encryption failed. Details: ${err?.message || err}`, 400);
-    }
-  }
 
   const res = await fetchWithFallback(path, {
     method,
     headers,
     credentials: 'include',
     cache: 'no-store',
-    body: payloadBody !== undefined ? JSON.stringify(payloadBody) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   }, { expectsJson: true });
 
   // Parse response body (backend always returns JSON)
   let data: any;
   try {
     data = await res.json();
-    if (data && typeof data.payload === 'string') {
-      data = await decryptApiPayload(data.payload);
-    }
   } catch {
     throw new ApiError('Unexpected server response.', res.status);
   }
