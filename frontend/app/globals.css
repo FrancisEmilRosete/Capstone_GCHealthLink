@@ -39,7 +39,7 @@
   --input-border: 214 20% 86%;
 
   /* Text */
-  --foreground: 200 20% 15%;
+  --foreground: 200 15% 30%;
   --muted: 200 10% 45%;
   --muted-foreground: 200 10% 55%;
   --subtle: 200 8% 65%;
@@ -93,14 +93,14 @@
 
 .dark {
   /* Dark Mode Overrides */
-  --background: 200 15% 8%;
-  --surface: 200 14% 12%;
-  --card: 200 14% 12%;
-  --surface-raised: 200 13% 15%;
-  --border: 200 10% 20%;
-  --border-hover: 200 10% 25%;
-  --input-border: 200 10% 22%;
-  --foreground: 180 10% 95%;
+  --background: 200 15% 12%;
+  --surface: 200 14% 15%;
+  --card: 200 14% 15%;
+  --surface-raised: 200 13% 18%;
+  --border: 200 10% 25%;
+  --border-hover: 200 10% 30%;
+  --input-border: 200 10% 27%;
+  --foreground: 200 10% 85%;
   --muted: 200 8% 55%;
   --muted-foreground: 200 8% 65%;
   --subtle: 200 6% 45%;
