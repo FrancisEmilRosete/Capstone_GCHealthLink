@@ -55,28 +55,5 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         icon:  AuditIcon,
       },
     ],
-  },
-  {
-    groupLabel: 'System Data',
-    items: [
-      {
-        id:    'departments',
-        label: 'Departments',
-        href:  '/dashboard/admin/departments',
-        icon:  SettingsIcon,
-      },
-      {
-        id:    'courses',
-        label: 'Courses',
-        href:  '/dashboard/admin/courses',
-        icon:  SettingsIcon,
-      },
-      {
-        id:    'staff',
-        label: 'Clinic Staff',
-        href:  '/dashboard/admin/staff',
-        icon:  UsersIcon,
-      }
-    ]
   }
 ];
