@@ -285,3 +285,41 @@ def predict_resources(payload: ResourcePredictionRequest) -> Dict[str, Any]:
         "at_risk": at_risk_items,
         "stable": stable_items,
     }
+
+class PatientRiskRequest(BaseModel):
+    anonymized_data: Dict[str, Any] = Field(...)
+
+@app.post("/predict/patient-risk")
+def predict_patient_risk(payload: PatientRiskRequest) -> Dict[str, Any]:
+    # Ensure no explicit direct identifiers are present as a double-check
+    data = payload.anonymized_data
+    forbidden_keys = ["first_name", "last_name", "student_number", "email", "phone"]
+    
+    for key in forbidden_keys:
+        if key in data:
+            raise HTTPException(status_code=400, detail=f"Privacy Violation: Data contains restricted field '{key}'")
+            
+    # Dummy ML logic for patient risk assessment
+    age = data.get("age", 20)
+    base_risk = 0.1
+    
+    if age > 40:
+        base_risk += 0.2
+        
+    medical_history = data.get("medical_history", [])
+    if "Hypertension" in medical_history or "Diabetes" in medical_history:
+        base_risk += 0.3
+        
+    risk_level = "low"
+    if base_risk >= 0.5:
+        risk_level = "high"
+    elif base_risk >= 0.3:
+        risk_level = "medium"
+
+    return {
+        "success": True,
+        "message": "Risk assessment completed successfully on anonymized payload.",
+        "risk_score": round(base_risk, 2),
+        "risk_level": risk_level,
+        "analyzed_fields": list(data.keys())
+    }

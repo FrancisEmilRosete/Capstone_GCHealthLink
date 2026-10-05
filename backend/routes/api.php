@@ -61,6 +61,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::apiResource('courses', \App\Http\Controllers\CourseController::class);
     Route::apiResource('staff', \App\Http\Controllers\ClinicStaffController::class);
 
+    // AI Integration
+    Route::post('/ai/predict-patient-risk', [\App\Http\Controllers\AiRiskController::class, 'predictPatientRisk']);
+
     // Clinic Compatibility (Legacy Frontend)
     Route::prefix('clinic')->group(function (): void {
         Route::get('/students', [\App\Http\Controllers\ClinicController::class, 'students']);
