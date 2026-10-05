@@ -60,6 +60,12 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     groupLabel: 'System Data',
     items: [
       {
+        id:    'departments',
+        label: 'Departments',
+        href:  '/dashboard/admin/departments',
+        icon:  SettingsIcon,
+      },
+      {
         id:    'courses',
         label: 'Courses',
         href:  '/dashboard/admin/courses',

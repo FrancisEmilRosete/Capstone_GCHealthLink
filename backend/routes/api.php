@@ -58,6 +58,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     // Dynamic System Data Management
+    Route::apiResource('departments', \App\Http\Controllers\DepartmentController::class);
     Route::apiResource('courses', \App\Http\Controllers\CourseController::class);
     Route::apiResource('staff', \App\Http\Controllers\ClinicStaffController::class);
 
