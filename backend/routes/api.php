@@ -144,6 +144,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/unread-count',      [\App\Http\Controllers\MessageController::class, 'unreadCount']);
         Route::get('/thread/{userId}',   [\App\Http\Controllers\MessageController::class, 'thread']);
         Route::post('/',                 [\App\Http\Controllers\MessageController::class, 'store']);
+        Route::patch('/read-all',        [\App\Http\Controllers\MessageController::class, 'markAllRead']);
         Route::patch('/{id}/read',       [\App\Http\Controllers\MessageController::class, 'markRead']);
     });
 

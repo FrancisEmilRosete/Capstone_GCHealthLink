@@ -535,7 +535,7 @@ export default function MessengerWidget() {
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
   const userId = getUserId();
-  const { unreadCount: unreadTotal, setUnreadCount: setUnreadTotal } = useUnreadMessages(userId);
+  const { unreadCount: unreadTotal, setUnreadCount: setUnreadTotal, markAllRead } = useUnreadMessages();
   const [error, setError] = useState<string | null>(null);
   const isOpenRef = useRef(isOpen);
   const activeRef = useRef(activeContact);
@@ -562,17 +562,7 @@ export default function MessengerWidget() {
     }
   }, [token]);
 
-  // ── Fetch unread count (polling even when closed) ──────────
-
-  const fetchUnreadCount = useCallback(async () => {
-    if (!token) return;
-    try {
-      const data = await api.get<UnreadCountResponse>('/messages/unread-count', token);
-      setUnreadTotal(data.count ?? 0);
-    } catch {
-      // Silent — badge update is non-critical
-    }
-  }, [token]);
+  // ── Fetch unread count is now handled globally by UnreadMessagesContext ──
 
   // ── Fetch thread ───────────────────────────────────────────
   //
@@ -658,19 +648,17 @@ export default function MessengerWidget() {
     setError(null);
 
     if (opening) {
+      markAllRead(); // Instantly clears badge and updates DB asynchronously
       await fetchContacts();
     } else {
     }
-  }, [isOpen, fetchContacts]);
+  }, [isOpen, fetchContacts, markAllRead]);
 
   // ── Realtime: react to incoming message pings ──────────────
 
   useUserPing(userId, (type, data) => {
     if (type !== 'message') return;
     
-    // Refresh unread counts regardless of where we are
-    void fetchUnreadCount();
-
     if (isOpenRef.current && activeRef.current) {
       // If the incoming message belongs to the currently open thread
       if (data && data.sender_id === activeRef.current.id) {
@@ -694,13 +682,6 @@ export default function MessengerWidget() {
   });
 
   // ── WebSockets Initialization ──────────────────────────────
-  
-  useEffect(() => {
-    // We MUST fetch the unread count once when the widget mounts.
-    // WebSockets only push *new* events, so if there are unread messages 
-    // before the user opened the browser, the WebSocket won't know.
-    void fetchUnreadCount();
-  }, [fetchUnreadCount]);
 
   // ── Don't render for unauthenticated or admin users ────────
 

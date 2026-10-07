@@ -268,6 +268,23 @@ class MessageController extends Controller
     }
 
     // -------------------------------------------------------------------------
+    // PATCH /api/messages/read-all
+    // Marks all messages received by the user as read.
+    // -------------------------------------------------------------------------
+
+    public function markAllRead(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        Message::where('recipient_id', $user->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        return response()->json(['success' => true]);
+    }
+
+    // -------------------------------------------------------------------------
     // GET /api/messages/unread-count
     // Returns the total number of unread messages for the current user.
     // -------------------------------------------------------------------------

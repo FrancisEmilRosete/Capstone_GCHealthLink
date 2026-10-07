@@ -32,10 +32,19 @@ class AppointmentAvailabilityController extends Controller
         $month = (int) $request->input('month', date('n'));
         $year = (int) $request->input('year', date('Y'));
 
-        $filePath = "availability_{$scope}.json";
+        $overridesDB = \App\Models\AvailabilityOverride::where('scope', $scope)
+            ->whereYear('date', $year)
+            ->whereMonth('date', $month)
+            ->get();
+
         $overrides = [];
-        if (Storage::exists($filePath)) {
-            $overrides = json_decode(Storage::get($filePath), true) ?? [];
+        foreach ($overridesDB as $ov) {
+            $dateStr = $ov->date->format('Y-m-d');
+            $overrides[$dateStr] = [
+                'isAvailable' => (bool)$ov->is_available,
+                'slots' => $ov->slots ?? [],
+                'isOverride' => true,
+            ];
         }
 
         $days = [];
@@ -195,19 +204,10 @@ class AppointmentAvailabilityController extends Controller
             }
         }
 
-        $filePath = "availability_{$scope}.json";
-        $overrides = [];
-        if (Storage::exists($filePath)) {
-            $overrides = json_decode(Storage::get($filePath), true) ?? [];
-        }
-
-        $overrides[$date] = [
-            'isAvailable' => $enabled,
-            'slots' => $slots,
-            'isOverride' => true,
-        ];
-
-        Storage::put($filePath, json_encode($overrides, JSON_PRETTY_PRINT));
+        \App\Models\AvailabilityOverride::updateOrCreate(
+            ['scope' => $scope, 'date' => $date],
+            ['is_available' => $enabled, 'slots' => $slots]
+        );
 
         \App\Models\AuditLog::record(
             'AVAILABILITY_UPDATE',

@@ -24,6 +24,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar  from '@/components/layout/TopBar';
 import { getDashboardRouteForRole, getNormalizedUserRole, getToken } from '@/lib/auth';
+import { UnreadMessagesProvider } from '@/hooks/useUnreadMessages';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -61,7 +62,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Student and admin pages use their own self-contained layouts
   if (hasDedicatedRoleLayout) {
-    return <>{children}</>;
+    return <UnreadMessagesProvider>{children}</UnreadMessagesProvider>;
   }
 
   if (!isAuthorized) {
@@ -96,7 +97,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Scrollable page content */}
         <main className="flex-1 overflow-auto dashboard-uniform-width">
-          {children}
+          <UnreadMessagesProvider>
+            {children}
+          </UnreadMessagesProvider>
         </main>
 
       </div>
