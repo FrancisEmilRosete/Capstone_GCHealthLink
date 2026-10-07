@@ -34,13 +34,16 @@ export function useUserPing(userId: number | string | null | undefined, callback
     // Listen to the private user channel
     const channel = (window as any).Echo.private(`App.Models.User.${userId}`);
 
-    channel.listen('.UserPinged', (event: any) => {
+    const handler = (event: any) => {
       console.log('WebSockets Ping Received:', event.type);
       if (callbackRef.current) callbackRef.current(event.type);
-    });
+    };
+
+    channel.listen('.UserPinged', handler);
 
     return () => {
-      channel.stopListening('.UserPinged');
+      // Remove only THIS listener — other components share the same channel.
+      channel.stopListening('.UserPinged', handler);
     };
   }, [userId]);
 }

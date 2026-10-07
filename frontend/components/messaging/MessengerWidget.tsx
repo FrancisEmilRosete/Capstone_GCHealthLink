@@ -663,11 +663,17 @@ export default function MessengerWidget() {
     }
   }, [isOpen, fetchContacts]);
 
-  // ── Polling when thread is open ────────────────────────────
+  // ── Realtime: react to incoming message pings ──────────────
 
   useUserPing(userId, (type) => {
-    if (type === 'message' && isOpenRef.current && activeRef.current) {
+    if (type !== 'message') return;
+    if (isOpenRef.current && activeRef.current) {
+      // Thread is open → pull new messages (marks them read server-side)
       void fetchThread(activeRef.current.id, true);
+    } else {
+      // Closed or on contact list → refresh badge + contact unread counts
+      void fetchUnreadCount();
+      if (isOpenRef.current) void fetchContacts();
     }
   });
 

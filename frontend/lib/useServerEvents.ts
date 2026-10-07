@@ -63,21 +63,25 @@ export function useServerEvents(
     if (typeof window === 'undefined' || !(window as any).Echo) return;
     const echo = (window as any).Echo;
 
+    const onQueue = (e: any) => callbackRef.current('queue', e);
+    const onVisits = (e: any) => callbackRef.current('visits', e);
+
     if (topics.includes('queue')) {
-      echo.channel('clinic.queue').listen('.QueueUpdated', (e: any) => {
-        callbackRef.current('queue', e);
-      });
+      echo.channel('clinic.queue').listen('.QueueUpdated', onQueue);
     }
 
     if (topics.includes('visits')) {
-      echo.channel('clinic.visits').listen('.VisitsUpdated', (e: any) => {
-        callbackRef.current('visits', e);
-      });
+      echo.channel('clinic.visits').listen('.VisitsUpdated', onVisits);
     }
 
     return () => {
-      // We don't strictly echo.leave() here to avoid breaking other components 
-      // listening to the same public channels, but we could if we tracked instances.
+      // Remove only this hook's handlers; other components share the channels.
+      if (topics.includes('queue')) {
+        echo.channel('clinic.queue').stopListening('.QueueUpdated', onQueue);
+      }
+      if (topics.includes('visits')) {
+        echo.channel('clinic.visits').stopListening('.VisitsUpdated', onVisits);
+      }
     };
   }, [topicsKey]);
 }

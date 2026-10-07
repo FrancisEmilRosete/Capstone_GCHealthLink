@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class QueueUpdated implements ShouldBroadcast
+class QueueUpdated implements ShouldBroadcastNow
 {
     use Dispatchable, SerializesModels;
 

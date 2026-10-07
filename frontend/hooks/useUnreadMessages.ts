@@ -30,13 +30,14 @@ export function useUnreadMessages(userId: number | string | null | undefined) {
     // Listen to the private user channel
     const channel = (window as any).Echo.private(`App.Models.User.${userId}`);
 
-    channel.listen('.UnreadCountUpdated', (event: any) => {
-      console.log('Instant update received via WebSockets!', event);
+    const handler = (event: any) => {
       setUnreadCount(event.unreadCount);
-    });
+    };
+
+    channel.listen('.UnreadCountUpdated', handler);
 
     return () => {
-      channel.stopListening('.UnreadCountUpdated');
+      channel.stopListening('.UnreadCountUpdated', handler);
     };
   }, [userId]);
 
