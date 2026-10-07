@@ -78,20 +78,20 @@ function getInitials(name: string): string {
 
 function roleColor(roleLabel: string): string {
   switch (roleLabel) {
-    case 'Nurse':   return '#0d9488'; // teal
-    case 'Doctor':  return '#2563eb'; // blue
+    case 'Nurse': return '#0d9488'; // teal
+    case 'Doctor': return '#2563eb'; // blue
     case 'Dentist': return '#7c3aed'; // violet
-    default:        return '#64748b'; // slate (student)
+    default: return '#64748b'; // slate (student)
   }
 }
 
 function formatTime(iso: string): string {
   const date = new Date(iso);
-  const now  = new Date();
+  const now = new Date();
   const diffMs = now.getTime() - date.getTime();
-  const diffM  = Math.floor(diffMs / 60000);
+  const diffM = Math.floor(diffMs / 60000);
 
-  if (diffM < 1)  return 'just now';
+  if (diffM < 1) return 'just now';
   if (diffM < 60) return `${diffM}m ago`;
 
   const diffH = Math.floor(diffM / 60);
@@ -343,7 +343,7 @@ function ThreadView({
 }) {
   const [draft, setDraft] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef  = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -526,22 +526,22 @@ function ThreadView({
 // ── Main Widget ───────────────────────────────────────────────
 
 export default function MessengerWidget() {
-  const [isOpen,   setIsOpen]   = useState(false);
-  const [view,     setView]     = useState<'contacts' | 'thread'>('contacts');
+  const [isOpen, setIsOpen] = useState(false);
+  const [view, setView] = useState<'contacts' | 'thread'>('contacts');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
-  const [messages,  setMessages]  = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
-  const [loadingThread,   setLoadingThread]   = useState(false);
-  const [sending,   setSending]   = useState(false);
+  const [loadingThread, setLoadingThread] = useState(false);
+  const [sending, setSending] = useState(false);
   const userId = getUserId();
   const { unreadCount: unreadTotal, setUnreadCount: setUnreadTotal } = useUnreadMessages(userId);
   const [error, setError] = useState<string | null>(null);
-  const isOpenRef  = useRef(isOpen);
-  const activeRef  = useRef(activeContact);
+  const isOpenRef = useRef(isOpen);
+  const activeRef = useRef(activeContact);
 
-  isOpenRef.current  = isOpen;
-  activeRef.current  = activeContact;
+  isOpenRef.current = isOpen;
+  activeRef.current = activeContact;
 
   const token = getToken();
 
@@ -671,7 +671,15 @@ export default function MessengerWidget() {
     }
   });
 
-  // ── Unread count polling replaced by WebSockets ──────────────
+  // ── WebSockets Initialization ──────────────────────────────
+  
+  useEffect(() => {
+    // We MUST fetch the unread count once when the widget mounts.
+    // WebSockets only push *new* events, so if there are unread messages 
+    // before the user opened the browser, the WebSocket won't know.
+    void fetchUnreadCount();
+  }, [fetchUnreadCount]);
+
   // ── Don't render for unauthenticated or admin users ────────
 
   if (!token) return null;
