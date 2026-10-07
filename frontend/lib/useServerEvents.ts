@@ -11,29 +11,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { getToken } from '@/lib/auth';
-import { API_PREFIX } from '@/lib/api';
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
-
-// Setup Pusher connection once
-if (typeof window !== 'undefined' && !(window as any).Echo && process.env.NEXT_PUBLIC_PUSHER_APP_KEY) {
-  (window as any).Pusher = Pusher;
-  (window as any).Echo = new Echo({
-    broadcaster: 'pusher',
-    key: process.env.NEXT_PUBLIC_PUSHER_APP_KEY,
-    cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER,
-    forceTLS: true,
-    withCredentials: true,
-    authEndpoint: `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || window.localStorage.getItem('gchl_api_base')?.replace(/\/+$/, '') || `http://${typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1'}:8000`}/api/broadcasting/auth`,
-    auth: {
-      headers: {
-        Authorization: 'Bearer cookie-auth',
-        Accept: 'application/json',
-      }
-    }
-  });
-}
+import { getEcho } from '@/lib/echo';
 
 type SseCallback = (topic: string, data: unknown) => void;
 

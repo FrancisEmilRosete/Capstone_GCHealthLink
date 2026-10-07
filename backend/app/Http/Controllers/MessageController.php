@@ -222,7 +222,15 @@ class MessageController extends Controller
 
         $newUnreadCount = Message::where('recipient_id', $recipient->id)->where('is_read', false)->count();
         UnreadCountUpdated::dispatch($recipient->id, $newUnreadCount);
-        UserPinged::dispatch($recipient->id, 'message');
+        UserPinged::dispatch($recipient->id, 'message', [
+            'id'           => $message->id,
+            'sender_id'    => $message->sender_id,
+            'recipient_id' => $message->recipient_id,
+            'body'         => $message->body,
+            'is_read'      => (bool) $message->is_read,
+            'created_at'   => $message->created_at->toISOString(),
+            'is_mine'      => false,
+        ]);
 
         return response()->json([
             'success' => true,

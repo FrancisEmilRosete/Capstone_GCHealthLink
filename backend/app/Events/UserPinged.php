@@ -16,14 +16,16 @@ class UserPinged implements ShouldBroadcastNow
 
     public $userId;
     public $type;
+    public $data;
 
     /**
      * Create a new event instance.
      */
-    public function __construct($userId, $type)
+    public function __construct($userId, $type, $data = null)
     {
         $this->userId = $userId;
         $this->type = $type; // e.g., 'message', 'notification', 'certificate'
+        $this->data = $data; // optional payload (e.g. the new message)
     }
 
     /**

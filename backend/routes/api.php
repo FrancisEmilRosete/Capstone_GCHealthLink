@@ -22,8 +22,8 @@ Route::get('/health', fn () => response()->json(['status' => 'ok']));
 // Sanctum CSRF cookie & Broadcasting Auth
 // --------------------------------------------------------------------------
 // Route::get('/sanctum/csrf-cookie', [CsrfCookieController::class, 'show']);
-use Illuminate\Support\Facades\Broadcast;
-Broadcast::routes(['middleware' => ['api', 'auth:sanctum']]);
+// Broadcasting auth (/api/broadcasting/auth) + channels.php are registered
+// in bootstrap/app.php via withBroadcasting() so they survive route:cache.
 
 // --------------------------------------------------------------------------
 // Public routes (authentication)

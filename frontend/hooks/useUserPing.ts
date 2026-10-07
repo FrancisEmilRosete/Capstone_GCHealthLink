@@ -1,27 +1,7 @@
 import { useEffect } from 'react';
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
+import { getEcho } from '@/lib/echo';
 
-// Setup Pusher connection once
-if (typeof window !== 'undefined' && !(window as any).Echo && process.env.NEXT_PUBLIC_PUSHER_APP_KEY) {
-  (window as any).Pusher = Pusher;
-  (window as any).Echo = new Echo({
-    broadcaster: 'pusher',
-    key: process.env.NEXT_PUBLIC_PUSHER_APP_KEY,
-    cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER,
-    forceTLS: true,
-    withCredentials: true,
-    authEndpoint: `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || window.localStorage.getItem('gchl_api_base')?.replace(/\/+$/, '') || `http://${typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1'}:8000`}/api/broadcasting/auth`,
-    auth: {
-      headers: {
-        Authorization: 'Bearer cookie-auth',
-        Accept: 'application/json',
-      }
-    }
-  });
-}
-
-export function useUserPing(userId: number | string | null | undefined, callback: (type: string) => void) {
+export function useUserPing(userId: number | string | null | undefined, callback: (type: string, data?: any) => void) {
   const callbackRef = require('react').useRef(callback);
 
   require('react').useEffect(() => {
@@ -29,14 +9,15 @@ export function useUserPing(userId: number | string | null | undefined, callback
   }, [callback]);
 
   useEffect(() => {
-    if (!userId || !(window as any).Echo) return;
+    const echo = getEcho();
+    if (!userId || !echo) return;
 
     // Listen to the private user channel
     const channel = (window as any).Echo.private(`App.Models.User.${userId}`);
 
     const handler = (event: any) => {
       console.log('WebSockets Ping Received:', event.type);
-      if (callbackRef.current) callbackRef.current(event.type);
+      if (callbackRef.current) callbackRef.current(event.type, event.data);
     };
 
     channel.listen('.UserPinged', handler);

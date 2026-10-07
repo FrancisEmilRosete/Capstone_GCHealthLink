@@ -665,14 +665,30 @@ export default function MessengerWidget() {
 
   // ── Realtime: react to incoming message pings ──────────────
 
-  useUserPing(userId, (type) => {
+  useUserPing(userId, (type, data) => {
     if (type !== 'message') return;
+    
+    // Refresh unread counts regardless of where we are
+    void fetchUnreadCount();
+
     if (isOpenRef.current && activeRef.current) {
-      // Thread is open → pull new messages (marks them read server-side)
-      void fetchThread(activeRef.current.id, true);
+      // If the incoming message belongs to the currently open thread
+      if (data && data.sender_id === activeRef.current.id) {
+        // Use functional state update to instantly append without fetching
+        setMessages((prev) => {
+          // Prevent duplicates if already fetched
+          if (prev.some(m => m.id === data.id)) return prev;
+          return [...prev, data];
+        });
+        
+        // After appending, mark it as read in the background
+        api.patch(`/messages/${data.id}/read`, {}, token).catch(() => {});
+      } else {
+        // It's for another thread, just update the contact list badge
+        void fetchContacts();
+      }
     } else {
-      // Closed or on contact list → refresh badge + contact unread counts
-      void fetchUnreadCount();
+      // Closed or on contact list → refresh contact unread counts
       if (isOpenRef.current) void fetchContacts();
     }
   });
