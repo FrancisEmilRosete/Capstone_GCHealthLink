@@ -20,6 +20,12 @@ if (typeof window !== 'undefined' && !(window as any).Echo && process.env.NEXT_P
 }
 
 export function useUserPing(userId: number | string | null | undefined, callback: (type: string) => void) {
+  const callbackRef = require('react').useRef(callback);
+
+  require('react').useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+
   useEffect(() => {
     if (!userId || !(window as any).Echo) return;
 
@@ -28,11 +34,11 @@ export function useUserPing(userId: number | string | null | undefined, callback
 
     channel.listen('.UserPinged', (event: any) => {
       console.log('WebSockets Ping Received:', event.type);
-      callback(event.type);
+      if (callbackRef.current) callbackRef.current(event.type);
     });
 
     return () => {
-      (window as any).Echo.leave(`App.Models.User.${userId}`);
+      channel.stopListening('.UserPinged');
     };
-  }, [userId, callback]);
+  }, [userId]);
 }

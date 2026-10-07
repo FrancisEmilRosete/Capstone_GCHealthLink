@@ -34,7 +34,7 @@ export function useUnreadMessages(userId: number | string | null | undefined) {
     });
 
     return () => {
-      (window as any).Echo.leave(`App.Models.User.${userId}`);
+      channel.stopListening('.UnreadCountUpdated');
     };
   }, [userId]);
 
