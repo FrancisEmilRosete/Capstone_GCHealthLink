@@ -317,8 +317,16 @@ class AppointmentAvailabilityController extends Controller
         // Apply time changes and notify affected students
         if ($enabled && isset($slotsData)) {
             foreach ($slotsData as $sData) {
-                if ($sData['startTime'] !== $sData['originalStartTime'] || $sData['endTime'] !== $sData['originalEndTime']) {
-                    foreach ($sData['appointments'] as $apt) {
+                $originalStartTime = $sData['originalStartTime'] ?? $sData['startTime'];
+                $originalEndTime = $sData['originalEndTime'] ?? $sData['endTime'];
+                
+                if ($sData['startTime'] !== $originalStartTime || $sData['endTime'] !== $originalEndTime) {
+                    foreach ($sData['appointments'] as $aptData) {
+                        if (!isset($aptData['id'])) continue;
+
+                        $apt = \App\Models\Appointment::with('student.user')->find($aptData['id']);
+                        if (!$apt) continue;
+
                         // Update the appointment preferred_time
                         $apt->preferred_time = $sData['startTime'] . ':00';
                         $apt->save();
