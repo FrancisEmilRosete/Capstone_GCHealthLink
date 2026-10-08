@@ -43,6 +43,8 @@ export function useServerEvents(
 
     const onQueue = (e: any) => callbackRef.current('queue', e);
     const onVisits = (e: any) => callbackRef.current('visits', e);
+    const onMedicalCalendar = (e: any) => callbackRef.current('medical.calendar', e);
+    const onDentalCalendar = (e: any) => callbackRef.current('dental.calendar', e);
 
     if (topics.includes('queue')) {
       echo.channel('clinic.queue').listen('.QueueUpdated', onQueue);
@@ -52,6 +54,14 @@ export function useServerEvents(
       echo.channel('clinic.visits').listen('.VisitsUpdated', onVisits);
     }
 
+    if (topics.includes('medical.calendar')) {
+      echo.channel('medical.calendar').listen('.CalendarUpdated', onMedicalCalendar);
+    }
+
+    if (topics.includes('dental.calendar')) {
+      echo.channel('dental.calendar').listen('.CalendarUpdated', onDentalCalendar);
+    }
+
     return () => {
       // Remove only this hook's handlers; other components share the channels.
       if (topics.includes('queue')) {
@@ -59,6 +69,12 @@ export function useServerEvents(
       }
       if (topics.includes('visits')) {
         echo.channel('clinic.visits').stopListening('.VisitsUpdated', onVisits);
+      }
+      if (topics.includes('medical.calendar')) {
+        echo.channel('medical.calendar').stopListening('.CalendarUpdated', onMedicalCalendar);
+      }
+      if (topics.includes('dental.calendar')) {
+        echo.channel('dental.calendar').stopListening('.CalendarUpdated', onDentalCalendar);
       }
     };
   }, [topicsKey]);

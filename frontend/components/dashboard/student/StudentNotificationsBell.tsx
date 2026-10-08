@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { getToken, getUserId } from '@/lib/auth';
 import { useUserPing } from '@/hooks/useUserPing';
 import { printCertificate, type PrintableCertificate } from '@/lib/printCertificate';
+import toast from 'react-hot-toast';
 
 interface AdvisoryItem {
   id: string;
@@ -146,9 +147,13 @@ export default function StudentNotificationsBell() {
   }, []);
 
   const userId = getUserId();
-  useUserPing(userId, (type) => {
+  useUserPing(userId, (type, data) => {
     if (type === 'certificate' || type === 'advisory') {
       void loadNotifications();
+    } else if (type === 'calendar') {
+      toast.success(data?.message || 'Your appointment time has been updated.', { duration: 6000 });
+      // Reload notifications if we also stored it in DB, although this component only fetches advisories/certs.
+      // But we can just show the toast for now since it's a real-time alert!
     }
   });
 

@@ -21,8 +21,17 @@ interface ScopeConfigResponse {
       string,
       {
         isAvailable: boolean;
-        slots: { startTime: string; endTime: string; capacity: number }[];
-        isOverride: boolean;
+        isOverride?: boolean;
+        slots: { 
+          startTime: string; 
+          endTime: string; 
+          capacity: number;
+          originalStartTime?: string;
+          originalEndTime?: string;
+          total_capacity?: number;
+          booked_count?: number;
+          bookings?: any[];
+        }[];
       }
     >;
   };
@@ -56,7 +65,16 @@ export default function AvailabilityCalendarManager({
   const [days, setDays] = useState<ScopeConfigResponse['data']['days']>({});
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [enabled, setEnabled] = useState(true);
-  const [selectedSlots, setSelectedSlots] = useState<{ startTime: string; endTime: string; capacity: number }[]>([]);
+  const [selectedSlots, setSelectedSlots] = useState<{ 
+    startTime: string; 
+    endTime: string; 
+    capacity: number;
+    originalStartTime?: string;
+    originalEndTime?: string;
+    total_capacity?: number;
+    booked_count?: number;
+    bookings?: any[];
+  }[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [newSlotStartTime, setNewSlotStartTime] = useState('08:00');
   const [newSlotEndTime, setNewSlotEndTime] = useState('09:00');
@@ -80,6 +98,9 @@ export default function AvailabilityCalendarManager({
   const [forceReason, setForceReason] = useState('');
   const [droppedCount, setDroppedCount] = useState(0);
   const [pendingConfig, setPendingConfig] = useState<{enabled: boolean, slots: any[]} | null>(null);
+
+  const [showSlotDetailsModal, setShowSlotDetailsModal] = useState(false);
+  const [selectedSlotDetails, setSelectedSlotDetails] = useState<any>(null);
 
   const daysInMonth = useMemo(() => new Date(year, month, 0).getDate(), [month, year]);
   const firstDayOfMonth = useMemo(() => new Date(year, month - 1, 1).getDay(), [month, year]);
@@ -133,8 +154,18 @@ export default function AvailabilityCalendarManager({
     void fetchScopeConfig(true);
   }, [scope, month, year]);
 
-  useServerEvents(['calendar'], () => {
-    void fetchScopeConfig(false);
+  useServerEvents([`${scope}.calendar`], (type, payload: any) => {
+    if (type === `${scope}.calendar` && payload?.date && payload?.dayConfig) {
+      setDays(prev => ({
+        ...prev,
+        [payload.date]: payload.dayConfig
+      }));
+      if (payload.date === selectedDate) {
+        setEnabled(payload.dayConfig.isAvailable);
+        setSelectedSlots(payload.dayConfig.slots || []);
+        setIsOverride(payload.dayConfig.isOverride ?? false);
+      }
+    }
   });
 
   useEffect(() => {
@@ -142,7 +173,7 @@ export default function AvailabilityCalendarManager({
 
     setEnabled(selectedDay.isAvailable);
     setSelectedSlots(selectedDay.slots || []);
-    setIsOverride(selectedDay.isOverride);
+    setIsOverride(selectedDay.isOverride ?? false);
   }, [selectedDay]);
 
   async function saveDateAvailability(newEnabled: boolean, newSlots: typeof selectedSlots, force = false, reason = '') {
@@ -265,9 +296,12 @@ export default function AvailabilityCalendarManager({
     const capacity = typeof editSlotCapacity === 'number' && editSlotCapacity > 0 ? editSlotCapacity : 1;
     const newSlots = [...selectedSlots];
     newSlots[editingSlotIndex] = {
+      ...newSlots[editingSlotIndex],
       startTime: editSlotStartTime,
       endTime: editSlotEndTime,
       capacity,
+      originalStartTime: newSlots[editingSlotIndex].originalStartTime || newSlots[editingSlotIndex].startTime,
+      originalEndTime: newSlots[editingSlotIndex].originalEndTime || newSlots[editingSlotIndex].endTime,
     };
     newSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
     
@@ -478,8 +512,13 @@ export default function AvailabilityCalendarManager({
                   selectedSlots.map((slot, index) => (
                     <div
                       key={index}
+                      onClick={() => {
+                        if (!enabled) return;
+                        setSelectedSlotDetails(slot);
+                        setShowSlotDetailsModal(true);
+                      }}
                       className={`p-4 rounded-xl border ${
-                        enabled ? 'border-gray-200 bg-white shadow-sm hover:border-teal-300 transition-colors' : 'border-gray-200 bg-gray-50 opacity-60'
+                        enabled ? 'border-gray-200 bg-white shadow-sm hover:border-teal-300 transition-colors cursor-pointer' : 'border-gray-200 bg-gray-50 opacity-60'
                       }`}
                     >
                       <div className="flex items-start justify-between">
@@ -488,10 +527,10 @@ export default function AvailabilityCalendarManager({
                             {formatTime12Hour(slot.startTime)} - {formatTime12Hour(slot.endTime)}
                           </p>
                           <span className="inline-flex items-center rounded-md bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 ring-1 ring-inset ring-teal-600/20">
-                            {slot.capacity} {slot.capacity === 1 ? 'slot available' : 'slots available'}
+                            {Math.max((slot.total_capacity || slot.capacity) - (slot.booked_count || 0), 0)}/{slot.total_capacity || slot.capacity} available slots
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             disabled={!enabled || isSelectedPast}
@@ -549,7 +588,7 @@ export default function AvailabilityCalendarManager({
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Number of Slots</label>
                 <input
                   type="number"
-                  min="1"
+                  min={editingSlotIndex !== null ? (selectedSlots[editingSlotIndex].booked_count || 1) : 1}
                   value={editSlotCapacity}
                   onChange={(e) => setEditSlotCapacity(e.target.value === '' ? '' : parseInt(e.target.value) || '')}
                   className="w-full rounded-xl border-gray-200 bg-gray-50 py-3 px-4 shadow-sm focus:bg-white focus:border-teal-500 focus:ring-teal-500 font-medium transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -582,7 +621,11 @@ export default function AvailabilityCalendarManager({
           <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-gray-900">Confirm Edit</h3>
             <p className="text-sm text-gray-600">
-              Are you sure you want to save changes to this time slot? This will update the availability for the selected date.
+              {editingSlotIndex !== null && selectedSlots[editingSlotIndex].booked_count! > 0 && (selectedSlots[editingSlotIndex].startTime !== editSlotStartTime || selectedSlots[editingSlotIndex].endTime !== editSlotEndTime) ? (
+                <span className="text-orange-600 font-medium">This slot has {selectedSlots[editingSlotIndex].booked_count} active student bookings. Changing the time will automatically notify them. Do you want to proceed?</span>
+              ) : (
+                "Are you sure you want to save changes to this time slot? This will update the availability for the selected date."
+              )}
             </p>
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
               <p className="text-sm font-medium text-gray-800">New Schedule:</p>
@@ -695,6 +738,84 @@ export default function AvailabilityCalendarManager({
                 className="px-4 py-2 rounded-lg bg-orange-600 text-white font-semibold hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? 'Dropping...' : 'Confirm & Drop'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Slot Details Modal */}
+      {showSlotDetailsModal && selectedSlotDetails && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Slot Details</h3>
+                <p className="text-sm text-gray-500">
+                  {formatTime12Hour(selectedSlotDetails.startTime)} - {formatTime12Hour(selectedSlotDetails.endTime)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSlotDetailsModal(false);
+                  setSelectedSlotDetails(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-semibold text-gray-700">Booked Students</h4>
+                <span className="inline-flex items-center rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-700 ring-1 ring-inset ring-teal-600/20">
+                  {selectedSlotDetails.booked_count || 0} / {selectedSlotDetails.total_capacity || selectedSlotDetails.capacity} Booked
+                </span>
+              </div>
+
+              {(!selectedSlotDetails.bookings || selectedSlotDetails.bookings.length === 0) ? (
+                <div className="text-center py-8 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
+                  <p className="text-sm text-gray-500 italic">No students booked yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {selectedSlotDetails.bookings.map((booking: any) => (
+                    <div key={booking.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">
+                          {booking.student ? `${booking.student.firstName} ${booking.student.lastName}` : 'Unknown Student'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {booking.student?.studentNumber || 'N/A'} • {booking.student?.courseDept || 'N/A'}
+                        </p>
+                      </div>
+                      <span className={`inline-flex items-center rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                        booking.status === 'WAITING' ? 'bg-blue-100 text-blue-800' :
+                        booking.status === 'IN_PROGRESS' ? 'bg-teal-100 text-teal-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {booking.status === 'IN_PROGRESS' ? 'In Progress' : booking.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-5 border-t border-gray-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSlotDetailsModal(false);
+                  setSelectedSlotDetails(null);
+                }}
+                className="px-5 py-2 rounded-xl text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>

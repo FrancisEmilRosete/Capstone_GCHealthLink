@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { X, FileText, CalendarClock } from 'lucide-react';
 import toast from 'react-hot-toast';
+import QRCode from 'react-qr-code';
 
 import { api, ApiError } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -194,13 +195,13 @@ function writeCachedQrPayload(payload: CachedQrPayload) {
 
 function QrCard({
   loading,
-  qrImage,
+  qrToken,
   profile,
   className = '',
   prominent = false,
 }: {
   loading: boolean;
-  qrImage: string;
+  qrToken: string;
   profile: StudentProfile | null;
   className?: string;
   prominent?: boolean;
@@ -211,12 +212,15 @@ function QrCard({
 
       {loading ? (
         <p className="text-sm text-[hsl(var(--muted))]">Loading QR...</p>
-      ) : qrImage ? (
-        <img
-          src={qrImage}
-          alt="Student QR Code"
-          className={`${prominent ? 'w-56 h-56 sm:w-60 sm:h-60' : 'w-44 h-44'} rounded-md border border-[hsl(var(--border))]`}
-        />
+      ) : qrToken ? (
+        <div style={{ height: "auto", margin: "0 auto", maxWidth: 200, width: "100%" }} className={`bg-white p-2 flex items-center justify-center rounded-md border border-[hsl(var(--border))] ${prominent ? 'w-56 h-56 sm:w-60 sm:h-60' : 'w-44 h-44'}`}>
+          <QRCode
+            size={256}
+            style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+            value={qrToken}
+            viewBox={`0 0 256 256`}
+          />
+        </div>
       ) : (
         <p className="text-sm text-[hsl(var(--muted))] text-center">QR code is not available right now.</p>
       )}
@@ -250,7 +254,7 @@ function QrCard({
 export default function StudentDashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [qrImage, setQrImage] = useState<string>('');
+  const [qrToken, setQrToken] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -287,8 +291,8 @@ export default function StudentDashboard() {
 
   async function loadStudentData(showLoader = true) {
     const cachedQr = readCachedQrPayload();
-    if (cachedQr?.qrCodeImage) {
-      setQrImage(cachedQr.qrCodeImage);
+    if (cachedQr?.qrToken) {
+      setQrToken(cachedQr.qrToken);
     }
 
     const token = getToken();
@@ -313,7 +317,7 @@ export default function StudentDashboard() {
 
       if (qrResponse.status === 'fulfilled') {
         const qrPayload = qrResponse.value.data;
-        setQrImage(qrPayload.qrCodeImage || cachedQr?.qrCodeImage || '');
+        setQrToken(qrPayload.qrToken || cachedQr?.qrToken || '');
 
         if (qrPayload.qrToken && qrPayload.qrCodeImage) {
           writeCachedQrPayload({
@@ -323,7 +327,7 @@ export default function StudentDashboard() {
           });
         }
       } else {
-        setQrImage(cachedQr?.qrCodeImage || '');
+        setQrToken(cachedQr?.qrToken || '');
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -405,7 +409,7 @@ export default function StudentDashboard() {
 
       <QrCard
         loading={loading}
-        qrImage={qrImage}
+        qrToken={qrToken}
         profile={profile}
         prominent
         className="lg:hidden mx-auto w-full max-w-sm"
@@ -506,7 +510,7 @@ export default function StudentDashboard() {
 
         <QrCard
           loading={loading}
-          qrImage={qrImage}
+          qrToken={qrToken}
           profile={profile}
           className="hidden lg:flex"
         />

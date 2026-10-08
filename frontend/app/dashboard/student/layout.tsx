@@ -22,6 +22,7 @@ import {
 import AiAssistantModal from '@/components/dashboard/AiAssistantModal';
 import { Sparkles } from 'lucide-react';
 import MessengerWidget from '@/components/messaging/MessengerWidget';
+import QRCode from 'react-qr-code';
 
 interface StudentProfileSummary {
   firstName: string;
@@ -136,43 +137,14 @@ function QRModal({
   profileName,
   studentNumber,
   courseDept,
-  qrImage,
+  qrToken,
 }: {
   onClose: () => void;
   profileName: string;
   studentNumber: string;
   courseDept: string;
-  qrImage: string;
+  qrToken: string;
 }) {
-  // Simple SVG QR-like pattern
-  const cells: { x: number; y: number }[] = [];
-  // Seed a deterministic pattern
-  const seed = [1,0,1,1,0,1,0,1,1,0,0,1,1,0,1,1,1,0,1,0,0,1,0,1,1,0,1,1,0,1,
-                 0,1,1,0,1,0,1,1,0,0,1,1,0,1,1,1,0,1,0,0,1,0,1,1,0,1,0,1,1,0,
-                 1,1,0,1,0,1,1,0,0,1,1,0,1,1,1,0,1,0,0,1,0,1,1,0,1,0,1,1,0,1,
-                 0,1,1,0,1,0,1,1,0,0,1,1,0,1,1,1,0,1,0,0,1,0,1,1,0,1,0,1,1,0,
-                 1,1,0,1,0,1,1,0,0,1,1,0,1,1,1,0,1,0,0,1,0,1,1,0,1,0,1,1,0,1];
-  const SIZE = 21;
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      // Finder patterns (corners)
-      const inFinder =
-        (r < 7 && c < 7) || (r < 7 && c >= SIZE - 7) || (r >= SIZE - 7 && c < 7);
-      const onFinderBorder =
-        (r === 0 || r === 6 || c === 0 || c === 6) && r < 7 && c < 7 ||
-        (r === 0 || r === 6 || c === SIZE-7 || c === SIZE-1) && r < 7 && c >= SIZE-7 ||
-        (r === SIZE-7 || r === SIZE-1 || c === 0 || c === 6) && r >= SIZE-7 && c < 7;
-      if (inFinder) {
-        const tr = r % 7;
-        if (onFinderBorder || (tr >= 2 && tr <= 4 && (c < 7 ? (c%7>=2&&c%7<=4) : (c>=SIZE-5&&c<=SIZE-3)) )) {
-          cells.push({ x: c, y: r });
-        }
-        continue;
-      }
-      if (seed[(r * SIZE + c) % seed.length]) cells.push({ x: c, y: r });
-    }
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-80 p-6 flex flex-col items-center"
@@ -188,23 +160,18 @@ function QRModal({
         </div>
 
         {/* QR Code SVG */}
-        <div className="mb-4">
-          {qrImage ? (
-            <img src={qrImage} alt="Student QR Code" className="w-[180px] h-[180px] rounded-lg border border-gray-100" />
+        <div className="mb-4 bg-white p-2 flex items-center justify-center rounded-lg border border-gray-100 w-[180px] h-[180px]">
+          {qrToken ? (
+            <QRCode
+              size={256}
+              style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+              value={qrToken}
+              viewBox={`0 0 256 256`}
+            />
           ) : (
-            <svg width="180" height="180" viewBox={`0 0 ${SIZE} ${SIZE}`} shapeRendering="crispEdges">
-              <rect width={SIZE} height={SIZE} fill="white" />
-              {cells.map((cell, i) => (
-                <rect key={i} x={cell.x} y={cell.y} width={1} height={1} fill="#111" />
-              ))}
-              {/* Finder pattern outlines */}
-              <rect x={0} y={0} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
-              <rect x={2} y={2} width={3} height={3} fill="#111" />
-              <rect x={SIZE-7} y={0} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
-              <rect x={SIZE-5} y={2} width={3} height={3} fill="#111" />
-              <rect x={0} y={SIZE-7} width={7} height={7} fill="none" stroke="#111" strokeWidth={0.1} />
-              <rect x={2} y={SIZE-5} width={3} height={3} fill="#111" />
-            </svg>
+            <div className="w-full h-full bg-gray-100 animate-pulse rounded-md flex items-center justify-center text-xs text-gray-400">
+              Loading...
+            </div>
           )}
         </div>
 
@@ -237,7 +204,7 @@ function StudentTopBar({
   profileName,
   studentNumber,
   courseDept,
-  qrImage,
+  qrToken,
 }: {
   onMenuClick: () => void;
   isDark: boolean;
@@ -245,7 +212,7 @@ function StudentTopBar({
   profileName: string;
   studentNumber: string;
   courseDept: string;
-  qrImage: string;
+  qrToken: string;
 }) {
   const [qrOpen, setQrOpen] = useState(false);
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -293,7 +260,7 @@ function StudentTopBar({
           profileName={profileName}
           studentNumber={studentNumber}
           courseDept={courseDept}
-          qrImage={qrImage}
+          qrToken={qrToken}
         />
       )}
       <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-6 py-4 shadow-sm">
@@ -361,7 +328,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   const [hasCompletedProfile, setHasCompletedProfile] = useState<boolean | null>(null);
   const [studentNumber, setStudentNumber] = useState('');
   const [courseDept, setCourseDept] = useState('');
-  const [qrImage, setQrImage] = useState('');
+  const [qrToken, setQrToken] = useState('');
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   const token = getToken();
@@ -428,7 +395,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
         if (qrResponse.status === 'fulfilled') {
           const qrPayload = qrResponse.value.data;
-          setQrImage(qrPayload?.qrCodeImage || cachedQr?.qrCodeImage || '');
+          setQrToken(qrPayload?.qrToken || cachedQr?.qrToken || '');
           setStudentNumber(qrPayload?.studentNumber || profile?.studentNumber || cachedQr?.studentNumber || '');
 
           if (qrPayload?.qrToken && qrPayload?.qrCodeImage) {
@@ -439,7 +406,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
             });
           }
         } else {
-          setQrImage(cachedQr?.qrCodeImage || '');
+          setQrToken(cachedQr?.qrToken || '');
         }
       } catch {
         if (!mounted) return;
@@ -485,7 +452,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           profileName={profileName}
           studentNumber={studentNumber}
           courseDept={courseDept}
-          qrImage={qrImage}
+          qrToken={qrToken}
         />
         <main className="flex-1 overflow-y-auto dashboard-uniform-width">
           {children}

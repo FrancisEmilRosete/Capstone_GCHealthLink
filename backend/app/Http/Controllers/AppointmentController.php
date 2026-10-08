@@ -80,6 +80,11 @@ class AppointmentController extends Controller
 
         QueueUpdated::dispatch();
 
+        $scope = (stripos($appointment->service_type, 'Dental') !== false) ? 'dental' : 'medical';
+        $dateStr = \Carbon\Carbon::parse($appointment->preferred_date)->format('Y-m-d');
+        $dayConfig = \App\Http\Controllers\AppointmentAvailabilityController::getDayConfig($dateStr, $scope);
+        \App\Events\CalendarUpdated::dispatch($scope, $dateStr, $dayConfig);
+
         return response()->json([
             'success' => true,
             'message' => 'Appointment created successfully.',
@@ -125,6 +130,11 @@ class AppointmentController extends Controller
 
         QueueUpdated::dispatch();
 
+        $scope = (stripos($appointment->service_type, 'Dental') !== false) ? 'dental' : 'medical';
+        $dateStr = \Carbon\Carbon::parse($appointment->preferred_date)->format('Y-m-d');
+        $dayConfig = \App\Http\Controllers\AppointmentAvailabilityController::getDayConfig($dateStr, $scope);
+        \App\Events\CalendarUpdated::dispatch($scope, $dateStr, $dayConfig);
+
         return response()->json([
             'success' => true,
             'message' => 'Appointment status updated.',
@@ -153,6 +163,11 @@ class AppointmentController extends Controller
         $appointment->update(['status' => Appointment::STATUS_CANCELLED]);
 
         QueueUpdated::dispatch();
+
+        $scope = (stripos($appointment->service_type, 'Dental') !== false) ? 'dental' : 'medical';
+        $dateStr = \Carbon\Carbon::parse($appointment->preferred_date)->format('Y-m-d');
+        $dayConfig = \App\Http\Controllers\AppointmentAvailabilityController::getDayConfig($dateStr, $scope);
+        \App\Events\CalendarUpdated::dispatch($scope, $dateStr, $dayConfig);
 
         return response()->json(['message' => 'Appointment cancelled.']);
     }
