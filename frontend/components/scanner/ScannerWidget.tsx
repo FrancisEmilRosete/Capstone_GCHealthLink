@@ -797,11 +797,12 @@ export default function ScannerWidget({ standalone = true }: { standalone?: bool
     };
 
     const requestPayload = {
-      studentProfileId: foundStudent.studentProfileId,
-      visitDate: normalizedVisitDate,
-      visitTime: form.visitTime?.trim() || new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-      chiefComplaintEnc: JSON.stringify(isDentalScanner ? dentalStructuredComplaint : structuredComplaint),
-      dispensedMedicines,
+      student_profile_id: foundStudent.studentProfileId,
+      visit_date: normalizedVisitDate,
+      visit_time: form.visitTime?.trim() || new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+      chief_complaint: JSON.stringify(isDentalScanner ? dentalStructuredComplaint : structuredComplaint),
+      concern_tag: normalizedTag,
+      medicines: dispensedMedicines,
     };
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -829,10 +830,10 @@ export default function ScannerWidget({ standalone = true }: { standalone?: bool
         const queueResponse = await api.post<QueueCreateResponse>(
           '/appointments/queue',
           {
-            studentProfileId: foundStudent.studentProfileId,
-            preferredDate: queueDate,
-            preferredTime: form.visitTime?.trim() || queueTime,
-            serviceType: 'Medical Consultation',
+            student_profile_id: foundStudent.studentProfileId,
+            preferred_date: queueDate,
+            preferred_time: form.visitTime?.trim() || queueTime,
+            service_type: 'Medical Consultation',
             symptoms: normalizedChiefComplaint || 'Nurse triage via QR scanner',
           },
           token,
@@ -851,10 +852,10 @@ export default function ScannerWidget({ standalone = true }: { standalone?: bool
           await api.post(
             '/appointments/queue',
             {
-              studentProfileId: foundStudent.studentProfileId,
-              preferredDate: normalizedFollowUpDate,
-              preferredTime: normalizedFollowUpTime,
-              serviceType: 'Dental Check-up',
+              student_profile_id: foundStudent.studentProfileId,
+              preferred_date: normalizedFollowUpDate,
+              preferred_time: normalizedFollowUpTime,
+              service_type: 'Dental Check-up',
               symptoms: `Follow Up: ${normalizedDiagnosis || normalizedChiefComplaint || 'Dental follow-up review'}`,
             },
             token,
@@ -873,10 +874,10 @@ export default function ScannerWidget({ standalone = true }: { standalone?: bool
         await api.post(
           '/appointments/queue',
           {
-            studentProfileId: foundStudent.studentProfileId,
-            preferredDate: normalizedFollowUpDate,
-            preferredTime: normalizedFollowUpTime,
-            serviceType: 'Medical Consultation',
+            student_profile_id: foundStudent.studentProfileId,
+            preferred_date: normalizedFollowUpDate,
+            preferred_time: normalizedFollowUpTime,
+            service_type: 'Medical Consultation',
             symptoms: `Follow Up: ${normalizedDiagnosis || normalizedChiefComplaint || 'Post consultation review'}`,
           },
           token,
@@ -889,10 +890,10 @@ export default function ScannerWidget({ standalone = true }: { standalone?: bool
         const queueResponse = await api.post<QueueCreateResponse>(
           '/appointments/queue',
           {
-            studentProfileId: foundStudent.studentProfileId,
-            preferredDate: queueDate,
-            preferredTime: form.visitTime?.trim() || queueTime,
-            serviceType: 'Medical Consultation',
+            student_profile_id: foundStudent.studentProfileId,
+            preferred_date: queueDate,
+            preferred_time: form.visitTime?.trim() || queueTime,
+            service_type: 'Medical Consultation',
             symptoms: `For Dispensing: ${normalizedDiagnosis || normalizedChiefComplaint || 'Prescribed medicines'}`,
           },
           token,

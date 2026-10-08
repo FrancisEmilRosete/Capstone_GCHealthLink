@@ -259,17 +259,12 @@ export default function NurseDashboardPage() {
     const complaint = form.chiefComplaint?.trim() || '';
     try {
       await api.post<CreateVisitResponse>('/clinic/visits', {
-        studentProfileId: consultPatient.studentProfile.id,
-        visitDate: form.visitDate?.trim() || new Date().toISOString(),
-        visitTime: form.visitTime?.trim() || consultPatient.preferredTime || undefined,
-        chiefComplaintEnc: JSON.stringify({
-          concernTag: tag, symptoms: complaint, chiefComplaint: complaint || tag,
-          diagnosis: null, treatmentProvided: null, treatmentManagement: null,
-          age: form.age?.trim() || null, sex: form.sex?.trim() || null,
-          vitals: { bp: form.bp?.trim() || null, temperature: form.temperature?.trim() || null },
-          notes: [tag, complaint].filter(Boolean).join(' | ') || 'General consultation',
-        }),
-        dispensedMedicines: [],
+        student_profile_id: consultPatient.studentProfile.id,
+        visit_date: form.visitDate?.trim() || new Date().toISOString(),
+        visit_time: form.visitTime?.trim() || consultPatient.preferredTime || undefined,
+        chief_complaint: form.chiefComplaint?.trim() || tag,
+        concern_tag: tag,
+        medicines: [],
       }, token);
       await api.put(`/appointments/queue/${consultPatient.id}`, { status: 'PENDING' }, token);
       setConsultOpen(false); setConsultPatient(null);

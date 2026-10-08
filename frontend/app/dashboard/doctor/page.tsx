@@ -527,11 +527,12 @@ export default function StaffCommandCenterPage() {
       await api.post<CreateVisitResponse>(
         '/clinic/visits',
         {
-          studentProfileId: consultingPatient.studentProfile.id,
-          visitDate: normalizedVisitDate,
-          visitTime: form.visitTime?.trim() || consultingPatient.preferredTime || undefined,
-          chiefComplaintEnc: JSON.stringify(structuredComplaint),
-          dispensedMedicines,
+          student_profile_id: consultingPatient.studentProfile.id,
+          visit_date: normalizedVisitDate,
+          visit_time: form.visitTime?.trim() || consultingPatient.preferredTime || undefined,
+          chief_complaint: JSON.stringify(structuredComplaint),
+          concern_tag: 'General Consultation',
+          medicines: dispensedMedicines,
         },
         token,
       );
@@ -540,10 +541,10 @@ export default function StaffCommandCenterPage() {
         await api.post(
           '/appointments/queue',
           {
-            studentProfileId: consultingPatient.studentProfile.id,
-            preferredDate: normalizedFollowUpDate,
-            preferredTime: normalizedFollowUpTime,
-            serviceType: 'Medical Consultation',
+            student_profile_id: consultingPatient.studentProfile.id,
+            preferred_date: normalizedFollowUpDate,
+            preferred_time: normalizedFollowUpTime,
+            service_type: 'Medical Consultation',
             symptoms: `Follow Up: ${normalizedDiagnosis || normalizedChiefComplaint || 'Post consultation review'}`,
           },
           token,

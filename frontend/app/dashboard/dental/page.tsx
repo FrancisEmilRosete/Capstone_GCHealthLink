@@ -180,14 +180,14 @@ export default function DentalDashboardPage() {
       await api.post(
         '/clinic/visits',
         {
-          studentProfileId: consultingPatient.studentProfile.id,
-          visitDate: form.visitDate?.trim() || new Date().toISOString(),
-          visitTime: form.visitTime?.trim() || consultingPatient.preferredTime || undefined,
-          chiefComplaintEnc: JSON.stringify(structuredComplaint),
-          dispensedMedicines: medicines.map((m) => ({
-            inventoryId: m.inventoryId,
+          student_profile_id: consultingPatient.studentProfile.id,
+          visit_date: form.visitDate?.trim() || new Date().toISOString(),
+          visit_time: form.visitTime?.trim() || consultingPatient.preferredTime || undefined,
+          chief_complaint: JSON.stringify(structuredComplaint),
+          concern_tag: 'Dental Consultation',
+          medicines: medicines.map((m) => ({
+            inventory_id: m.inventoryId,
             quantity: parseInt(m.qty, 10),
-            autoDispense: true,
           })),
         },
         token,
