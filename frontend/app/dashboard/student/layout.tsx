@@ -41,7 +41,6 @@ interface StudentQrResponse {
   data: {
     studentNumber: string;
     qrToken: string;
-    qrCodeImage: string;
   };
 }
 
@@ -52,7 +51,6 @@ const STUDENT_QR_CACHE_KEY = 'gchl:student:static-qr';
 interface CachedQrPayload {
   studentNumber: string;
   qrToken: string;
-  qrCodeImage: string;
 }
 
 function readCachedQrPayload(): CachedQrPayload | null {
@@ -66,19 +64,17 @@ function readCachedQrPayload(): CachedQrPayload | null {
     if (
       typeof parsed?.studentNumber !== 'string'
       || typeof parsed?.qrToken !== 'string'
-      || typeof parsed?.qrCodeImage !== 'string'
     ) {
       return null;
     }
 
-    if (!parsed.qrToken.trim() || !parsed.qrCodeImage.trim()) {
+    if (!parsed.qrToken.trim()) {
       return null;
     }
 
     return {
       studentNumber: parsed.studentNumber,
       qrToken: parsed.qrToken,
-      qrCodeImage: parsed.qrCodeImage,
     };
   } catch {
     return null;
@@ -357,8 +353,8 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     async function loadStudentSession() {
       try {
         const cachedQr = readCachedQrPayload();
-        if (cachedQr?.qrCodeImage) {
-          setQrImage(cachedQr.qrCodeImage);
+        if (cachedQr?.qrToken) {
+          setQrToken(cachedQr.qrToken);
           if (cachedQr.studentNumber) {
             setStudentNumber(cachedQr.studentNumber);
           }
@@ -398,11 +394,10 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           setQrToken(qrPayload?.qrToken || cachedQr?.qrToken || '');
           setStudentNumber(qrPayload?.studentNumber || profile?.studentNumber || cachedQr?.studentNumber || '');
 
-          if (qrPayload?.qrToken && qrPayload?.qrCodeImage) {
+          if (qrPayload?.qrToken) {
             writeCachedQrPayload({
               studentNumber: qrPayload.studentNumber || profile?.studentNumber || '',
               qrToken: qrPayload.qrToken,
-              qrCodeImage: qrPayload.qrCodeImage,
             });
           }
         } else {

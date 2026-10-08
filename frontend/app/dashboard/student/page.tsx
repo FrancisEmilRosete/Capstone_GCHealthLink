@@ -54,7 +54,6 @@ interface QrResponse {
   data: {
     studentNumber: string;
     qrToken: string;
-    qrCodeImage: string;
   };
 }
 
@@ -63,7 +62,6 @@ const STUDENT_QR_CACHE_KEY = 'gchl:student:static-qr';
 interface CachedQrPayload {
   studentNumber: string;
   qrToken: string;
-  qrCodeImage: string;
 }
 
 function parseAllergyCount(raw?: string | null): number {
@@ -164,19 +162,17 @@ function readCachedQrPayload(): CachedQrPayload | null {
     if (
       typeof parsed?.studentNumber !== 'string'
       || typeof parsed?.qrToken !== 'string'
-      || typeof parsed?.qrCodeImage !== 'string'
     ) {
       return null;
     }
 
-    if (!parsed.qrToken.trim() || !parsed.qrCodeImage.trim()) {
+    if (!parsed.qrToken.trim()) {
       return null;
     }
 
     return {
       studentNumber: parsed.studentNumber,
       qrToken: parsed.qrToken,
-      qrCodeImage: parsed.qrCodeImage,
     };
   } catch {
     return null;
@@ -319,11 +315,10 @@ export default function StudentDashboard() {
         const qrPayload = qrResponse.value.data;
         setQrToken(qrPayload.qrToken || cachedQr?.qrToken || '');
 
-        if (qrPayload.qrToken && qrPayload.qrCodeImage) {
+        if (qrPayload.qrToken) {
           writeCachedQrPayload({
             studentNumber: qrPayload.studentNumber || profileResponse.value.data.studentNumber || '',
             qrToken: qrPayload.qrToken,
-            qrCodeImage: qrPayload.qrCodeImage,
           });
         }
       } else {
