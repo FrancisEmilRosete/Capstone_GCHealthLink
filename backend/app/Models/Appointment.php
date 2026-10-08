@@ -43,6 +43,11 @@ class Appointment extends Model
         return $this->belongsTo(StudentProfile::class);
     }
 
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(StudentProfile::class, 'student_profile_id');
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
