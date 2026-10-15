@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Printer, FileText } from 'lucide-react';
 import { getNormalizedUserRole } from '@/lib/auth';
+import { api } from '@/lib/api';
 
 interface UiStudent {
   id: string;
@@ -68,11 +69,8 @@ const MedicalCertificateModal: React.FC<MedicalCertificateModalProps> = ({
     // Fetch dynamic staff
     const fetchStaff = async () => {
       try {
-        const res = await fetch('/api/staff', {
-          headers: { 'Authorization': `Bearer cookie-auth`, 'X-Encrypted-Request': 'true' }
-        });
-        const data = await res.json();
-        setStaffList(data.payload ? data.payload : data); // Handle decrypted if using api helper
+        const data = await api.get<{ name: string; position: string }[]>('/staff');
+        setStaffList(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error('Failed to load staff');
       }

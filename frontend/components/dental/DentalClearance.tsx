@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FileCheck, Printer, FileDown } from 'lucide-react';
+import { api } from '@/lib/api';
 
 interface DentalClearanceProps {
   patient: {
@@ -25,11 +26,8 @@ const DentalClearance: React.FC<DentalClearanceProps> = ({
   useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const res = await fetch('/api/staff', {
-          headers: { 'Authorization': `Bearer cookie-auth`, 'X-Encrypted-Request': 'true' }
-        });
-        const data = await res.json();
-        setStaffList(data.payload ? data.payload : data);
+        const data = await api.get<{ name: string; position: string }[]>('/staff');
+        setStaffList(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error('Failed to load staff');
       }

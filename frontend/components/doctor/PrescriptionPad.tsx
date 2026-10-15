@@ -25,6 +25,7 @@ interface PrescriptionPadProps {
 }
 
 import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
 
 const PrescriptionPad: React.FC<PrescriptionPadProps> = ({ 
   patient, medicines, onAddMedicine, onUpdateMedicine, onDeleteMedicine,
@@ -36,11 +37,8 @@ const PrescriptionPad: React.FC<PrescriptionPadProps> = ({
   useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const res = await fetch('/api/staff', {
-          headers: { 'Authorization': `Bearer cookie-auth`, 'X-Encrypted-Request': 'true' }
-        });
-        const data = await res.json();
-        setStaffList(data.payload ? data.payload : data);
+        const data = await api.get<{ name: string; position: string }[]>('/staff');
+        setStaffList(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error('Failed to load staff');
       }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Save, Printer, History, PenTool, Lock } from 'lucide-react';
 import AuditHistoryModal from './AuditHistoryModal';
+import { api } from '@/lib/api';
 
 interface DentalPrescriptionProps {
   patient: {
@@ -25,11 +26,8 @@ const DentalPrescription: React.FC<DentalPrescriptionProps> = ({
   useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const res = await fetch('/api/staff', {
-          headers: { 'Authorization': `Bearer cookie-auth`, 'X-Encrypted-Request': 'true' }
-        });
-        const data = await res.json();
-        setStaffList(data.payload ? data.payload : data);
+        const data = await api.get<{ name: string; position: string }[]>('/staff');
+        setStaffList(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error('Failed to load staff');
       }
