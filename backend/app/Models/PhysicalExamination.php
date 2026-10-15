@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\SafeEncrypted;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,13 +27,13 @@ class PhysicalExamination extends Model
     {
         return [
             'exam_date'   => 'date',
-            'skin'        => 'encrypted',
-            'heent'       => 'encrypted',
-            'chest_lungs' => 'encrypted',
-            'heart'       => 'encrypted',
-            'abdomen'     => 'encrypted',
-            'extremities' => 'encrypted',
-            'others'      => 'encrypted',
+            'skin'        => SafeEncrypted::class,
+            'heent'       => SafeEncrypted::class,
+            'chest_lungs' => SafeEncrypted::class,
+            'heart'       => SafeEncrypted::class,
+            'abdomen'     => SafeEncrypted::class,
+            'extremities' => SafeEncrypted::class,
+            'others'      => SafeEncrypted::class,
         ];
     }
 

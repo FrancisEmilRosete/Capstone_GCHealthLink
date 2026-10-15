@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\SafeEncrypted;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -37,8 +38,8 @@ class Appointment extends Model
     {
         return [
             'preferred_date'      => 'date',
-            'symptoms'            => 'encrypted',
-            'cancellation_reason' => 'encrypted',
+            'symptoms'            => SafeEncrypted::class,
+            'cancellation_reason' => SafeEncrypted::class,
         ];
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\SafeEncrypted;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -48,26 +49,26 @@ class MedicalHistory extends Model
     protected function casts(): array
     {
         return [
-            'allergy_enc'                       => 'encrypted',
-            'asthma_enc'                        => 'encrypted',
-            'chicken_pox_enc'                   => 'encrypted',
-            'diabetes_enc'                      => 'encrypted',
-            'dysmenorrhea_enc'                  => 'encrypted',
-            'epilepsy_seizure_enc'              => 'encrypted',
-            'heart_disorder_enc'                => 'encrypted',
-            'hepatitis_enc'                     => 'encrypted',
-            'hypertension_enc'                  => 'encrypted',
-            'measles_enc'                       => 'encrypted',
-            'mumps_enc'                         => 'encrypted',
-            'anxiety_disorder_enc'              => 'encrypted',
-            'panic_attack_hyperventilation_enc' => 'encrypted',
-            'pneumonia_enc'                     => 'encrypted',
-            'ptb_primary_complex_enc'           => 'encrypted',
-            'typhoid_fever_enc'                 => 'encrypted',
-            'covid19_enc'                       => 'encrypted',
-            'urinary_tract_infection_enc'       => 'encrypted',
-            'has_past_operation_enc'            => 'encrypted',
-            'operation_nature_and_date_enc'     => 'encrypted',
+            'allergy_enc'                       => SafeEncrypted::class,
+            'asthma_enc'                        => SafeEncrypted::class,
+            'chicken_pox_enc'                   => SafeEncrypted::class,
+            'diabetes_enc'                      => SafeEncrypted::class,
+            'dysmenorrhea_enc'                  => SafeEncrypted::class,
+            'epilepsy_seizure_enc'              => SafeEncrypted::class,
+            'heart_disorder_enc'                => SafeEncrypted::class,
+            'hepatitis_enc'                     => SafeEncrypted::class,
+            'hypertension_enc'                  => SafeEncrypted::class,
+            'measles_enc'                       => SafeEncrypted::class,
+            'mumps_enc'                         => SafeEncrypted::class,
+            'anxiety_disorder_enc'              => SafeEncrypted::class,
+            'panic_attack_hyperventilation_enc' => SafeEncrypted::class,
+            'pneumonia_enc'                     => SafeEncrypted::class,
+            'ptb_primary_complex_enc'           => SafeEncrypted::class,
+            'typhoid_fever_enc'                 => SafeEncrypted::class,
+            'covid19_enc'                       => SafeEncrypted::class,
+            'urinary_tract_infection_enc'       => SafeEncrypted::class,
+            'has_past_operation_enc'            => SafeEncrypted::class,
+            'operation_nature_and_date_enc'     => SafeEncrypted::class,
         ];
     }
 

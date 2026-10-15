@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\SafeEncrypted;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,8 +28,8 @@ class LabResult extends Model
         return [
             'date'              => 'date',
             'date_received'     => 'date',
-            'xray_findings_enc' => 'encrypted',
-            'others_enc'        => 'encrypted',
+            'xray_findings_enc' => SafeEncrypted::class,
+            'others_enc'        => SafeEncrypted::class,
         ];
     }
 

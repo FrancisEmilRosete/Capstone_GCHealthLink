@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\SafeEncrypted;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -41,12 +42,12 @@ class StudentProfile extends Model
             'birthday'  => 'date',
             'age'       => 'integer',
             // PII encrypted at rest (AES-256-CBC via APP_KEY)
-            'present_address'              => 'encrypted',
-            'tel_number'                   => 'encrypted',
-            'emergency_contact_name'       => 'encrypted',
-            'emergency_relationship'       => 'encrypted',
-            'emergency_contact_address'    => 'encrypted',
-            'emergency_contact_tel_number' => 'encrypted',
+            'present_address'              => SafeEncrypted::class,
+            'tel_number'                   => SafeEncrypted::class,
+            'emergency_contact_name'       => SafeEncrypted::class,
+            'emergency_relationship'       => SafeEncrypted::class,
+            'emergency_contact_address'    => SafeEncrypted::class,
+            'emergency_contact_tel_number' => SafeEncrypted::class,
         ];
     }
 

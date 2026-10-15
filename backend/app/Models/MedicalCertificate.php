@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\SafeEncrypted;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,9 +33,9 @@ class MedicalCertificate extends Model
     {
         return [
             'issued_at'               => 'datetime',
-            'diagnosis_findings'      => 'encrypted',
-            'recommendations_remarks' => 'encrypted',
-            'remarks'                 => 'encrypted',
+            'diagnosis_findings'      => SafeEncrypted::class,
+            'recommendations_remarks' => SafeEncrypted::class,
+            'remarks'                 => SafeEncrypted::class,
         ];
     }
 

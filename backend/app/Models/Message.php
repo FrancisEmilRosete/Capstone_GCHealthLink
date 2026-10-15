@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\SafeEncrypted;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -40,7 +41,7 @@ class Message extends Model
     {
         return [
             'is_read' => 'boolean',
-            'body'    => 'encrypted',
+            'body'    => SafeEncrypted::class,
         ];
     }
 

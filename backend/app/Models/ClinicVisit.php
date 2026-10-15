@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\SafeEncrypted;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -40,7 +41,7 @@ class ClinicVisit extends Model
     {
         return [
             'visit_date'         => 'date',
-            'chief_complaint_enc' => 'encrypted',  // at-rest field-level encryption
+            'chief_complaint_enc' => SafeEncrypted::class,  // at-rest field-level encryption
         ];
     }
 

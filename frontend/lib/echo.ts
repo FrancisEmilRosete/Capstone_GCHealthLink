@@ -33,19 +33,41 @@ export function getEcho(): Echo<'pusher'> | null {
   if (typeof window === 'undefined') return null;
   if (window.Echo) return window.Echo;
 
-  const key = process.env.NEXT_PUBLIC_PUSHER_APP_KEY;
+  const isLocal = process.env.NODE_ENV === 'development';
+
+  const key = isLocal
+    ? process.env.NEXT_PUBLIC_REVERB_APP_KEY
+    : process.env.NEXT_PUBLIC_PUSHER_APP_KEY;
   if (!key) {
-    console.warn('[realtime] NEXT_PUBLIC_PUSHER_APP_KEY is not set — realtime disabled.');
+    console.warn(
+      `[realtime] ${isLocal ? 'NEXT_PUBLIC_REVERB_APP_KEY' : 'NEXT_PUBLIC_PUSHER_APP_KEY'} is not set — realtime disabled.`,
+    );
     return null;
   }
 
   window.Pusher = Pusher;
 
+  // Local: Laravel Reverb (speaks the Pusher protocol) — never touches the live Pusher app.
+  // Production: Pusher cloud.
+  const connection = isLocal
+    ? {
+        wsHost: process.env.NEXT_PUBLIC_REVERB_HOST || '127.0.0.1',
+        wsPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT || 8080),
+        wssPort: Number(process.env.NEXT_PUBLIC_REVERB_PORT || 8080),
+        forceTLS: false,
+        enabledTransports: ['ws', 'wss'],
+        disableStats: true,
+        cluster: 'mt1', // required by pusher-js typings; ignored when wsHost is set
+      }
+    : {
+        cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER || 'ap1',
+        forceTLS: true,
+      };
+
   window.Echo = new Echo({
     broadcaster: 'pusher',
     key,
-    cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER || 'ap1',
-    forceTLS: true,
+    ...connection,
     // Custom authorizer so the HttpOnly auth cookie is sent cross-origin.
     authorizer: (channel: { name: string }) => ({
       authorize: (socketId: string, callback: AuthCallback) => {
