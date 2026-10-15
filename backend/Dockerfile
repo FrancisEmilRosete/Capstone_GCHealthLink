@@ -15,6 +15,10 @@ COPY . .
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
+# Startup script (migrations, seeders, caches, server).
+# sed strips CRLF in case the file was saved on Windows.
+RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
+
 # Expose port and launch Laravel
 EXPOSE 8000
-CMD php artisan config:clear && php artisan optimize:clear && php artisan migrate --force && php artisan db:seed --class=CourseSeeder --force && php artisan db:seed --class=ClinicStaffSeeder --force && php artisan config:cache && php artisan route:cache && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
+CMD ["./start.sh"]
