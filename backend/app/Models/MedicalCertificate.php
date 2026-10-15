@@ -30,7 +30,12 @@ class MedicalCertificate extends Model
 
     protected function casts(): array
     {
-        return ['issued_at' => 'datetime'];
+        return [
+            'issued_at'               => 'datetime',
+            'diagnosis_findings'      => 'encrypted',
+            'recommendations_remarks' => 'encrypted',
+            'remarks'                 => 'encrypted',
+        ];
     }
 
     public function studentProfile(): BelongsTo

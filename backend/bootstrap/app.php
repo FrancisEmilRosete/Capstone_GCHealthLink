@@ -40,6 +40,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // ADDED: Register CookieToBearerToken to parse auth_token cookies.
         // ---------------------------------------------------------------
         $middleware->api(prepend: [
+            // Outermost: decrypts AES request bodies / encrypts JSON responses
+            \App\Http\Middleware\EncryptApiPayloads::class,
             \App\Http\Middleware\CookieToBearerToken::class,
         ]);
 

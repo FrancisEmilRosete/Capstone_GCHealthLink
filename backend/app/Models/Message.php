@@ -40,6 +40,7 @@ class Message extends Model
     {
         return [
             'is_read' => 'boolean',
+            'body'    => 'encrypted',
         ];
     }
 

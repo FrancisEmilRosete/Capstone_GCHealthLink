@@ -132,20 +132,21 @@ class AiAssistantController extends Controller
     public function outbreakForecast(Request $request): JsonResponse
     {
         try {
-            // Get historical data for the FastAPI service
-            $visits = Appointment::whereNotNull('symptoms')
+            // `symptoms` is encrypted at rest, so group after decryption in PHP.
+            $historicalData = Appointment::whereNotNull('symptoms')
                 ->whereNotNull('preferred_date')
-                ->selectRaw('DATE(preferred_date) as date, symptoms as illness_category, count(*) as cases')
-                ->groupBy('date', 'illness_category')
-                ->get();
-                
-            $historicalData = $visits->map(function ($visit) {
-                return [
-                    'date' => $visit->date,
-                    'illness_category' => $visit->illness_category,
-                    'cases' => (int) $visit->cases
-                ];
-            })->toArray();
+                ->get(['preferred_date', 'symptoms'])
+                ->groupBy(fn ($a) => $a->preferred_date->format('Y-m-d') . '|' . $a->symptoms)
+                ->map(function ($group) {
+                    $first = $group->first();
+                    return [
+                        'date' => $first->preferred_date->format('Y-m-d'),
+                        'illness_category' => $first->symptoms,
+                        'cases' => $group->count(),
+                    ];
+                })
+                ->values()
+                ->toArray();
             
             // If empty, supply a dummy record so the AI service doesn't fail
             if (empty($historicalData)) {

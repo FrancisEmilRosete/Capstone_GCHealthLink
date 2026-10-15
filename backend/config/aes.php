@@ -28,4 +28,17 @@ return [
     */
     'shared_secret' => env('APP_AES_SECRET'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | API Payload Encryption (EncryptApiPayloads middleware)
+    |--------------------------------------------------------------------------
+    |
+    | AES_PAYLOAD_KEY MUST equal NEXT_PUBLIC_AES_KEY on the frontend.
+    | Leave empty to disable payload encryption entirely.
+    | AES_PAYLOAD_ENFORCE=true rejects plaintext JSON request bodies.
+    |
+    */
+    'payload_key'     => env('AES_PAYLOAD_KEY', ''),
+    'payload_enforce' => (bool) env('AES_PAYLOAD_ENFORCE', false),
+
 ];

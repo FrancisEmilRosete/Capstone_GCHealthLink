@@ -12,7 +12,13 @@
  * All methods throw an ApiError on non-2xx responses so callers
  * can catch and display the backend's error message.
  */
-// import { encryptApiPayload, decryptApiPayload } from '@/lib/crypto';
+import {
+  encryptApiPayload,
+  decryptApiPayload,
+  isEncryptedEnvelope,
+  isPayloadEncryptionEnabled,
+  ENCRYPTION_HEADER,
+} from '@/lib/crypto';
 
 export const API_PREFIX = '/api';
 const API_BASE_CACHE_KEY = 'gchl_api_base';
@@ -209,19 +215,25 @@ async function request<T = unknown>(
     'Accept': 'application/json',
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (isPayloadEncryptionEnabled) headers[ENCRYPTION_HEADER] = '1';
+
+  const serializedBody = body === undefined
+    ? undefined
+    : JSON.stringify(isPayloadEncryptionEnabled ? encryptApiPayload(body) : body);
 
   const res = await fetchWithFallback(path, {
     method,
     headers,
     credentials: 'include',
     cache: 'no-store',
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: serializedBody,
   }, { expectsJson: true });
 
   // Parse response body (backend always returns JSON)
   let data: any;
   try {
     data = await res.json();
+    if (isEncryptedEnvelope(data)) data = decryptApiPayload(data);
   } catch {
     throw new ApiError('Unexpected server response.', res.status);
   }
@@ -241,6 +253,8 @@ async function requestForm<T = unknown>(
 ): Promise<T> {
   const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Multipart bodies stay as-is (files), but the JSON response is encrypted.
+  if (isPayloadEncryptionEnabled) headers[ENCRYPTION_HEADER] = '1';
 
   const res = await fetchWithFallback(path, {
     method,
@@ -253,6 +267,7 @@ async function requestForm<T = unknown>(
   let data: any;
   try {
     data = await res.json();
+    if (isEncryptedEnvelope(data)) data = decryptApiPayload(data);
   } catch {
     throw new ApiError('Unexpected server response.', res.status);
   }
@@ -288,9 +303,7 @@ async function requestBlob(
   path: string,
   token?: string | null,
 ): Promise<{ blob: Blob; fileName: string | null }> {
-  const headers: HeadersInit = {
-    'X-Encrypted-Request': 'true'
-  };
+  const headers: HeadersInit = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetchWithFallback(path, {

@@ -35,7 +35,11 @@ class Appointment extends Model
 
     protected function casts(): array
     {
-        return ['preferred_date' => 'date'];
+        return [
+            'preferred_date'      => 'date',
+            'symptoms'            => 'encrypted',
+            'cancellation_reason' => 'encrypted',
+        ];
     }
 
     public function studentProfile(): BelongsTo

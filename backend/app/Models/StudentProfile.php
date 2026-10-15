@@ -40,6 +40,13 @@ class StudentProfile extends Model
         return [
             'birthday'  => 'date',
             'age'       => 'integer',
+            // PII encrypted at rest (AES-256-CBC via APP_KEY)
+            'present_address'              => 'encrypted',
+            'tel_number'                   => 'encrypted',
+            'emergency_contact_name'       => 'encrypted',
+            'emergency_relationship'       => 'encrypted',
+            'emergency_contact_address'    => 'encrypted',
+            'emergency_contact_tel_number' => 'encrypted',
         ];
     }
 

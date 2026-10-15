@@ -24,7 +24,16 @@ class PhysicalExamination extends Model
 
     protected function casts(): array
     {
-        return ['exam_date' => 'date'];
+        return [
+            'exam_date'   => 'date',
+            'skin'        => 'encrypted',
+            'heent'       => 'encrypted',
+            'chest_lungs' => 'encrypted',
+            'heart'       => 'encrypted',
+            'abdomen'     => 'encrypted',
+            'extremities' => 'encrypted',
+            'others'      => 'encrypted',
+        ];
     }
 
     public function studentProfile(): BelongsTo
