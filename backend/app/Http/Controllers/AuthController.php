@@ -48,8 +48,13 @@ class AuthController extends Controller
         // Revoke previous tokens for this device (optional — comment out for multi-device)
         $user->tokens()->where('name', 'web-spa')->delete();
 
-        $remember = $request->boolean('remember');
-        $expirationMinutes = $remember ? (30 * 24 * 60) : (2 * 60);
+        // Role-based session lifetime (security policy):
+        //   STUDENT                                 → 2 hours
+        //   Staff (ADMIN / NURSE / DOCTOR / DENTIST) → 8 hours
+        // The same value drives the Sanctum token expiry and the cookie lifetime,
+        // so the browser drops the cookie exactly when the token stops working.
+        // NOTE: "remember me" intentionally does NOT extend this anymore.
+        $expirationMinutes = $user->isStudent() ? 2 * 60 : 8 * 60;
 
         $token = $user->createToken('web-spa', ['*'], now()->addMinutes($expirationMinutes));
 

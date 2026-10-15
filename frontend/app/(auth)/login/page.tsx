@@ -48,6 +48,11 @@ export default function LoginPage() {
   const [loading,       setLoading]       = useState(false);
 
   useEffect(() => {
+    if (sessionStorage.getItem('gchl_session_expired')) {
+      sessionStorage.removeItem('gchl_session_expired');
+      toast.error('Your session has expired. Please log in again.', { id: 'session-expired' });
+    }
+
     const savedEmail = localStorage.getItem('rememberedEmail');
     const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
     if (savedEmail) {

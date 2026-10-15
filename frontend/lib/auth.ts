@@ -5,6 +5,7 @@
  */
 
 import { api } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 const TOKEN_KEY = 'token';
 const ROLE_KEY = 'userRole';
@@ -134,6 +135,27 @@ export async function authLogin(credentials: {
 
 export function authLogout(): void {
   clearSession();
+}
+
+export function handleSessionExpired(): void {
+  clearSession();
+  if (typeof window === 'undefined') return;
+
+  if (window.location.pathname.startsWith('/login')) {
+    return;
+  }
+
+  window.sessionStorage.setItem('gchl_session_expired', '1');
+
+  try {
+    toast.error('Your session has expired. Please log in again.', { id: 'session-expired' });
+  } catch {
+    // ignore
+  }
+
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
 }
 
 export function isLoggedIn(): boolean {

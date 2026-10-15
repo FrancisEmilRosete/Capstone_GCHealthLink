@@ -12,6 +12,7 @@
  * All methods throw an ApiError on non-2xx responses so callers
  * can catch and display the backend's error message.
  */
+import toast from 'react-hot-toast';
 import {
   encryptApiPayload,
   decryptApiPayload,
@@ -202,6 +203,39 @@ export class ApiError extends Error {
   }
 }
 
+// ── Unauthorized / Session Expiry Interceptor ───────────────────
+
+function handleUnauthorizedResponse(path: string): void {
+  if (typeof window === 'undefined') return;
+
+  // Do not intercept login attempts or if user is already on the login page
+  if (path.includes('/auth/login') || window.location.pathname.startsWith('/login')) {
+    return;
+  }
+
+  // Clear local session state
+  window.sessionStorage.removeItem('userRole');
+  window.sessionStorage.removeItem('userId');
+  window.sessionStorage.removeItem('gchl_token');
+  window.sessionStorage.removeItem('gchl_user');
+  window.localStorage.removeItem('gchl_token');
+  window.localStorage.removeItem('gchl_user');
+  window.localStorage.removeItem('token');
+
+  // Set flag so login page can reliably display notification upon navigation
+  window.sessionStorage.setItem('gchl_session_expired', '1');
+
+  try {
+    toast.error('Your session has expired. Please log in again.', { id: 'session-expired' });
+  } catch {
+    // Ignore if toast is not mounted
+  }
+
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+}
+
 // ── Core fetch helper ───────────────────────────────────────────
 
 async function request<T = unknown>(
@@ -239,6 +273,9 @@ async function request<T = unknown>(
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      handleUnauthorizedResponse(path);
+    }
     throw new ApiError(data?.message ?? data?.error ?? 'Something went wrong.', res.status, data);
   }
 
@@ -273,6 +310,9 @@ async function requestForm<T = unknown>(
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      handleUnauthorizedResponse(path);
+    }
     throw new ApiError(data?.message ?? data?.error ?? 'Something went wrong.', res.status, data);
   }
 
@@ -314,6 +354,9 @@ async function requestBlob(
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      handleUnauthorizedResponse(path);
+    }
     let message = 'Something went wrong.';
     try {
       const json = await res.json();
