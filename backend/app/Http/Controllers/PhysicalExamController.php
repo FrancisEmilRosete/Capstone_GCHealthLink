@@ -18,11 +18,28 @@ class PhysicalExamController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
         $studentProfileId = $request->query('studentProfileId');
         
         $query = PhysicalExamination::with('studentProfile');
         
-        if ($studentProfileId) {
+        if ($user && $user->isStudent()) {
+            $ownProfileId = $user->studentProfile?->id;
+            if (!$ownProfileId) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Physical exams retrieved successfully.',
+                    'data' => [],
+                    'pagination' => [
+                        'total' => 0,
+                        'page' => 1,
+                        'limit' => 20,
+                        'totalPages' => 0,
+                    ],
+                ]);
+            }
+            $query->where('student_profile_id', $ownProfileId);
+        } elseif ($studentProfileId) {
             $query->where('student_profile_id', $studentProfileId);
         }
         
@@ -46,6 +63,11 @@ class PhysicalExamController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (!$user || (!$user->isClinicStaff() && !$user->isAdmin())) {
+            return response()->json(['error' => 'Unauthorized. Only clinic staff and administrators can record physical exams.'], 403);
+        }
+
         $validated = $request->validate([
             'studentProfileId' => 'required|exists:student_profiles,id',
             'yearLevel' => 'nullable|string|max:50',

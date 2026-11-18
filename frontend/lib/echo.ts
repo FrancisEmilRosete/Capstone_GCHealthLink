@@ -68,16 +68,26 @@ export function getEcho(): Echo<'pusher'> | null {
     broadcaster: 'pusher',
     key,
     ...connection,
-    // Custom authorizer so the HttpOnly auth cookie is sent cross-origin.
+    // Custom authorizer supporting both HttpOnly cookies and Bearer tokens.
     authorizer: (channel: { name: string }) => ({
       authorize: (socketId: string, callback: AuthCallback) => {
+        const token = typeof window !== 'undefined'
+          ? (window.sessionStorage.getItem('token') || window.sessionStorage.getItem('gchl_token') || window.localStorage.getItem('token') || window.localStorage.getItem('gchl_token'))
+          : null;
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        };
+
+        if (token && token !== 'cookie-auth') {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         fetch(authEndpoint(), {
           method: 'POST',
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
+          headers,
           body: JSON.stringify({ socket_id: socketId, channel_name: channel.name }),
         })
           .then(async (res) => {

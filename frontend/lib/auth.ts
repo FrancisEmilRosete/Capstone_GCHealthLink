@@ -10,12 +10,16 @@ import toast from 'react-hot-toast';
 const TOKEN_KEY = 'token';
 const ROLE_KEY = 'userRole';
 const USER_ID_KEY = 'userId';
+const EXPIRES_AT_KEY = 'gchl_expires_at';
 
 function readSessionValue(key: string): string | null {
   if (typeof window === 'undefined') return null;
 
   const fromSession = window.sessionStorage.getItem(key);
   if (fromSession) return fromSession;
+
+  const fromLocal = window.localStorage.getItem(key);
+  if (fromLocal) return fromLocal;
 
   return null;
 }
@@ -28,6 +32,7 @@ function writeSessionValue(key: string, value: string): void {
 function clearSessionValue(key: string): void {
   if (typeof window === 'undefined') return;
   window.sessionStorage.removeItem(key);
+  window.localStorage.removeItem(key);
 }
 
 export interface AuthUser {
@@ -42,7 +47,11 @@ export type BackendUserRole = 'ADMIN' | 'CLINIC_STAFF' | 'STUDENT' | 'DOCTOR' | 
 interface LoginResponse {
   success: boolean;
   message: string;
-  token: string;
+  token?: string;
+  access_token?: string;
+  token_type?: string;
+  expires_at?: string;
+  expires_in?: number;
   user: AuthUser;
 }
 
@@ -61,21 +70,47 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-function isTokenExpired(token: string): boolean {
+export function isTokenExpired(token: string): boolean {
+  // If token is JWT, inspect payload exp
   const payload = decodeJwtPayload(token);
   const exp = Number(payload?.exp);
 
-  if (!Number.isFinite(exp) || exp <= 0) {
-    return false;
+  if (Number.isFinite(exp) && exp > 0) {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return exp <= nowSeconds;
   }
 
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  return exp <= nowSeconds;
+  // Otherwise check stored expires_at timestamp if present
+  if (typeof window !== 'undefined') {
+    const expiresAt = window.sessionStorage.getItem(EXPIRES_AT_KEY)
+      || window.localStorage.getItem(EXPIRES_AT_KEY);
+    if (expiresAt) {
+      const expiryMs = new Date(expiresAt).getTime();
+      if (!isNaN(expiryMs) && expiryMs > 0) {
+        return Date.now() >= expiryMs;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function getToken(): string | null {
-  // Since we migrated to HttpOnly cookies, we don't have the real token here.
-  // Return a dummy string if logged in so frontend guards and api clients don't fail.
+  if (typeof window === 'undefined') return null;
+
+  const sessionToken = window.sessionStorage.getItem(TOKEN_KEY)
+    || window.sessionStorage.getItem('gchl_token');
+  if (sessionToken && sessionToken !== 'cookie-auth') {
+    return sessionToken;
+  }
+
+  const localToken = window.localStorage.getItem(TOKEN_KEY)
+    || window.localStorage.getItem('gchl_token');
+  if (localToken && localToken !== 'cookie-auth') {
+    return localToken;
+  }
+
+  // Fallback indicator if authenticated via HttpOnly cookie
   return isLoggedIn() ? 'cookie-auth' : null;
 }
 
@@ -89,9 +124,30 @@ export function getUserId(): string | null {
   return readSessionValue(USER_ID_KEY);
 }
 
-function saveSession(user: AuthUser): void {
+function saveSession(user: AuthUser, token?: string | null, rememberMe?: boolean, expiresAt?: string | null): void {
   writeSessionValue(ROLE_KEY, user.role);
   writeSessionValue(USER_ID_KEY, user.id);
+
+  if (token && token !== 'cookie-auth') {
+    writeSessionValue(TOKEN_KEY, token);
+    writeSessionValue('gchl_token', token);
+    if (rememberMe && typeof window !== 'undefined') {
+      window.localStorage.setItem(TOKEN_KEY, token);
+      window.localStorage.setItem('gchl_token', token);
+    }
+  }
+
+  if (expiresAt) {
+    writeSessionValue(EXPIRES_AT_KEY, expiresAt);
+    if (rememberMe && typeof window !== 'undefined') {
+      window.localStorage.setItem(EXPIRES_AT_KEY, expiresAt);
+    }
+  }
+
+  if (rememberMe && typeof window !== 'undefined') {
+    window.localStorage.setItem(ROLE_KEY, user.role);
+    window.localStorage.setItem(USER_ID_KEY, user.id);
+  }
 }
 
 /**
@@ -102,19 +158,27 @@ function saveSession(user: AuthUser): void {
 export function setUserRole(role: string): void {
   if (typeof window !== 'undefined') {
     writeSessionValue(ROLE_KEY, role);
+    if (window.localStorage.getItem(ROLE_KEY)) {
+      window.localStorage.setItem(ROLE_KEY, role);
+    }
   }
 }
 
 function clearSession(): void {
   clearSessionValue(ROLE_KEY);
   clearSessionValue(USER_ID_KEY);
+  clearSessionValue(TOKEN_KEY);
+  clearSessionValue(EXPIRES_AT_KEY);
 
   // Backward-compatible cleanup for previously used keys.
   if (typeof window !== 'undefined') {
     window.sessionStorage.removeItem('gchl_token');
     window.sessionStorage.removeItem('gchl_user');
+    window.sessionStorage.removeItem(EXPIRES_AT_KEY);
+    window.sessionStorage.removeItem(TOKEN_KEY);
     window.localStorage.removeItem('gchl_token');
     window.localStorage.removeItem('gchl_user');
+    window.localStorage.removeItem(EXPIRES_AT_KEY);
     window.localStorage.removeItem(TOKEN_KEY);
   }
 }
@@ -129,7 +193,8 @@ export async function authLogin(credentials: {
     throw new Error('Invalid login response from server.');
   }
 
-  saveSession(data.user);
+  const token = data.token || data.access_token || null;
+  saveSession(data.user, token, rememberMe, data.expires_at || null);
   return { user: data.user };
 }
 

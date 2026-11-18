@@ -85,16 +85,38 @@ export const API_BASE = configuredApiBase || cachedApiBase || defaultDevBases[0]
 
 let preferredApiBase = API_BASE;
 
+function adaptHostToWindow(url: string): string {
+  if (typeof window === 'undefined' || !url) return url;
+  try {
+    const parsed = new URL(url);
+    const windowHost = window.location.hostname;
+    if (windowHost === 'localhost' && parsed.hostname === '127.0.0.1') {
+      parsed.hostname = 'localhost';
+      return normalizeBaseUrl(parsed.toString());
+    }
+    if (windowHost === '127.0.0.1' && parsed.hostname === 'localhost') {
+      parsed.hostname = '127.0.0.1';
+      return normalizeBaseUrl(parsed.toString());
+    }
+  } catch {
+    // If not a full URL or parse fails, return as-is
+  }
+  return url;
+}
+
 function orderedCandidateBases(): string[] {
-  // If explicitly configured, trust it completely. No fallback loops.
+  const configuredAdapted = configuredApiBase ? adaptHostToWindow(configuredApiBase) : '';
+
+  // If explicitly configured, prioritize matching current host, with fallback to configured
   if (configuredApiBase && !ENABLE_DEV_PORT_DISCOVERY) {
-    return [configuredApiBase];
+    return uniqueBases([configuredAdapted, configuredApiBase].filter(Boolean));
   }
 
   // If explicitly requested dev discovery, include the default ports
   if (ENABLE_DEV_PORT_DISCOVERY) {
     const latestCachedBase = readCachedApiBase();
     return uniqueBases([
+      configuredAdapted,
       configuredApiBase, 
       preferredApiBase, 
       latestCachedBase, 
@@ -203,6 +225,26 @@ export class ApiError extends Error {
   }
 }
 
+// ── Token Resolver Helper ───────────────────────────────────────
+
+function resolveAuthToken(explicitToken?: string | null): string | null {
+  if (explicitToken && explicitToken !== 'cookie-auth') {
+    return explicitToken;
+  }
+  if (typeof window === 'undefined') return null;
+
+  const stored = window.sessionStorage.getItem('token')
+    || window.sessionStorage.getItem('gchl_token')
+    || window.localStorage.getItem('token')
+    || window.localStorage.getItem('gchl_token');
+
+  if (stored && stored !== 'cookie-auth') {
+    return stored;
+  }
+
+  return null;
+}
+
 // ── Unauthorized / Session Expiry Interceptor ───────────────────
 
 function handleUnauthorizedResponse(path: string): void {
@@ -216,11 +258,14 @@ function handleUnauthorizedResponse(path: string): void {
   // Clear local session state
   window.sessionStorage.removeItem('userRole');
   window.sessionStorage.removeItem('userId');
+  window.sessionStorage.removeItem('token');
   window.sessionStorage.removeItem('gchl_token');
   window.sessionStorage.removeItem('gchl_user');
+  window.sessionStorage.removeItem('gchl_expires_at');
+  window.localStorage.removeItem('token');
   window.localStorage.removeItem('gchl_token');
   window.localStorage.removeItem('gchl_user');
-  window.localStorage.removeItem('token');
+  window.localStorage.removeItem('gchl_expires_at');
 
   // Set flag so login page can reliably display notification upon navigation
   window.sessionStorage.setItem('gchl_session_expired', '1');
@@ -248,7 +293,8 @@ async function request<T = unknown>(
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const activeToken = resolveAuthToken(token);
+  if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
   if (isPayloadEncryptionEnabled) headers[ENCRYPTION_HEADER] = '1';
 
   const serializedBody = body === undefined
@@ -266,7 +312,12 @@ async function request<T = unknown>(
   // Parse response body (backend always returns JSON)
   let data: any;
   try {
-    data = await res.json();
+    const rawText = await res.text();
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      data = rawText;
+    }
     if (isEncryptedEnvelope(data)) data = decryptApiPayload(data);
   } catch {
     throw new ApiError('Unexpected server response.', res.status);
@@ -289,7 +340,8 @@ async function requestForm<T = unknown>(
   token?: string | null,
 ): Promise<T> {
   const headers: HeadersInit = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const activeToken = resolveAuthToken(token);
+  if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
   // Multipart bodies stay as-is (files), but the JSON response is encrypted.
   if (isPayloadEncryptionEnabled) headers[ENCRYPTION_HEADER] = '1';
 
@@ -303,7 +355,12 @@ async function requestForm<T = unknown>(
 
   let data: any;
   try {
-    data = await res.json();
+    const rawText = await res.text();
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      data = rawText;
+    }
     if (isEncryptedEnvelope(data)) data = decryptApiPayload(data);
   } catch {
     throw new ApiError('Unexpected server response.', res.status);
@@ -344,7 +401,8 @@ async function requestBlob(
   token?: string | null,
 ): Promise<{ blob: Blob; fileName: string | null }> {
   const headers: HeadersInit = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const activeToken = resolveAuthToken(token);
+  if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
 
   const res = await fetchWithFallback(path, {
     method: 'GET',

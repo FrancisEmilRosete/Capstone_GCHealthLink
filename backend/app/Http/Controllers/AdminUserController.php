@@ -43,4 +43,19 @@ class AdminUserController extends Controller
             'data' => $formattedUsers
         ]);
     }
+
+    public function me(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+                'displayName' => $user->email,
+            ],
+        ]);
+    }
 }

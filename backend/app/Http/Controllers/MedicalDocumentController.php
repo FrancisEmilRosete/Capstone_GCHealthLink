@@ -18,7 +18,14 @@ class MedicalDocumentController extends Controller
      */
     public function index(Request $request, string $studentId): JsonResponse
     {
-        // Actually the original Express route was /:studentId, but the parameter name might be studentProfileId depending on frontend
+        $user = $request->user();
+        if ($user && $user->isStudent()) {
+            $ownProfileId = $user->studentProfile?->id;
+            if (!$ownProfileId || $ownProfileId !== $studentId) {
+                return response()->json(['error' => 'Unauthorized to access these documents.'], 403);
+            }
+        }
+
         // Assuming studentId refers to student_profile_id
         $documents = MedicalDocument::where('student_profile_id', $studentId)
             ->orderBy('uploaded_at', 'desc')
@@ -36,11 +43,21 @@ class MedicalDocumentController extends Controller
      */
     public function upload(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         $request->validate([
             'studentProfileId' => 'required|exists:student_profiles,id',
             'file' => 'required|file|max:10240', // 10MB max
             'documentType' => 'nullable|string|max:100'
         ]);
+
+        $targetProfileId = $request->input('studentProfileId');
+        if ($user && $user->isStudent()) {
+            $ownProfileId = $user->studentProfile?->id;
+            if (!$ownProfileId || $ownProfileId !== $targetProfileId) {
+                return response()->json(['error' => 'Unauthorized to upload documents for other students.'], 403);
+            }
+        }
 
         if (!$request->hasFile('file')) {
             return response()->json(['success' => false, 'message' => 'No file uploaded.'], 400);
@@ -80,12 +97,20 @@ class MedicalDocumentController extends Controller
     /**
      * Download the specified document.
      */
-    public function download(string $id)
+    public function download(Request $request, string $id)
     {
         $document = MedicalDocument::find($id);
 
         if (!$document) {
             return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
+        }
+
+        $user = $request->user();
+        if ($user && $user->isStudent()) {
+            $ownProfileId = $user->studentProfile?->id;
+            if (!$ownProfileId || $ownProfileId !== $document->student_profile_id) {
+                return response()->json(['error' => 'Unauthorized to access this document.'], 403);
+            }
         }
 
         if (!Storage::disk('local')->exists($document->file_url)) {

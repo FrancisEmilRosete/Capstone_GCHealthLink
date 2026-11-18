@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Services\AiPrivacyService;
+use App\Services\AiServiceClient;
 use Illuminate\Support\Facades\Http;
 
 class AiRiskController extends Controller
@@ -32,11 +33,9 @@ class AiRiskController extends Controller
         $anonymizedData = $this->privacyService->anonymizePatientRecord($rawPatientData);
 
         // 3. Send ONLY the anonymized data to the Python AI Microservice
-        $aiServiceUrl = env('AI_SERVICE_URL', 'http://localhost:8000');
-        
+        //    (URL + X-AI-Service-Key header come from config('services.ai.*')).
         try {
-            // Assuming the AI microservice has a new endpoint /predict/patient-risk
-            $response = Http::post("{$aiServiceUrl}/predict/patient-risk", [
+            $response = AiServiceClient::request()->post('/predict/patient-risk', [
                 'anonymized_data' => $anonymizedData
             ]);
 
@@ -45,22 +44,23 @@ class AiRiskController extends Controller
                     'success' => true,
                     'message' => 'Patient risk assessment completed successfully (PII was securely masked).',
                     'data' => $response->json(),
-                    'debug_anonymized_payload' => $anonymizedData // Only for debugging/demonstration to the adviser
                 ]);
             }
+
+            report(new \RuntimeException('AI service error ' . $response->status() . ': ' . $response->body()));
 
             return response()->json([
                 'success' => false,
                 'message' => 'AI Service failed to process the request.',
-                'error' => $response->body()
-            ], $response->status());
+            ], $response->status() >= 500 ? 502 : $response->status());
 
         } catch (\Exception $e) {
+            report($e);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Could not connect to the AI Microservice.',
-                'error' => $e->getMessage()
-            ], 500);
+            ], 503);
         }
     }
 }

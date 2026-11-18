@@ -34,6 +34,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
             'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
+            // RBAC: ->middleware('role:ADMIN') / ->middleware('role:ADMIN,CLINIC_STAFF')
+            'role' => \App\Http\Middleware\EnsureUserHasRole::class,
         ]);
 
         // ---------------------------------------------------------------

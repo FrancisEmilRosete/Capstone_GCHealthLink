@@ -159,9 +159,8 @@ class AiAssistantController extends Controller
                 ];
             }
 
-            $aiServiceUrl = env('AI_SERVICE_URL', 'http://127.0.0.1:8001');
-            
-            $response = \Illuminate\Support\Facades\Http::post("{$aiServiceUrl}/predict/outbreak", [
+            // URL + X-AI-Service-Key come from config('services.ai.*').
+            $response = \App\Services\AiServiceClient::request()->post('/predict/outbreak', [
                 'historical_data' => $historicalData,
                 'forecast_months' => 3
             ]);

@@ -117,4 +117,18 @@ class User extends Authenticatable
     {
         return $this->clinic_staff_type === 'DENTIST';
     }
+
+    /**
+     * Role-based token expiration lifetime in minutes:
+     * - Students (STUDENT): 2 hours (120 minutes)
+     * - All Staff (ADMIN and CLINIC_STAFF — including Nurse, Doctor, and Dentist): 8 hours (480 minutes)
+     */
+    public function getTokenExpirationMinutes(): int
+    {
+        if ($this->isStudent()) {
+            return 120; // 2 hours
+        }
+
+        return 480; // 8 hours (All staff: ADMIN, CLINIC_STAFF)
+    }
 }

@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import math
 import os
+import secrets
 import datetime as dt
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field, field_validator
 from sklearn.linear_model import LinearRegression
 
@@ -32,6 +34,27 @@ app = FastAPI(
     description="Predictive analytics microservice for outbreak forecasting and resource depletion.",
 )
 
+
+class ServiceKeyAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Allow preflight and public health check / documentation routes
+        if request.method == "OPTIONS" or request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
+            return await call_next(request)
+
+        expected_secret = os.getenv("AI_SERVICE_SECRET", "").strip()
+        if expected_secret:
+            provided_key = request.headers.get("X-AI-Service-Key", "").strip()
+            if not provided_key or not secrets.compare_digest(provided_key, expected_secret):
+                return Response(
+                    content='{"detail":"Forbidden: Invalid or missing microservice authentication key."}',
+                    status_code=403,
+                    media_type="application/json",
+                )
+
+        return await call_next(request)
+
+
+app.add_middleware(ServiceKeyAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=parse_allowed_origins(),
